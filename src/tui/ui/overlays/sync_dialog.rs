@@ -360,13 +360,7 @@ fn home_lines(theme: &Theme, body: &mut Body, view: &SyncDialogView<'_>, width: 
 
     lines.push(Line::from(""));
     if let Some(server) = &status.server {
-        lines.extend(wrapped_row(
-            theme,
-            "Server",
-            server,
-            Style::new().fg(theme.fg),
-            width,
-        ));
+        server_lines(theme, lines, server, width);
     }
     lines.extend(wrapped_row(
         theme,
@@ -1143,6 +1137,19 @@ fn invitation_lines(
     }
 }
 
+fn server_lines(theme: &Theme, lines: &mut Vec<Line<'static>>, server: &str, width: usize) {
+    if aven_core::sync::client::is_aven_cloud(server) {
+        lines.extend(wrapped_row(
+            theme,
+            "Hosting",
+            "Aven Cloud",
+            Style::new().fg(theme.fg),
+            width,
+        ));
+    }
+    lines.extend(wrapped_row(theme, "Server", server, Style::new().fg(theme.fg), width));
+}
+
 fn confirm_setup_lines(
     theme: &Theme,
     body: &mut Body,
@@ -1151,13 +1158,7 @@ fn confirm_setup_lines(
     width: usize,
 ) {
     let lines = &mut body.lines;
-    lines.extend(wrapped_row(
-        theme,
-        "Server",
-        server,
-        Style::new().fg(theme.fg),
-        width,
-    ));
+    server_lines(theme, lines, server, width);
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "Use this computer's data:",
@@ -1213,13 +1214,7 @@ fn confirm_setup_lines(
 
 fn confirm_join_lines(theme: &Theme, body: &mut Body, server: &str, replace: bool, width: usize) {
     let lines = &mut body.lines;
-    lines.extend(wrapped_row(
-        theme,
-        "Server",
-        server,
-        Style::new().fg(theme.fg),
-        width,
-    ));
+    server_lines(theme, lines, server, width);
     lines.push(Line::from(""));
     if replace {
         lines.extend(paragraph(
@@ -1608,4 +1603,31 @@ pub(in crate::tui::ui) fn sync_dialog_lines_for_test_width(
     width: usize,
 ) -> Vec<Line<'static>> {
     body(&Theme::dark(), view, width).lines
+}
+
+#[cfg(test)]
+mod cloud_tests {
+    use super::*;
+
+    #[test]
+    fn hosting_identity_keeps_the_address_visible_without_labeling_other_origins() {
+        for (server, cloud) in [
+            ("https://sync.aventasks.dev", true),
+            ("HTTPS://SYNC.AVENTASKS.DEV:443/", true),
+            ("https://sync.aventasks.dev:444", false),
+            ("http://sync.private.example:3746", false),
+            ("https://sync.aventasks.dev/private", false),
+            ("https://user@sync.aventasks.dev", false),
+        ] {
+            let mut lines = Vec::new();
+            server_lines(&Theme::dark(), &mut lines, server, 100);
+            let text = lines
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("\n");
+            assert_eq!(text.contains("Aven Cloud"), cloud, "{text}");
+            assert!(text.contains(server), "{text}");
+        }
+    }
 }

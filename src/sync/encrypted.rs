@@ -526,6 +526,9 @@ async fn print_setup_preview(database: &Database, config: &AppConfig, server: &s
     let preview = setup_preview(database, config).await?;
     eprintln!("Set up sync from this database");
     eprintln!("  Database: {}", database.path().display());
+    if aven_core::sync::client::is_aven_cloud(server) {
+        eprintln!("  Hosting: Aven Cloud");
+    }
     eprintln!("  Server: {server}");
     eprintln!(
         "  Workspaces: {}, tasks: {} (including scheduled and recurring)",
@@ -809,6 +812,9 @@ pub(crate) async fn join(database: &Database, config: &AppConfig, args: JoinArgs
                 error
             }
         })?;
+        if aven_core::sync::client::is_aven_cloud(&invitation.server) {
+            eprintln!("Hosting: Aven Cloud");
+        }
         eprintln!("Server: {}", invitation.server);
         confirm_action(
             args.yes,
@@ -938,6 +944,9 @@ pub(crate) async fn status(database: &Database, config: &AppConfig, json: bool) 
     }
     println!("Sync: end-to-end encrypted");
     if let Some(server) = &report.server {
+        if aven_core::sync::client::is_aven_cloud(server) {
+            println!("Hosting: Aven Cloud");
+        }
         println!("Server: {server}");
     }
     if report.devices == Some(1) {
