@@ -6,6 +6,7 @@ use crate::tui::theme::Theme;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum SyncHealth {
+    VaultDeleted,
     AccessRefused,
     ProtectedStorageUnavailable,
     Attention,
@@ -33,6 +34,7 @@ pub(super) struct SyncStatusSummary {
 impl SyncStatusSummary {
     pub(super) fn headline(&self) -> &'static str {
         match self.health {
+            SyncHealth::VaultDeleted => "Sync vault deleted",
             SyncHealth::AccessRefused => "Sync access unconfirmed",
             SyncHealth::ProtectedStorageUnavailable => "Sync keys unavailable",
             SyncHealth::Attention => "Sync needs attention",
@@ -46,7 +48,7 @@ impl SyncStatusSummary {
 
     pub(super) fn color(&self, theme: &Theme) -> Color {
         match self.health {
-            SyncHealth::AccessRefused | SyncHealth::ProtectedStorageUnavailable => theme.danger,
+            SyncHealth::VaultDeleted | SyncHealth::AccessRefused | SyncHealth::ProtectedStorageUnavailable => theme.danger,
             SyncHealth::Attention | SyncHealth::Unfinished | SyncHealth::Pending(_) => {
                 theme.warning
             }
@@ -68,7 +70,7 @@ impl SyncStatusSummary {
             }
         }
         match self.health {
-            SyncHealth::AccessRefused | SyncHealth::ProtectedStorageUnavailable => {
+            SyncHealth::VaultDeleted | SyncHealth::AccessRefused | SyncHealth::ProtectedStorageUnavailable => {
                 (theme.danger, "sync error".to_string())
             }
             SyncHealth::Attention | SyncHealth::Unfinished => (theme.warning, "sync!".to_string()),
@@ -98,6 +100,8 @@ pub(super) fn sync_status_summary(status: &TuiSyncStatus) -> SyncStatusSummary {
         SyncHealth::NotSetUp
     } else if !status.protected_storage.ok {
         SyncHealth::ProtectedStorageUnavailable
+    } else if status.vault_deleted_at.is_some() {
+        SyncHealth::VaultDeleted
     } else if status.access_refused_at.is_some() {
         SyncHealth::AccessRefused
     } else if !status.runtime_allowed {
@@ -177,6 +181,22 @@ mod tests {
             summary.badge(&THEME, &status),
             (THEME.danger, "sync error".to_string())
         );
+        assert!(summary.can_manual_sync);
+    }
+
+    #[test]
+    fn vault_deletion_outranks_access_refusal_and_can_be_rechecked() {
+        let status = TuiSyncStatus {
+            access_refused_at: Some("2026-09-24T12:00:00Z".to_string()),
+            vault_deleted_at: Some("2026-10-09T12:00:00Z".to_string()),
+            ..set_up()
+        };
+
+        let summary = sync_status_summary(&status);
+
+        assert_eq!(summary.health, SyncHealth::VaultDeleted);
+        assert_eq!(summary.headline(), "Sync vault deleted");
+        assert_eq!(summary.badge(&status), (RED, "sync error".to_string()));
         assert!(summary.can_manual_sync);
     }
 
