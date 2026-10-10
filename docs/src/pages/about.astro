@@ -1,0 +1,69 @@
+---
+import portrait from '../assets/raine-virta.webp';
+import Brand from '../components/Brand.astro';
+import GitHubIcon from '../components/GitHubIcon.astro';
+import ExternalLinkIcon from '../components/ExternalLinkIcon.astro';
+import '../styles/landing.css';
+import '../styles/about.css';
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#121110" />
+    <title>About | aven</title>
+    <meta name="description" content="Aven is built by Raine, a developer in Helsinki, as a task manager for his own terminal and coding agents." />
+    <link rel="canonical" href="https://aventasks.dev/about/" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preload" href="/fonts/space-grotesk-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="About | aven" />
+    <meta property="og:description" content="Who builds Aven, and why." />
+    <meta property="og:url" content="https://aventasks.dev/about/" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="container">
+      <header class="site-header">
+        <Brand />
+        <nav aria-label="Main navigation">
+          <a class="features-link" href="/#features">Features</a>
+          <a href="/sync/">Sync</a>
+          <a href="/getting-started/">Docs</a>
+          <a href="https://github.com/raine/aven"><GitHubIcon /> GitHub</a>
+        </nav>
+      </header>
+
+      <main id="main" class="about-page">
+        <aside class="about-card" aria-label="Raine Virta">
+          <img src={portrait.src} alt="Raine Virta" width="120" height="120" />
+          <b>Raine Virta</b>
+          <span>Developer · Helsinki, Finland</span>
+          <ul>
+            <li><a href="https://raine.dev/"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></svg> raine.dev</a></li>
+            <li><a href="https://github.com/raine"><GitHubIcon /> github.com/raine</a></li>
+          </ul>
+          <p>Also made <a href="https://github.com/raine/workmux">workmux</a>, git worktrees and tmux windows for parallel development</p>
+        </aside>
+
+        <div class="about-story">
+          <h1>About Aven</h1>
+          <p>I'm Raine. I wanted one task list for all my projects that lives in the terminal, works offline, and that my coding agents can use too.</p>
+          <p>Taskwarrior was a big inspiration, but it wasn't a great fit for agents, its ecosystem felt scattered, and I never found a TUI for it I liked. So I started toying with the idea of building the whole stack myself, with the CLI, the TUI, sync and eventually mobile apps designed together. Before the AI coding era, this would've been too ambitious as a side project, but now it feels within reach. I've written more about how Aven differs from Taskwarrior <a href="/taskwarrior/">here</a>.</p>
+          <p>I use it every day, so it's heavily shaped by my own workflow.</p>
+          <p class="about-legal">Aven is published by Zendit Oy, my one-person company in Finland. That's the name in the <a href="/privacy/">privacy policy</a>.</p>
+
+          <h2>Get in touch</h2>
+          <p>Bugs and ideas are best as <a href="https://github.com/raine/aven/issues">GitHub issues</a>, but you can also <a href="mailto:raine.virta@gmail.com">send email</a>.</p>
+        </div>
+      </main>
+
+      <footer class="site-footer">
+        <div><Brand /></div>
+        <nav aria-label="Footer navigation"><a href="/getting-started/">Docs</a><a href="/changelog/">Changelog</a><a href="/about/" aria-current="page">About</a><a href="/support/">Support</a><a href="/privacy/">Privacy</a><a href="https://github.com/raine/aven">Source <ExternalLinkIcon /></a></nav>
+      </footer>
+    </div>
+  </body>
+</html>
