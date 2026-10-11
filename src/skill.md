@@ -47,10 +47,10 @@ aven show APP-7KQ9 --full
 
 - Use `list --ready` when choosing work. It excludes blocked tasks and epics.
 - Use `show <ref>` for a one-line status check.
-- Use `context <ref>` for an agent-focused snapshot before acting. It shortens
-  long descriptions and collapses older notes, printing a `truncated` or
-  `collapsed` line with a hint. Rerun with `--full` only when the omitted text
-  matters. Use `show <ref> --full` when decisions depend on task metadata.
+- Use `context <ref>` before acting. It prints the full description, metadata,
+  relations, and recent notes. When earlier notes are left out, it lists them
+  one per line and ends with a `read=` command that prints their bodies in one
+  call.
 - Search includes done and canceled tasks. Add `--all` to search deleted tasks.
 - List commands accept filters such as `--status`, `--priority`, `--label`,
   `--metadata`, and `--project`. Use `--limit` to bound large results.

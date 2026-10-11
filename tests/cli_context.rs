@@ -142,11 +142,29 @@ fn context_text_omits_empty_sections() {
     );
 }
 
+fn note_ids_in_order(env: &TestEnv, db: &std::path::Path, task_ref: &str) -> Vec<String> {
+    let json = ok(env.aven(db, ["context", task_ref, "--json"]));
+    let value: Value = serde_json::from_str(&json).unwrap();
+    value["notes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|note| note["id"].as_str().unwrap().to_string())
+        .collect()
+}
+
+fn add_notes(env: &TestEnv, db: &std::path::Path, task_ref: &str, count: usize, chars: usize) {
+    for index in 0..count {
+        let body = format!("note {index}\n{}", "z".repeat(chars - 7));
+        ok(env.aven(db, ["note", task_ref, &body]));
+    }
+}
+
 #[test]
-fn context_text_shortens_long_description_and_notes() {
+fn context_text_prints_long_description_in_full() {
     let env = TestEnv::new();
-    let db = env.db("context-shortened.sqlite");
-    let description = (0..100)
+    let db = env.db("context-long-description.sqlite");
+    let description = (0..300)
         .map(|line| format!("description line {line:03} {}", "x".repeat(20)))
         .collect::<Vec<_>>()
         .join("\n");
@@ -161,80 +179,141 @@ fn context_text_shortens_long_description_and_notes() {
             &description,
         ],
     )));
-    let first_note = format!("first note\n{}", "f".repeat(1500));
-    let second_note = format!("second note\n{}", "s".repeat(1500));
-    ok(env.aven(&db, ["note", &task_ref, &first_note]));
-    ok(env.aven(&db, ["note", &task_ref, &second_note]));
 
     let text = ok(env.aven(&db, ["context", &task_ref]));
-    contains_all(
-        &text,
-        &[
-            "description line 000",
-            "description truncated shown_chars=",
-            &format!("total_chars={}", description.chars().count()),
-            &format!("notes collapsed=1 hint=\"aven context {task_ref} --full\""),
-        ],
-    );
-    contains_none(&text, &["description line 099"]);
-    let shown = text
-        .split("description<<EOF\n")
-        .nth(1)
-        .and_then(|rest| rest.split("\nEOF").next())
-        .unwrap();
-    assert!(shown.ends_with(&"x".repeat(20)), "cut at a line boundary");
-
-    // Notes created in the same second sort by ID, so either may be newest.
-    let (older, newest, older_preview) =
-        if text.find("first note").unwrap() < text.find("second note").unwrap() {
-            (&first_note, &second_note, "first note")
-        } else {
-            (&second_note, &first_note, "second note")
-        };
-    contains_all(
-        &text,
-        &[
-            &format!(
-                "chars={} collapsed=yes preview=\"{older_preview}\"",
-                older.chars().count()
-            ),
-            newest,
-        ],
-    );
-    contains_none(&text, &[older]);
-
-    let full = ok(env.aven(&db, ["context", &task_ref, "--full"]));
-    contains_all(&full, &[&description, &first_note, &second_note]);
-    contains_none(&full, &["truncated", "collapsed"]);
-
-    let json = ok(env.aven(&db, ["context", &task_ref, "--json"]));
-    let value: Value = serde_json::from_str(&json).unwrap();
-    assert_eq!(value["task"]["description"], description);
-    let bodies: Vec<&str> = value["notes"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|note| note["body"].as_str().unwrap())
-        .collect();
-    assert!(bodies.contains(&first_note.as_str()));
-    assert!(bodies.contains(&second_note.as_str()));
+    contains_all(&text, &[&description]);
+    contains_none(&text, &["truncated"]);
 }
 
 #[test]
-fn context_text_cuts_oversized_newest_note() {
+fn context_text_omits_older_notes_beyond_budget() {
+    let env = TestEnv::new();
+    let db = env.db("context-omitted-notes.sqlite");
+    let task_ref = extract_ref(&ok(env.aven(&db, ["add", "notes", "--project", "app"])));
+    add_notes(&env, &db, &task_ref, 5, 1600);
+    let ids = note_ids_in_order(&env, &db, &task_ref);
+    let omitted = &ids[..3];
+
+    let text = ok(env.aven(&db, ["context", &task_ref]));
+    let read_args = format!("note-show {task_ref} {}", omitted.join(" "));
+    contains_all(
+        &text,
+        &[
+            "notes total=5 shown=2 omitted=3 omitted_chars=4800",
+            &format!("note id={} created=", ids[3]),
+            &format!("note id={} created=", ids[4]),
+            &format!("read=\"aven {read_args}\""),
+        ],
+    );
+    for id in omitted {
+        assert!(
+            text.lines()
+                .any(|line| line.starts_with(&format!("note id={id} "))
+                    && line.contains("chars=1600 excerpt=\"note ")),
+            "index line for {id}:\n{text}"
+        );
+    }
+    assert_eq!(text.matches("body<<EOF").count(), 2);
+    assert!(
+        text.trim_end()
+            .ends_with(&format!("read=\"aven {read_args}\""))
+    );
+
+    let read = ok(env.aven(&db, read_args.split(' ').collect::<Vec<_>>()));
+    assert_eq!(read.matches("body<<EOF").count(), 3);
+    for id in omitted {
+        contains_all(&read, &[&format!("note id={id} created=")]);
+    }
+    contains_none(&read, &[&ids[3], &ids[4], "context "]);
+
+    let full = ok(env.aven(&db, ["context", &task_ref, "--full"]));
+    assert_eq!(full.matches("body<<EOF").count(), 5);
+    contains_none(&full, &["read=", "notes total=", "excerpt="]);
+}
+
+#[test]
+fn context_text_prints_small_remainder_of_older_notes() {
+    let env = TestEnv::new();
+    let db = env.db("context-note-tail.sqlite");
+    let task_ref = extract_ref(&ok(env.aven(&db, ["add", "notes", "--project", "app"])));
+    add_notes(&env, &db, &task_ref, 4, 1400);
+
+    let text = ok(env.aven(&db, ["context", &task_ref]));
+    assert_eq!(text.matches("body<<EOF").count(), 4);
+    contains_none(&text, &["read=", "notes total=", "excerpt="]);
+}
+
+#[test]
+fn context_text_cuts_oversized_note() {
     let env = TestEnv::new();
     let db = env.db("context-oversized-note.sqlite");
     let task_ref = extract_ref(&ok(env.aven(&db, ["add", "big note", "--project", "app"])));
-    let note = "y".repeat(3000);
+    let note = (0..200)
+        .map(|line| format!("line {line:03} {}", "y".repeat(40)))
+        .collect::<Vec<_>>()
+        .join("\n");
     ok(env.aven(&db, ["note", &task_ref, &note]));
+    let ids = note_ids_in_order(&env, &db, &task_ref);
 
     let text = ok(env.aven(&db, ["context", &task_ref]));
     contains_all(
         &text,
         &[
-            "note truncated shown_chars=2000 total_chars=3000",
-            &"y".repeat(2000),
+            "notes total=1 shown=1 omitted=0 omitted_chars=",
+            &format!("note truncated id={} shown_chars=", ids[0]),
+            &format!("total_chars={}", note.chars().count()),
+            &format!("read=\"aven note-show {task_ref} {}\"", ids[0]),
+            "line 000",
         ],
     );
-    contains_none(&text, &[&"y".repeat(2001), "collapsed"]);
+    contains_none(&text, &["line 199"]);
+    let shown = text
+        .split("body<<EOF\n")
+        .nth(1)
+        .and_then(|rest| rest.split("\nEOF").next())
+        .unwrap();
+    assert!(shown.ends_with(&"y".repeat(40)), "cut at a line boundary");
+}
+
+#[test]
+fn context_includes_task_metadata() {
+    let env = TestEnv::new();
+    let db = env.db("context-metadata.sqlite");
+    let task_ref = extract_ref(&ok(env.aven(
+        &db,
+        [
+            "add",
+            "tagged",
+            "--project",
+            "app",
+            "--metadata",
+            "source=github",
+        ],
+    )));
+
+    let text = ok(env.aven(&db, ["context", &task_ref]));
+    contains_all(&text, &["key=source", "value<<EOF\ngithub\nEOF"]);
+
+    let json = ok(env.aven(&db, ["context", &task_ref, "--json"]));
+    let value: Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(value["metadata"]["source"], "github");
+    assert_eq!(value["metadata_details"][0]["key"], "source");
+}
+
+#[test]
+fn note_show_rejects_unknown_note_ids() {
+    let env = TestEnv::new();
+    let db = env.db("note-show-unknown.sqlite");
+    let task_ref = extract_ref(&ok(env.aven(&db, ["add", "notes", "--project", "app"])));
+    ok(env.aven(&db, ["note", &task_ref, "kept"]));
+    let ids = note_ids_in_order(&env, &db, &task_ref);
+
+    let json = ok(env.aven(&db, ["note-show", &task_ref, &ids[0], "--json"]));
+    let value: Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(value[0]["body"], "kept");
+
+    let output = env.aven(&db, ["note-show", &task_ref, &ids[0], "MISSINGNOTEID"]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    contains_all(&stderr, &["error unknown-note", "note_ids=MISSINGNOTEID"]);
 }

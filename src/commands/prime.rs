@@ -267,7 +267,7 @@ impl PrimeTextRenderer {
     fn print_issue_workflow() {
         println!("## Issue Workflow");
         println!();
-        println!("- Inspect an issue with `aven show <ref> --full` before changing it.");
+        println!("- Inspect an issue with `aven context <ref>` before changing it.");
         println!(
             "- Mark picked-up work with `aven edit <ref> --status active` before making changes."
         );

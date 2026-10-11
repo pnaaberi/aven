@@ -64,6 +64,7 @@ impl Commands {
             Self::Update(_) => CommandMetadata::cli(),
             Self::Note(_) => CommandMetadata::cli_wake(),
             Self::NoteDelete(_) => CommandMetadata::cli_wake(),
+            Self::NoteShow(_) => CommandMetadata::cli(),
             Self::Delete(_) => CommandMetadata::cli_wake(),
             Self::Restore(_) => CommandMetadata::cli_wake(),
             Self::Attachment(args) => CommandMetadata {

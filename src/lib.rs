@@ -51,9 +51,9 @@ use commands::{
     cmd_add, cmd_attachment, cmd_backup, cmd_bulk_update, cmd_config, cmd_conflict, cmd_context,
     cmd_daemon_status, cmd_delete_restore, cmd_demo, cmd_dep, cmd_doctor, cmd_edit, cmd_epic,
     cmd_export, cmd_import, cmd_internal_demo_snapshot, cmd_internal_natural_add, cmd_label,
-    cmd_list, cmd_metadata, cmd_move, cmd_note, cmd_note_delete, cmd_prime, cmd_project, cmd_recur,
-    cmd_related, cmd_search, cmd_self_update, cmd_show, cmd_skill, cmd_skill_install, cmd_text,
-    cmd_workspace,
+    cmd_list, cmd_metadata, cmd_move, cmd_note, cmd_note_delete, cmd_note_show, cmd_prime,
+    cmd_project, cmd_recur, cmd_related, cmd_search, cmd_self_update, cmd_show, cmd_skill,
+    cmd_skill_install, cmd_text, cmd_workspace,
 };
 use sync::run_server;
 use workspaces::resolve_active_workspace_with_routing;
@@ -151,6 +151,7 @@ enum DatabaseCommand {
     List(cli::ListArgs),
     Note(cli::NoteArgs),
     NoteDelete(cli::NoteDeleteArgs),
+    NoteShow(cli::NoteShowArgs),
     Prime(cli::PrimeArgs),
     Project(cli::ProjectCommand),
     Recur(cli::RecurCommand),
@@ -190,6 +191,7 @@ impl From<Commands> for CliDispatch {
             Commands::Update(args) => Self::Standalone(StandaloneCommand::Update(args)),
             Commands::Note(args) => Self::database(DatabaseCommand::Note(args)),
             Commands::NoteDelete(args) => Self::database(DatabaseCommand::NoteDelete(args)),
+            Commands::NoteShow(args) => Self::database(DatabaseCommand::NoteShow(args)),
             Commands::Delete(args) => Self::database(DatabaseCommand::Delete(args)),
             Commands::Restore(args) => Self::database(DatabaseCommand::Restore(args)),
             Commands::Text(args) => Self::database(DatabaseCommand::Text(args)),
@@ -416,6 +418,11 @@ async fn dispatch_database(
             let workspace =
                 resolve_command_workspace(&database, workspace.as_deref(), &routing).await?;
             cmd_note_delete(&database, &workspace, args).await
+        }
+        DatabaseCommand::NoteShow(args) => {
+            let workspace =
+                resolve_command_workspace(&database, workspace.as_deref(), &routing).await?;
+            cmd_note_show(&database, &workspace, args).await
         }
         DatabaseCommand::Export(args) => cmd_export(&database, args).await,
         DatabaseCommand::Import(args) => cmd_import(&database, &db_path, args).await,

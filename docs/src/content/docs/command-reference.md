@@ -293,14 +293,16 @@ aven context <task-ref> [--full] [--json]
 
 The snapshot includes stable identity, display reference, task fields, description, custom task metadata, project and workspace metadata, labels, notes, dependencies, dependents, related tasks, epic membership, recurring-task metadata, deletion state, and unresolved conflicts. It also derives whether the task is blocked, has conflicts, or blocks open work.
 
-Text output omits empty fields and sections. It also shortens long text so repeated checks stay small:
+Text output omits empty fields and sections, and always prints the full description and metadata. Notes are chronological. On tasks with long note histories, earlier notes are left out so repeated checks stay small:
 
-- A description over 2,000 characters is cut at a line boundary and followed by a `description truncated shown_chars=<n> total_chars=<n>` line.
-- Notes print in full from the newest backward while their bodies fit a 2,000-character budget. Older notes collapse to one `note ... collapsed=yes preview=<first line>` line each, followed by a `notes collapsed=<n>` line. The newest note always prints, cut the same way as the description when it alone exceeds the budget.
+- The two newest notes always print. Earlier notes print while all printed note bodies fit 4,500 characters. If the remaining earlier notes total 1,500 characters or less, they print too.
+- Each left-out note prints as one line: `note id=<id> created=<time> chars=<n> excerpt=<opening text>`.
+- A note body over 8,000 characters is cut at a line boundary and followed by `note truncated id=<id> shown_chars=<n> total_chars=<n>`.
+- When anything is left out or cut, a `notes total=<n> shown=<n> omitted=<n> omitted_chars=<n>` line comes before the notes, and the last line is `read="aven note-show <task-ref> <note-id>..."`, which prints every missing body in one call.
 
 | Option | Description |
 | --- | --- |
-| `--full` | Print the description and every note body in full. |
+| `--full` | Print every note body in full. |
 | `--json` | Print the complete snapshot as JSON. JSON output is never shortened. |
 
 ```sh
@@ -609,6 +611,18 @@ aven note-delete <task-ref> <note-id>
 
 ```sh
 aven note-delete APP-7KQ9 01JABCDEF123
+```
+
+### `aven note-show`
+
+Print complete note bodies by ID, in the task's note order. `aven context` prints this command when it leaves notes out. If any ID is not a live note on the task, the command prints nothing and fails with `error unknown-note`.
+
+```sh
+aven note-show <task-ref> <note-id>... [--json]
+```
+
+```sh
+aven note-show APP-7KQ9 01JABCDEF123 01JABCDEF456
 ```
 
 ### `aven dep`

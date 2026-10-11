@@ -47,8 +47,9 @@ pub(crate) use sync::{
     ResetArgs, ServerArgs, ServerSetupArgs, ServerSubcommand, SetupArgs, SyncArgs, SyncSubcommand,
 };
 pub(crate) use tasks::{
-    AddArgs, BulkUpdateArgs, ContextArgs, ListArgs, MoveArgs, NoteArgs, NoteDeleteArgs, PrimeArgs,
-    RefArgs, ShowArgs, TaskEditArgs, TaskSearchArgs, TextCommand, TextSubcommand,
+    AddArgs, BulkUpdateArgs, ContextArgs, ListArgs, MoveArgs, NoteArgs, NoteDeleteArgs,
+    NoteShowArgs, PrimeArgs, RefArgs, ShowArgs, TaskEditArgs, TaskSearchArgs, TextCommand,
+    TextSubcommand,
 };
 #[cfg(test)]
 pub(crate) use tui::TuiPriorityArg;
@@ -114,6 +115,8 @@ pub(crate) enum Commands {
     Note(NoteArgs),
     /// Delete a note from a task
     NoteDelete(NoteDeleteArgs),
+    /// Print complete note bodies by ID
+    NoteShow(NoteShowArgs),
     /// Delete a task
     Delete(RefArgs),
     /// Restore a deleted task

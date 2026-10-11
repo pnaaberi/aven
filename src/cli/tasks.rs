@@ -157,7 +157,7 @@ pub(crate) struct ShowArgs {
 pub(crate) struct ContextArgs {
     /// Task ref, such as APP-7KQ9 or an unambiguous suffix
     pub(crate) task_ref: String,
-    /// Print long descriptions and every note body in full
+    /// Print every note body in full
     #[arg(long)]
     pub(crate) full: bool,
     #[arg(long, help = "Print machine-readable JSON")]
@@ -391,6 +391,17 @@ pub(crate) struct NoteDeleteArgs {
     pub(crate) task_ref: String,
     /// Exact note ID printed by `aven show --full`
     pub(crate) note_id: String,
+}
+
+#[derive(Args)]
+pub(crate) struct NoteShowArgs {
+    /// Task ref containing the notes
+    pub(crate) task_ref: String,
+    /// Exact note IDs printed by `aven context` or `aven show --full`
+    #[arg(required = true)]
+    pub(crate) note_ids: Vec<String>,
+    #[arg(long, help = "Print machine-readable JSON")]
+    pub(crate) json: bool,
 }
 
 #[derive(Args)]
