@@ -3,9 +3,14 @@ title: Changelog
 description: Release notes for aven.
 ---
 
-## Unreleased
+## v0.1.47 (2026-10-11)
 
-- Docker images now accept full aven commands (`server setup` or `server --bind …`), with clearer storage errors and [setup and recovery guidance](https://aventasks.dev/sync/setup/#run-with-docker). CLI and TUI commands no longer fail when log files can't be written. Generate [shell completions](https://aventasks.dev/command-reference/#aven-completions) with `aven completions <shell>`; Homebrew installs them automatically. ([#35](https://github.com/raine/aven/issues/35))
+- Generate [shell completions](https://aventasks.dev/command-reference/#aven-completions) with `aven completions <shell>`; Homebrew installs them automatically. ([#35](https://github.com/raine/aven/issues/35))
+- Docker images now accept full aven commands (`server setup` or `server --bind …`), with clearer storage errors and [setup and recovery guidance](https://aventasks.dev/sync/setup/#run-with-docker). Custom image commands must now include `server`. ([#35](https://github.com/raine/aven/issues/35))
+- [`aven context`](https://aventasks.dev/command-reference/#aven-context) keeps task descriptions and metadata complete while shortening long note histories. Read omitted notes with `aven note-show`, or use `--full` for every note.
+- Fix: Rerunning `aven sync setup` can resume an interrupted setup without the original invitation once the server has accepted it.
+- Fix: Undo works after changes have been prepared for encrypted sync, even while offline, and can undo note, project, and label creation after syncing.
+- Fix: CLI and TUI commands no longer fail when log files can't be written, and storage errors include clearer explanations. ([#35](https://github.com/raine/aven/issues/35))
 - Fix: TUI shortcut help wraps descriptions instead of clipping them, uses one column on narrow terminals, and lists only commands with hotkeys. ([#33](https://github.com/raine/aven/issues/33))
 
 ## v0.1.46 (2026-10-05)
