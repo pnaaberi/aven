@@ -155,7 +155,7 @@ impl App {
     }
 
     pub(in crate::tui) fn pairing_unavailable_reason(&self) -> Option<&'static str> {
-        (!self.store.sync_status.set_up).then_some("requires sync setup")
+        (!self.store.sync_status.set_up).then_some("set up sync with :sync first")
     }
 
     pub(super) async fn poll_invite(&mut self) -> Result<bool> {

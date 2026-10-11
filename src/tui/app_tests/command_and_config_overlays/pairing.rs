@@ -17,7 +17,7 @@ async fn add_device_is_disabled_until_sync_is_set_up() {
     assert_eq!(state.candidates.len(), 1);
     assert_eq!(
         state.candidates[0].availability.reason(),
-        Some("requires sync setup")
+        Some("set up sync with :sync first")
     );
 
     app.handle_overlay_key(key(KeyCode::Enter)).await.unwrap();
@@ -25,7 +25,7 @@ async fn add_device_is_disabled_until_sync_is_set_up() {
     assert!(!app.invite.work_pending());
     assert_eq!(
         toast_message(&app).as_deref(),
-        Some(":add-device is disabled: requires sync setup")
+        Some(":add-device is disabled: set up sync with :sync first")
     );
 }
 
