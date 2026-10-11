@@ -8,16 +8,18 @@ import Brand from '../components/Brand.astro';
 import ArrowRightIcon from '../components/ArrowRightIcon.astro';
 
 const heroViews = [
-  { id: 'queue', label: 'Queue', src: '/tui.webp', alt: 'Aven terminal UI showing a shared task queue, project sidebar, priorities, and selected task context.' },
-  { id: 'columns', label: 'Columns', src: '/columns.webp', alt: 'Aven columns view showing tasks grouped into Inbox, Backlog, Todo, Active, and Done.' },
-  { id: 'add-task', label: 'Add task', src: '/add-task.webp', alt: 'Aven task composer over the queue, with title, description, project, status, priority, labels, and schedule fields.' },
-  { id: 'search', label: 'Search', src: '/search.webp', alt: 'Aven search for offline showing three tasks across projects, with matches in task titles and descriptions.' },
+  { id: 'queue', caption: 'See what needs attention across your projects.', label: 'Queue', src: '/tui.webp', alt: 'Aven terminal UI showing a shared task queue, project sidebar, priorities, and selected task context.' },
+  { id: 'detail', caption: 'Keep descriptions, notes, and dependencies together.', label: 'Task', src: '/task-detail.webp', alt: "Aven task detail showing a Markdown description alongside the task's project, status, priority, labels, and reference." },
+  { id: 'columns', caption: 'See tasks grouped by status.', label: 'Columns', src: '/columns.webp', alt: 'Aven columns view showing tasks grouped into Inbox, Backlog, Todo, Active, and Done.' },
+  { id: 'add-task', caption: 'Capture a task without leaving the keyboard.', label: 'Add task', src: '/add-task.webp', alt: 'Aven task composer over the queue, with title, description, project, status, priority, labels, and schedule fields.' },
+  { id: 'search', caption: 'Find tasks across titles and descriptions.', label: 'Search', src: '/search.webp', alt: 'Aven search for offline showing three tasks across projects, with matches in task titles and descriptions.' },
+  { id: 'commands', caption: 'Find commands without memorizing every shortcut.', label: 'Commands', src: '/hero-commands.webp', alt: 'Aven command palette filtering view commands over the queue, showing command names, keyboard shortcuts, and descriptions.' },
 ];
 
 const features = [
   { label: '▸ NEEDS ACTION · FOCUS · SOON', title: 'Separate projects. One queue.', description: 'See what needs attention across your projects, or narrow your scope. Use separate workspaces to keep independent task collections apart.', color: 'violet', href: '/organize-tasks/' },
   { label: 'DUE DATES · RECURRING', title: 'Give work its own time.', description: 'Due dates, deferred tasks, and recurring schedules. Keep later work out of the way until it belongs in front of you.', color: 'orange', href: '/schedule-tasks/' },
-  { label: 'MARKDOWN · NOTES · IMAGES', title: 'Keep the context attached.', description: 'Markdown, notes, images, epics, and dependencies. Everything you need to pick up where you left off.', color: 'pink', href: '/concepts/' },
+  { label: 'MARKDOWN · NOTES · IMAGES', title: 'Keep the context attached.', description: 'Markdown, notes, images, epics, and dependencies. Pick up where you left off, or copy a Markdown task report for handoffs.', color: 'pink', href: '/concepts/' },
   { label: 'KEYS · COMMANDS · UNDO', title: 'Stay on the keyboard.', description: 'Move, filter, edit, and undo without reaching for the mouse. A command palette fills in the gaps.', color: 'blue', href: '/tui/' },
   { label: 'SQLITE · OFFLINE', title: 'Local is the default.', description: 'Your tasks live in SQLite, outside your repositories. Work offline. Switch branches. Keep your data.', color: 'green', href: '/backups/' },
   { label: 'SYNC · SELF-HOSTED · E2EE', title: 'Sync you control', description: 'Works fully offline. Need it on more machines? Run the sync server on a Raspberry Pi and connect over your own network. Sync is end-to-end encrypted, so the server cannot read your tasks.', color: 'yellow', href: '/sync/' },
@@ -101,7 +103,10 @@ const testimonials = [
           <figure class="hero-product" data-hero-showcase>
             <div class="hero-tabs" role="tablist" aria-label="Explore Aven" data-pending>
               {heroViews.map((view, index) => (
-                <button type="button" role="tab" id={`hero-tab-${view.id}`} aria-controls={`hero-panel-${view.id}`} aria-selected={index === 0 ? 'true' : 'false'} tabindex={index === 0 ? 0 : -1}>{view.label}</button>
+                <button type="button" role="tab" id={`hero-tab-${view.id}`} aria-controls={`hero-panel-${view.id}`} aria-label={view.label} aria-selected={index === 0 ? 'true' : 'false'} tabindex={index === 0 ? 0 : -1}>
+                  <span class="hero-tab-label">{view.label}</span>
+                  <span class="hero-tab-description">{view.caption}</span>
+                </button>
               ))}
             </div>
             <div class="screenshot-frame">
@@ -110,6 +115,7 @@ const testimonials = [
                 {heroViews.map((view, index) => (
                   <div id={`hero-panel-${view.id}`} role="tabpanel" aria-labelledby={`hero-tab-${view.id}`} aria-hidden={index !== 0 ? 'true' : 'false'} tabindex="0" inert={index !== 0} hidden={index !== 0}>
                     <img src={view.src} width="1992" height="1322" alt={view.alt} fetchpriority={index === 0 ? 'high' : 'auto'} loading={index === 0 ? 'eager' : 'lazy'} />
+                    <p class="hero-caption">{view.caption}</p>
                   </div>
                 ))}
               </div>
@@ -156,18 +162,6 @@ const testimonials = [
                 <p class="feature-description">{feature.description}</p>
               </a>
             ))}
-          </div>
-        </section>
-
-        <section class="section detail-section" aria-labelledby="context-heading">
-          <div class="detail-copy">
-            <p class="eyebrow">Task context</p>
-            <h2 id="context-heading">Keep the context with the task.</h2>
-            <p>Keep descriptions, notes, and dependencies together. Copy a Markdown task report for handoffs.</p>
-          </div>
-          <div class="screenshot-frame">
-            <div class="window-bar"><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>aven</span></div>
-            <img src="/task-detail.webp" width="1992" height="1322" alt="Aven task detail showing a Markdown description alongside the task's project, status, priority, labels, and reference." loading="lazy" />
           </div>
         </section>
 
@@ -233,6 +227,10 @@ const testimonials = [
     const tablist = showcase.querySelector<HTMLElement>('[role="tablist"]')!;
     const tabs = Array.from(tablist.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
     const panels = Array.from(showcase.querySelectorAll<HTMLElement>('[role="tabpanel"]'));
+    const desktop = window.matchMedia('(min-width: 1001px)');
+    const updateOrientation = () => tablist.setAttribute('aria-orientation', desktop.matches ? 'vertical' : 'horizontal');
+    updateOrientation();
+    desktop.addEventListener('change', updateOrientation);
     const select = (index: number) => {
       tabs.forEach((tab, position) => {
         tab.setAttribute('aria-selected', String(position === index));
@@ -240,12 +238,22 @@ const testimonials = [
         panels[position].setAttribute('aria-hidden', String(position !== index));
         panels[position].inert = position !== index;
       });
+      panels[index].querySelector<HTMLImageElement>('img')!.loading = 'eager';
+      if (!desktop.matches) tabs[index].scrollIntoView({ block: 'nearest', inline: 'nearest' });
     };
     tabs.forEach((tab, index) => {
       tab.addEventListener('click', () => select(index));
       tab.addEventListener('keydown', (event) => {
         let next: number;
         switch (event.key) {
+          case 'ArrowDown':
+            if (!desktop.matches) return;
+            next = (index + 1) % tabs.length;
+            break;
+          case 'ArrowUp':
+            if (!desktop.matches) return;
+            next = (index + tabs.length - 1) % tabs.length;
+            break;
           case 'ArrowRight': next = (index + 1) % tabs.length; break;
           case 'ArrowLeft': next = (index + tabs.length - 1) % tabs.length; break;
           case 'Home': next = 0; break;
