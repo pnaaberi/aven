@@ -116,7 +116,6 @@ h2 { font-size: 43px; font-weight: 500; line-height: 1.14; letter-spacing: -2px;
 .session-tool > span { position: absolute; left: 0; top: .825em; width: 6px; height: 6px; transform: translateY(-50%); border-radius: 50%; background: #aebd74; }
 .prompt { color: #938d9b; margin-right: 9px; }
 .detail-copy { margin-bottom: 26px; }
-.capture-section .text-link { margin-top: 16px; font: 14px/1.7 var(--mono); }
 .detail-copy h2 { margin: 0; font-size: 34px; line-height: 1.2; letter-spacing: -1px; }
 .detail-copy .eyebrow { margin-bottom: 16px; }
 .detail-copy p:not(.eyebrow) { margin-top: 12px; color: var(--muted); font-size: 16px; line-height: 1.7; }

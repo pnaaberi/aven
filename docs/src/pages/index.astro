@@ -8,6 +8,7 @@ import Brand from '../components/Brand.astro';
 import ArrowRightIcon from '../components/ArrowRightIcon.astro';
 import SyncTopology from '../components/SyncTopology.astro';
 import AgentSessions from '../components/agent-sessions/AgentSessions.astro';
+import QuickCapture from '../components/QuickCapture.astro';
 
 const heroViews = [
   { id: 'queue', caption: 'See what needs attention across your projects.', label: 'Queue', src: '/tui.webp', alt: 'Aven terminal UI showing a shared task queue, project sidebar, priorities, and selected task context.' },
@@ -153,17 +154,7 @@ const testimonials = [
           </div>
         </section>
 
-        <section class="section capture-section" aria-labelledby="capture-heading">
-          <div class="detail-copy">
-            <p class="eyebrow">Quick capture</p>
-            <h2 id="capture-heading">Capture a task. Get back to work.</h2>
-            <p>Open the composer in a tmux popup without leaving your current terminal. Turn rough notes into a structured task draft with your configured agent, then review before saving.</p>
-            <a class="text-link" href="/tui/#run-aven-from-tmux">Set up tmux capture <ArrowRightIcon /></a>
-          </div>
-          <div class="screenshot-frame">
-            <img src="/landing-tmux-capture.webp" width="3024" height="1898" alt="Aven task composer in a tmux popup over an active terminal workspace." loading="lazy" />
-          </div>
-        </section>
+        <QuickCapture />
 
         <section class="section" aria-labelledby="mobile-heading">
           <div class="mobile-preview">
