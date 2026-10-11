@@ -61,6 +61,7 @@ fn implemented_action_is_handled(action: Action) -> bool {
             | Action::ReturnToLastChange
             | Action::ToggleHelp
             | Action::ShowWelcome
+            | Action::BeginTriage
             | Action::BeginSearch
             | Action::BeginCommand
             | Action::Refresh
