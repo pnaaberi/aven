@@ -255,8 +255,8 @@ h2 { font-size: 43px; font-weight: 500; line-height: 1.14; letter-spacing: -2px;
 }
 @keyframes cursor-blink { 50% { opacity: 0; } }
 
-.hero-tabs { display: grid; gap: 6px; min-width: 0; }
-.hero-tabs button { display: grid; gap: 4px; padding: 14px 16px; text-align: left; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--muted); font: 13px/1.6 var(--mono); }
+.hero-tabs { display: grid; align-self: stretch; gap: 6px; min-width: 0; }
+.hero-tabs button { display: grid; align-content: center; gap: 4px; padding: 4px 16px; text-align: left; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--muted); font: 13px/1.6 var(--mono); }
 .hero-tab-label { color: var(--ink); font: 500 14px/1.4 var(--mono); }
 .hero-tab-description { color: var(--muted); font: 13px/1.5 var(--aven-font), sans-serif; }
 .hero-tabs button[aria-selected='true'] .hero-tab-label { color: #dac4f3; }
