@@ -26,7 +26,7 @@ pub(crate) async fn cmd_context(
     if args.json {
         print_json_pretty(&snapshot)?;
     } else {
-        print_task_context(&snapshot);
+        print_task_context(&snapshot, args.full);
     }
     Ok(())
 }
@@ -274,7 +274,15 @@ async fn context_conflicts(
     Ok(conflicts)
 }
 
-fn print_task_context(snapshot: &TaskContextSnapshot) {
+/// Character budget for the description in the default text output.
+const DESCRIPTION_LIMIT: usize = 2000;
+/// Character budget for all note bodies before older notes collapse.
+const NOTES_LIMIT: usize = 2000;
+/// Character budget for the first-line preview of a collapsed note.
+const NOTE_PREVIEW_LIMIT: usize = 120;
+
+fn print_task_context(snapshot: &TaskContextSnapshot, full: bool) {
+    let display_ref = &snapshot.task.display_ref;
     println!(
         "context {} suffix={} id={} status={} priority={} deleted={} epic={} blocked={} conflicts={} blocks_open={} labels={} title={}",
         snapshot.task.display_ref,
@@ -290,21 +298,30 @@ fn print_task_context(snapshot: &TaskContextSnapshot) {
         snapshot.labels.join(","),
         quote(&snapshot.task.title),
     );
-    println!(
-        "project={} prefix={} name={}",
-        snapshot.project.key,
-        snapshot.project.prefix,
-        quote(&snapshot.project.name)
+    let mut project_line = format!(
+        "project={} prefix={}",
+        snapshot.project.key, snapshot.project.prefix
     );
+    if snapshot.project.name != snapshot.project.key {
+        project_line.push_str(&format!(" name={}", quote(&snapshot.project.name)));
+    }
+    println!("{project_line}");
     println!("workspace={}", snapshot.workspace.key);
     println!(
         "created={} updated={}",
         snapshot.task.created_at, snapshot.task.updated_at
     );
-    println!(
-        "available_at={} due_on={}",
-        snapshot.task.available_at, snapshot.task.due_on
-    );
+    let schedule: Vec<String> = [
+        ("available_at", &snapshot.task.available_at),
+        ("due_on", &snapshot.task.due_on),
+    ]
+    .into_iter()
+    .filter(|(_, value)| !value.is_empty())
+    .map(|(key, value)| format!("{key}={value}"))
+    .collect();
+    if !schedule.is_empty() {
+        println!("{}", schedule.join(" "));
+    }
     if let Some(recurrence) = &snapshot.recurrence {
         println!(
             "recurrence series={} slot={} rule={} timezone={} lifecycle={} outcome={} projection={}",
@@ -318,14 +335,22 @@ fn print_task_context(snapshot: &TaskContextSnapshot) {
         );
     }
     if !snapshot.task.description.is_empty() {
-        print_multiline_block("description", &snapshot.task.description);
+        print_limited_block(
+            "description",
+            "description",
+            &snapshot.task.description,
+            (!full).then_some(DESCRIPTION_LIMIT),
+            display_ref,
+        );
     }
     print_attachment_section(&snapshot.attachments);
     let deps = &snapshot.dependencies;
-    println!(
-        "depends_on open={} total={}",
-        deps.depends_on_open, deps.depends_on_total
-    );
+    if deps.depends_on_total > 0 {
+        println!(
+            "depends_on open={} total={}",
+            deps.depends_on_open, deps.depends_on_total
+        );
+    }
     for item in &deps.depends_on {
         println!(
             "- {} status={} unresolved={} title={}",
@@ -335,10 +360,12 @@ fn print_task_context(snapshot: &TaskContextSnapshot) {
             quote(&item.title),
         );
     }
-    println!(
-        "blocks open={} total={}",
-        deps.blocks_open, deps.blocks_total
-    );
+    if deps.blocks_total > 0 {
+        println!(
+            "blocks open={} total={}",
+            deps.blocks_open, deps.blocks_total
+        );
+    }
     for item in &deps.blocks {
         println!(
             "- {} status={} unresolved={} title={}",
@@ -348,7 +375,9 @@ fn print_task_context(snapshot: &TaskContextSnapshot) {
             quote(&item.title),
         );
     }
-    println!("related total={}", snapshot.related.len());
+    if !snapshot.related.is_empty() {
+        println!("related total={}", snapshot.related.len());
+    }
     for related in &snapshot.related {
         println!(
             "- {} status={} deleted={} title={}",
@@ -367,7 +396,9 @@ fn print_task_context(snapshot: &TaskContextSnapshot) {
             quote(&parent.title)
         );
     }
-    println!("epic_children total={}", snapshot.epic_children.len());
+    if !snapshot.epic_children.is_empty() {
+        println!("epic_children total={}", snapshot.epic_children.len());
+    }
     for child in &snapshot.epic_children {
         println!(
             "- {} status={} open={} title={}",
@@ -377,10 +408,7 @@ fn print_task_context(snapshot: &TaskContextSnapshot) {
             quote(&child.title)
         );
     }
-    for note in &snapshot.notes {
-        println!("note id={} created={}", note.id, note.created_at);
-        print_multiline_block("body", &note.body);
-    }
+    print_notes(&snapshot.notes, full, display_ref);
     for conflict in &snapshot.conflicts {
         println!(
             "conflict {} field={}",
@@ -391,6 +419,99 @@ fn print_task_context(snapshot: &TaskContextSnapshot) {
             print_multiline_block("value", &variant.value);
         }
     }
+}
+
+/// Prints notes in full while their bodies fit the budget, counting from the
+/// newest note, which usually carries the current state. Older notes beyond
+/// the budget collapse to previews, and an oversized newest note is cut.
+fn print_notes(notes: &[ContextNote], full: bool, display_ref: &str) {
+    let mut fitting = 0;
+    let mut remaining = NOTES_LIMIT;
+    for note in notes.iter().rev() {
+        let chars = note.body.chars().count();
+        if chars > remaining {
+            break;
+        }
+        remaining -= chars;
+        fitting += 1;
+    }
+    let expanded = if full {
+        notes.len()
+    } else {
+        fitting.max(notes.len().min(1))
+    };
+    let collapsed = notes.len() - expanded;
+    for (index, note) in notes.iter().enumerate() {
+        let chars = note.body.chars().count();
+        if index < collapsed {
+            let first_line = note.body.lines().next().unwrap_or("");
+            let preview = match truncate_at_char(first_line, NOTE_PREVIEW_LIMIT) {
+                Some(prefix) => format!("{prefix}..."),
+                None => first_line.to_string(),
+            };
+            println!(
+                "note id={} created={} chars={chars} collapsed=yes preview={}",
+                note.id,
+                note.created_at,
+                quote(&preview)
+            );
+            continue;
+        }
+        println!("note id={} created={}", note.id, note.created_at);
+        print_limited_block(
+            "body",
+            "note",
+            &note.body,
+            (!full).then_some(NOTES_LIMIT),
+            display_ref,
+        );
+    }
+    if collapsed > 0 {
+        println!(
+            "notes collapsed={collapsed} hint={}",
+            quote(&format!("aven context {display_ref} --full"))
+        );
+    }
+}
+
+/// Prints a multiline block, cutting it at a line boundary within `limit`
+/// characters and reporting the cut so readers know text is missing.
+fn print_limited_block(
+    label: &str,
+    subject: &str,
+    value: &str,
+    limit: Option<usize>,
+    display_ref: &str,
+) {
+    let Some(prefix) = limit.and_then(|limit| truncate_at_line(value, limit)) else {
+        print_multiline_block(label, value);
+        return;
+    };
+    print_multiline_block(label, prefix);
+    println!(
+        "{subject} truncated shown_chars={} total_chars={} hint={}",
+        prefix.chars().count(),
+        value.chars().count(),
+        quote(&format!("aven context {display_ref} --full"))
+    );
+}
+
+/// Returns the longest prefix within `limit` characters that ends at a line
+/// break, falling back to a character cut when that would drop more than half
+/// the budget. Returns `None` when `value` already fits.
+fn truncate_at_line(value: &str, limit: usize) -> Option<&str> {
+    let prefix = truncate_at_char(value, limit)?;
+    match prefix.rfind('\n') {
+        Some(end) if end >= prefix.len() / 2 => Some(prefix[..end].trim_end()),
+        _ => Some(prefix),
+    }
+}
+
+fn truncate_at_char(value: &str, limit: usize) -> Option<&str> {
+    value
+        .char_indices()
+        .nth(limit)
+        .map(|(byte_index, _)| &value[..byte_index])
 }
 
 fn yes_no(value: bool) -> &'static str {

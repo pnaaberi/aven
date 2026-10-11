@@ -119,3 +119,122 @@ fn context_includes_attachment_metadata() {
     assert!(value["attachments"][0].get("sha256").is_none());
     assert!(value["attachments"][0].get("bytes").is_none());
 }
+
+#[test]
+fn context_text_omits_empty_sections() {
+    let env = TestEnv::new();
+    let db = env.db("context-empty-sections.sqlite");
+    let task_ref = extract_ref(&ok(env.aven(&db, ["add", "plain", "--project", "app"])));
+
+    let text = ok(env.aven(&db, ["context", &task_ref]));
+    contains_all(&text, &["project=app prefix="]);
+    contains_none(
+        &text,
+        &[
+            "name=",
+            "available_at=",
+            "due_on=",
+            "depends_on ",
+            "blocks ",
+            "related total=",
+            "epic_children total=",
+        ],
+    );
+}
+
+#[test]
+fn context_text_shortens_long_description_and_notes() {
+    let env = TestEnv::new();
+    let db = env.db("context-shortened.sqlite");
+    let description = (0..100)
+        .map(|line| format!("description line {line:03} {}", "x".repeat(20)))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let task_ref = extract_ref(&ok(env.aven(
+        &db,
+        [
+            "add",
+            "long",
+            "--project",
+            "app",
+            "--description",
+            &description,
+        ],
+    )));
+    let first_note = format!("first note\n{}", "f".repeat(1500));
+    let second_note = format!("second note\n{}", "s".repeat(1500));
+    ok(env.aven(&db, ["note", &task_ref, &first_note]));
+    ok(env.aven(&db, ["note", &task_ref, &second_note]));
+
+    let text = ok(env.aven(&db, ["context", &task_ref]));
+    contains_all(
+        &text,
+        &[
+            "description line 000",
+            "description truncated shown_chars=",
+            &format!("total_chars={}", description.chars().count()),
+            &format!("notes collapsed=1 hint=\"aven context {task_ref} --full\""),
+        ],
+    );
+    contains_none(&text, &["description line 099"]);
+    let shown = text
+        .split("description<<EOF\n")
+        .nth(1)
+        .and_then(|rest| rest.split("\nEOF").next())
+        .unwrap();
+    assert!(shown.ends_with(&"x".repeat(20)), "cut at a line boundary");
+
+    // Notes created in the same second sort by ID, so either may be newest.
+    let (older, newest, older_preview) =
+        if text.find("first note").unwrap() < text.find("second note").unwrap() {
+            (&first_note, &second_note, "first note")
+        } else {
+            (&second_note, &first_note, "second note")
+        };
+    contains_all(
+        &text,
+        &[
+            &format!(
+                "chars={} collapsed=yes preview=\"{older_preview}\"",
+                older.chars().count()
+            ),
+            newest,
+        ],
+    );
+    contains_none(&text, &[older]);
+
+    let full = ok(env.aven(&db, ["context", &task_ref, "--full"]));
+    contains_all(&full, &[&description, &first_note, &second_note]);
+    contains_none(&full, &["truncated", "collapsed"]);
+
+    let json = ok(env.aven(&db, ["context", &task_ref, "--json"]));
+    let value: Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(value["task"]["description"], description);
+    let bodies: Vec<&str> = value["notes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|note| note["body"].as_str().unwrap())
+        .collect();
+    assert!(bodies.contains(&first_note.as_str()));
+    assert!(bodies.contains(&second_note.as_str()));
+}
+
+#[test]
+fn context_text_cuts_oversized_newest_note() {
+    let env = TestEnv::new();
+    let db = env.db("context-oversized-note.sqlite");
+    let task_ref = extract_ref(&ok(env.aven(&db, ["add", "big note", "--project", "app"])));
+    let note = "y".repeat(3000);
+    ok(env.aven(&db, ["note", &task_ref, &note]));
+
+    let text = ok(env.aven(&db, ["context", &task_ref]));
+    contains_all(
+        &text,
+        &[
+            "note truncated shown_chars=2000 total_chars=3000",
+            &"y".repeat(2000),
+        ],
+    );
+    contains_none(&text, &[&"y".repeat(2001), "collapsed"]);
+}

@@ -285,16 +285,27 @@ aven search recovery --all --json
 
 ### `aven context`
 
-Print a complete context snapshot for one task.
+Print an agent-focused context snapshot for one task.
 
 ```sh
-aven context <task-ref> [--json]
+aven context <task-ref> [--full] [--json]
 ```
 
 The snapshot includes stable identity, display reference, task fields, description, custom task metadata, project and workspace metadata, labels, notes, dependencies, dependents, related tasks, epic membership, recurring-task metadata, deletion state, and unresolved conflicts. It also derives whether the task is blocked, has conflicts, or blocks open work.
 
+Text output omits empty fields and sections. It also shortens long text so repeated checks stay small:
+
+- A description over 2,000 characters is cut at a line boundary and followed by a `description truncated shown_chars=<n> total_chars=<n>` line.
+- Notes print in full from the newest backward while their bodies fit a 2,000-character budget. Older notes collapse to one `note ... collapsed=yes preview=<first line>` line each, followed by a `notes collapsed=<n>` line. The newest note always prints, cut the same way as the description when it alone exceeds the budget.
+
+| Option | Description |
+| --- | --- |
+| `--full` | Print the description and every note body in full. |
+| `--json` | Print the complete snapshot as JSON. JSON output is never shortened. |
+
 ```sh
 aven context APP-7KQ9
+aven context APP-7KQ9 --full
 aven context APP-7KQ9 --json
 ```
 
