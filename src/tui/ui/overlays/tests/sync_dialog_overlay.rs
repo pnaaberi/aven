@@ -934,6 +934,8 @@ fn open_invitation_is_visible_and_can_be_cancelled() {
 
     assert!(rendered.contains("Invitation"), "{rendered}");
     assert!(rendered.contains("open, expires"), "{rendered}");
+    assert!(rendered.contains("Show invitation"), "{rendered}");
+    assert!(!rendered.contains("Add device"), "{rendered}");
     assert!(rendered.contains("Cancel invitation"), "{rendered}");
 }
 

@@ -122,7 +122,8 @@ impl App {
             }
             // The Add device page replaces the dialog at once, and Esc
             // returns to this page; admission keeps waiting after it closes.
-            SyncAction::AddDevice => {
+            // An open invitation shows its QR code again instead of a new one.
+            SyncAction::AddDevice | SyncAction::ShowInvitation => {
                 self.show_pairing_invitation_from(state);
                 return Ok(());
             }

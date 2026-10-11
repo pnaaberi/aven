@@ -173,6 +173,8 @@ pub(crate) enum SyncAction {
     /// Turns on automatic sync and installs the background service.
     SyncAutomatically,
     AddDevice,
+    /// Reopens the open invitation's QR code.
+    ShowInvitation,
     CancelInvitation,
     SetUp,
     Join,
@@ -202,6 +204,7 @@ impl SyncAction {
             Self::SyncNow => "Sync now",
             Self::SyncAutomatically => "Sync automatically",
             Self::AddDevice => "Add device",
+            Self::ShowInvitation => "Show invitation",
             Self::CancelInvitation => "Cancel invitation",
             Self::SetUp => "Set up sync",
             Self::Join => "Join existing sync",
@@ -242,7 +245,11 @@ pub(crate) fn sync_actions(
                     actions.push(SyncAction::SyncAutomatically);
                 }
                 if !refused {
-                    actions.push(SyncAction::AddDevice);
+                    actions.push(if status.invitation.is_some() {
+                        SyncAction::ShowInvitation
+                    } else {
+                        SyncAction::AddDevice
+                    });
                 }
                 // Cancelling retires the invitation locally even when the
                 // server refuses this device.
@@ -604,6 +611,19 @@ mod tests {
         assert_eq!(
             sync_actions(&state, &refused_with_invitation, &idle),
             [SyncAction::SyncNow, SyncAction::CancelInvitation]
+        );
+        let with_invitation = TuiSyncStatus {
+            invitation: refused_with_invitation.invitation.clone(),
+            ..status(LocalPhase::SetUp)
+        };
+        assert_eq!(
+            sync_actions(&state, &with_invitation, &idle),
+            [
+                SyncAction::SyncNow,
+                SyncAction::ShowInvitation,
+                SyncAction::CancelInvitation,
+                SyncAction::ManageDevices
+            ]
         );
     }
 
