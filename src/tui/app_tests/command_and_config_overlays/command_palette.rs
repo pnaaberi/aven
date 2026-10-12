@@ -974,7 +974,20 @@ async fn tab_completes_command_then_cycles_arguments_and_resets_on_edit() {
         (KeyCode::BackTab, "theme terminal"),
     ] {
         app.handle_overlay_key(key(code)).await.unwrap();
-        assert_eq!(command_input_and_choices(&app).0, expected);
+        let (input, choices) = command_input_and_choices(&app);
+        assert_eq!(input, expected);
+        assert_eq!(choices, ["theme dark", "theme light", "theme terminal"]);
+        let Some(OverlayState::Command { state }) = &app.overlay else {
+            panic!("command overlay");
+        };
+        assert_eq!(
+            state.candidates[state.highlighted.unwrap()].input(&state.catalog),
+            expected
+        );
+        let rendered = render_app_text(&mut app, 100, 30);
+        for choice in choices {
+            assert!(rendered.contains(&format!(":{choice}")));
+        }
     }
     for _ in 0..8 {
         app.handle_overlay_key(key(KeyCode::Backspace))
@@ -983,10 +996,31 @@ async fn tab_completes_command_then_cycles_arguments_and_resets_on_edit() {
     }
     type_chars(&mut app, "l").await;
     app.handle_overlay_key(key(KeyCode::Tab)).await.unwrap();
-    assert_eq!(command_input_and_choices(&app).0, "theme light");
+    assert_eq!(
+        command_input_and_choices(&app),
+        ("theme light".to_string(), vec!["theme light".to_string()])
+    );
     app.handle_overlay_key(key(KeyCode::Enter)).await.unwrap();
     assert_eq!(app.appearance, crate::tui::theme::Appearance::Light);
     assert!(app.overlay.is_none());
+}
+
+#[tokio::test]
+async fn argument_cycle_keeps_rows_browsable_and_enter_applies_highlight() {
+    let mut app = test_app().await;
+    app.begin_command().await;
+    type_chars(&mut app, "theme").await;
+    for _ in 0..2 {
+        app.handle_overlay_key(key(KeyCode::Tab)).await.unwrap();
+    }
+    assert_eq!(command_input_and_choices(&app).0, "theme dark");
+    app.handle_overlay_key(key(KeyCode::Down)).await.unwrap();
+    app.handle_overlay_key(key(KeyCode::Tab)).await.unwrap();
+    assert_eq!(command_input_and_choices(&app).0, "theme light");
+    app.handle_overlay_key(key(KeyCode::Down)).await.unwrap();
+    app.handle_overlay_key(key(KeyCode::Enter)).await.unwrap();
+    assert!(app.overlay.is_none());
+    assert_eq!(app.appearance, crate::tui::theme::Appearance::Terminal);
 }
 
 #[tokio::test]

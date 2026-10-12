@@ -320,8 +320,9 @@ The in-app command catalog is the authoritative shortcut reference:
 - `?` lists commands available in the current mode.
 - `:theme` selects `dark`, `light`, or `terminal` colors for this session.
   Press Enter on `theme` to see the choices, then use arrow keys and Enter or
-  Tab to complete a value. For example, `:theme terminal` uses your terminal's
-  own colors. This does not change your config.
+  Tab to cycle values while keeping the choices visible. Typing an argument
+  filters the choices. For example, `:theme terminal` uses your terminal's own
+  colors. This does not change your config.
 - `:` searches command names and descriptions. `:sync` opens the **Sync**
   dialog; `:config-status` remains an alias. From a task-list surface, choose
   `:add-device` to invite another device to sync. The **Add device** overlay
