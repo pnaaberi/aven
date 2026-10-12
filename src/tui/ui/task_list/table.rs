@@ -52,6 +52,7 @@ pub(super) struct TaskListTaskRow {
     pub(super) state: TaskRowState,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn render_task_list(
     frame: &mut Frame,
     theme: &Theme,
@@ -373,6 +374,7 @@ pub(super) fn list_scrollbar_area(area: Rect) -> Rect {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn render_task_header(
     frame: &mut Frame,
     theme: &Theme,

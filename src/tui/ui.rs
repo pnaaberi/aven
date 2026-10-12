@@ -442,6 +442,7 @@ pub(crate) fn main_list_page_rows(store: &TuiStore, area: ratatui::layout::Rect)
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_main_surface(
     frame: &mut Frame,
     theme: &Theme,

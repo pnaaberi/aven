@@ -155,6 +155,7 @@ pub(super) fn ordered_epic_children(children: &[DetailEpicChild]) -> Vec<&Detail
         .collect()
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn extend_epic_children_section(
     theme: &Theme,
     lines: &mut Vec<Line<'static>>,
@@ -264,6 +265,7 @@ pub(super) fn disclosure_line(theme: &Theme, label: &str, active: bool) -> Line<
     ])
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn epic_child_tree_item_lines(
     theme: &Theme,
     link: &crate::query::TaskDependencyLink,

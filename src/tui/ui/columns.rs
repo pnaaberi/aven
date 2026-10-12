@@ -194,6 +194,7 @@ pub(super) struct ColumnInteraction<'a> {
     pub(super) drag: Option<&'a crate::tui::list_surface::ColumnDrag>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn render_columns(
     frame: &mut Frame,
     theme: &Theme,

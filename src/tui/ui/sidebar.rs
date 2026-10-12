@@ -370,6 +370,7 @@ fn sidebar_icon_cell(marker: &str) -> String {
     format!("{marker}{}", " ".repeat(padding))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn sidebar_entry_line(
     theme: &Theme,
     entry: &SidebarEntry,
