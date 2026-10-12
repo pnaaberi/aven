@@ -768,6 +768,7 @@ impl App {
         } else {
             let task = self.store.selected_task(self.list.selected_task());
             handle_detail_scroll_key_with_images(
+                &self.theme,
                 key,
                 scroll,
                 terminal_size.width,

@@ -135,13 +135,13 @@ fn detail_text_mapping_handles_wide_title_characters() {
 
     assert_eq!(first_wide_cell, second_wide_cell);
     assert_eq!(
-        detail_selected_text(&item, &selection).as_deref(),
+        detail_selected_text(&Theme::dark(), &item, &selection).as_deref(),
         Some("界")
     );
     let trailing_space = detail_text_cell_at_position(&item, 80, 24, 70, 3, 0).unwrap();
     let trailing_selection = DetailTextSelection::new(item.task.id.clone(), 80, trailing_space);
     assert_eq!(
-        detail_selected_text(&item, &trailing_selection).as_deref(),
+        detail_selected_text(&Theme::dark(), &item, &trailing_selection).as_deref(),
         Some("B")
     );
 
@@ -169,7 +169,7 @@ fn detail_text_mapping_uses_scrolled_wrapped_description_lines() {
     let selection = DetailTextSelection::new(item.task.id.clone(), 70, cell);
 
     assert_eq!(
-        detail_selected_text(&item, &selection).as_deref(),
+        detail_selected_text(&Theme::dark(), &item, &selection).as_deref(),
         Some(expected.as_str())
     );
 }
@@ -196,7 +196,7 @@ fn detail_selection_copies_rendered_markdown_text() {
 
     assert_eq!(description.text, "bold and code");
     assert_eq!(
-        detail_selected_text(&item, &selection).as_deref(),
+        detail_selected_text(&Theme::dark(), &item, &selection).as_deref(),
         Some("bold and code")
     );
 }
@@ -252,7 +252,8 @@ fn detail_markdown_links_hide_destinations_and_have_mouse_targets() {
         "See the [Aven guide](https://aven.raine.dev/guide/) for details.".to_string();
     item.notes[0].body = "Review the [task docs](https://aven.raine.dev/tasks/).".to_string();
     let expanded_sections = BTreeSet::new();
-    let context = detail_query_context(100, 30, 0, &expanded_sections, None);
+    let theme = Theme::dark();
+    let context = detail_query_context(&theme, 100, 30, 0, &expanded_sections, None);
     let document = DetailDocument::build(&item, &context);
     let rendered = document
         .model

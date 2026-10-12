@@ -2,6 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::query::TaskListItem;
 use crate::tui::store::SidebarEntry;
+use crate::tui::theme::Theme;
 use crate::tui::ui::{DetailInlineImageContext, detail_scroll_cap_with_images};
 
 pub(crate) fn scroll_with_delta(scroll: u16, delta: isize, cap: u16) -> u16 {
@@ -17,6 +18,7 @@ pub(crate) fn scroll_with_delta(scroll: u16, delta: isize, cap: u16) -> u16 {
 }
 
 pub(crate) fn detail_scroll_with_delta_with_images(
+    theme: &Theme,
     scroll: u16,
     delta: isize,
     terminal_width: u16,
@@ -26,7 +28,13 @@ pub(crate) fn detail_scroll_with_delta_with_images(
 ) -> u16 {
     let cap = task
         .map(|task| {
-            detail_scroll_cap_with_images(task, terminal_width, terminal_height, inline_images)
+            detail_scroll_cap_with_images(
+                theme,
+                task,
+                terminal_width,
+                terminal_height,
+                inline_images,
+            )
         })
         .unwrap_or(0);
     scroll_with_delta(scroll, delta, cap)
@@ -40,10 +48,19 @@ pub(crate) fn handle_detail_scroll_key(
     terminal_height: u16,
     task: Option<&TaskListItem>,
 ) -> u16 {
-    handle_detail_scroll_key_with_images(key, scroll, terminal_width, terminal_height, task, None)
+    handle_detail_scroll_key_with_images(
+        &Theme::dark(),
+        key,
+        scroll,
+        terminal_width,
+        terminal_height,
+        task,
+        None,
+    )
 }
 
 pub(crate) fn handle_detail_scroll_key_with_images(
+    theme: &Theme,
     key: KeyEvent,
     scroll: u16,
     terminal_width: u16,
@@ -53,7 +70,13 @@ pub(crate) fn handle_detail_scroll_key_with_images(
 ) -> u16 {
     let cap = task
         .map(|task| {
-            detail_scroll_cap_with_images(task, terminal_width, terminal_height, inline_images)
+            detail_scroll_cap_with_images(
+                theme,
+                task,
+                terminal_width,
+                terminal_height,
+                inline_images,
+            )
         })
         .unwrap_or(0);
     handle_detail_scroll_key_with_cap(key, scroll, terminal_height, cap)

@@ -12,6 +12,7 @@ pub(crate) use attachments::{
 pub(crate) use document::{DetailDocument, DetailInteractiveRow, DetailRenderContext};
 pub(crate) use metadata::{DetailMetadataTarget, detail_copy_target_at, detail_metadata_target_at};
 
+use crate::tui::theme::Theme;
 #[cfg(test)]
 use crate::tui::theme::{BORDER, FG_MUTED};
 #[cfg(test)]
@@ -134,6 +135,7 @@ fn render_detail(
 }
 
 fn detail_query_context<'a>(
+    theme: &'a Theme,
     terminal_width: u16,
     terminal_height: u16,
     scroll: u16,
@@ -141,6 +143,7 @@ fn detail_query_context<'a>(
     inline_images: Option<&'a DetailInlineImageContext>,
 ) -> DetailRenderContext<'a> {
     DetailRenderContext {
+        theme,
         terminal_area: Rect::new(0, 0, terminal_width, terminal_height),
         scroll,
         detail_revision: DetailRevision::UNCACHED,
@@ -161,10 +164,11 @@ pub(crate) fn detail_scroll_cap(
     terminal_width: u16,
     terminal_height: u16,
 ) -> u16 {
-    detail_scroll_cap_with_images(item, terminal_width, terminal_height, None)
+    detail_scroll_cap_with_images(&Theme::dark(), item, terminal_width, terminal_height, None)
 }
 
 pub(crate) fn detail_scroll_cap_with_images(
+    theme: &Theme,
     item: &TaskListItem,
     terminal_width: u16,
     terminal_height: u16,
@@ -174,6 +178,7 @@ pub(crate) fn detail_scroll_cap_with_images(
     DetailDocument::build(
         item,
         &detail_query_context(
+            theme,
             terminal_width,
             terminal_height,
             0,
@@ -213,6 +218,7 @@ pub(crate) fn detail_interactive_rows(
     DetailDocument::build(
         item,
         &detail_query_context(
+            &Theme::dark(),
             terminal_width,
             terminal_height,
             0,
@@ -237,6 +243,7 @@ pub(crate) fn detail_attachment_scroll_target(
     let document = DetailDocument::build(
         item,
         &detail_query_context(
+            &Theme::dark(),
             terminal_width,
             terminal_height,
             scroll,
@@ -265,6 +272,7 @@ pub(crate) fn detail_section_scroll_target_with_images(
     DetailDocument::build(
         item,
         &detail_query_context(
+            &Theme::dark(),
             terminal_width,
             terminal_height,
             scroll,
@@ -549,6 +557,7 @@ pub(crate) fn detail_text_cell_at_position(
     DetailDocument::build(
         item,
         &detail_query_context(
+            &Theme::dark(),
             terminal_width,
             terminal_height,
             scroll,
@@ -560,13 +569,21 @@ pub(crate) fn detail_text_cell_at_position(
 }
 
 pub(crate) fn detail_selected_text(
+    theme: &Theme,
     item: &TaskListItem,
     selection: &DetailTextSelection,
 ) -> Option<String> {
     let expanded_sections = BTreeSet::new();
     DetailDocument::build(
         item,
-        &detail_query_context(selection.terminal_width, 24, 0, &expanded_sections, None),
+        &detail_query_context(
+            theme,
+            selection.terminal_width,
+            24,
+            0,
+            &expanded_sections,
+            None,
+        ),
     )
     .selected_text(selection)
 }
@@ -585,6 +602,7 @@ pub(crate) fn detail_attachment_at_position(
     DetailDocument::build(
         item,
         &detail_query_context(
+            &Theme::dark(),
             terminal_width,
             terminal_height,
             scroll,
@@ -609,6 +627,7 @@ pub(crate) fn detail_child_task_at_position(
     DetailDocument::build(
         item,
         &detail_query_context(
+            &Theme::dark(),
             terminal_width,
             terminal_height,
             scroll,
@@ -623,6 +642,7 @@ pub(crate) fn detail_child_task_at_position(
 #[allow(clippy::too_many_arguments)]
 pub(super) fn render_detail_underlay(
     frame: &mut Frame,
+    theme: &Theme,
     store: &TuiStore,
     widgets: &mut WidgetState,
     selected_task: Option<usize>,
@@ -638,6 +658,7 @@ pub(super) fn render_detail_underlay(
 ) {
     if let Some(task) = store.selected_task(selected_task) {
         let context = DetailRenderContext {
+            theme,
             terminal_area: frame.area(),
             scroll,
             detail_revision: store.tasks.revision(),

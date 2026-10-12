@@ -334,6 +334,7 @@ async fn detail_keyboard_scroll_includes_framed_preview_rows() {
     app.show_detail(0);
     let text_only_cap = crate::tui::ui::detail_scroll_cap(&app.store.tasks[selected], 80, 26);
     let preview_cap = crate::tui::ui::detail_scroll_cap_with_images(
+        &crate::tui::theme::Theme::dark(),
         &app.store.tasks[selected],
         80,
         26,

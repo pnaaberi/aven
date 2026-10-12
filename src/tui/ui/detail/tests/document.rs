@@ -52,7 +52,8 @@ fn detail_selection_maps_and_highlights_across_wrapped_title_lines() {
     let mut item = detail_test_item();
     item.task.title = "first wrapped second line".to_string();
     let expanded_sections = BTreeSet::new();
-    let context = detail_query_context(20, 24, 0, &expanded_sections, None);
+    let theme = Theme::dark();
+    let context = detail_query_context(&theme, 20, 24, 0, &expanded_sections, None);
     let document = DetailDocument::build(&item, &context);
     let layout = detail_content_layout(context.terminal_area);
     let first = document
@@ -171,6 +172,7 @@ fn cached_geometry_accepts_frame_specific_detail_styles() {
     let expanded_sections = BTreeSet::new();
     let images = DetailInlineImageContext::default();
     let base = DetailRenderContext {
+        theme: &Theme::dark(),
         terminal_area: Rect::new(0, 0, 80, 24),
         scroll: 0,
         detail_revision: DetailRevision::UNCACHED,
@@ -199,6 +201,7 @@ fn cached_geometry_accepts_frame_specific_detail_styles() {
         ..images.clone()
     };
     let styled = DetailRenderContext {
+        theme: &Theme::dark(),
         terminal_area: base.terminal_area,
         scroll: 0,
         detail_revision: base.detail_revision,
@@ -221,6 +224,7 @@ fn cached_geometry_invalidates_for_semantic_detail_changes() {
     let expanded_sections = BTreeSet::new();
     let images = DetailInlineImageContext::default();
     let base = DetailRenderContext {
+        theme: &Theme::dark(),
         terminal_area: Rect::new(0, 0, 80, 24),
         scroll: 0,
         detail_revision: DetailRevision::UNCACHED,
@@ -237,6 +241,7 @@ fn cached_geometry_invalidates_for_semantic_detail_changes() {
     assert!(document.matches_frame(&item, &base));
 
     let changed_context = DetailRenderContext {
+        theme: &Theme::dark(),
         detail_revision: DetailRevision::next(),
         ..base
     };
@@ -261,6 +266,7 @@ fn cached_geometry_invalidates_for_semantic_detail_changes() {
         status: crate::tui::attachment_controller::PendingAttachmentStatus::Preparing,
     }];
     let pending_context = DetailRenderContext {
+        theme: &Theme::dark(),
         pending_attachments: &pending,
         ..base
     };
@@ -274,6 +280,7 @@ fn cached_geometry_invalidates_for_semantic_detail_changes() {
         cursor: 2,
     };
     let editor_context = DetailRenderContext {
+        theme: &Theme::dark(),
         inline_title_editor: Some(&editor),
         pending_attachments: &[],
         ..base
@@ -282,9 +289,39 @@ fn cached_geometry_invalidates_for_semantic_detail_changes() {
 
     let expanded_sections = [DetailSection::DependsOn].into_iter().collect();
     let expanded_context = DetailRenderContext {
+        theme: &Theme::dark(),
         expanded_sections: &expanded_sections,
         pending_attachments: &[],
         ..base
     };
     assert!(!document.matches_frame(&item, &expanded_context));
+}
+
+#[test]
+fn cached_detail_document_rebuilds_only_when_theme_differs() {
+    let item = detail_test_item();
+    let expanded_sections = BTreeSet::new();
+    let dark = Theme::dark();
+    let context = detail_query_context(&dark, 80, 24, 0, &expanded_sections, None);
+    let cached = std::rc::Rc::new(DetailDocument::build(&item, &context));
+
+    let equal = dark.clone();
+    let equal_context = DetailRenderContext {
+        theme: &equal,
+        ..context
+    };
+    let reused = DetailDocument::reuse_or_build(Some(&cached), &item, &equal_context);
+    assert!(std::rc::Rc::ptr_eq(&reused, &cached));
+
+    let changed = Theme {
+        accent: ratatui::style::Color::Rgb(1, 2, 3),
+        ..Theme::dark()
+    };
+    let changed_context = DetailRenderContext {
+        theme: &changed,
+        ..context
+    };
+    let rebuilt = DetailDocument::reuse_or_build(Some(&cached), &item, &changed_context);
+    assert!(!std::rc::Rc::ptr_eq(&rebuilt.geometry, &cached.geometry));
+    assert_eq!(rebuilt.geometry.theme, changed);
 }

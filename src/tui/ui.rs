@@ -91,7 +91,7 @@ use crate::tui::overlay::{
     TextInputView,
 };
 use crate::tui::store::{TaskOrder, TaskQuery, TuiStore};
-use crate::tui::theme::{ACCENT, BG, BG_ALT, BG_PANEL, FG, FG_DIM, GREEN, PINK, SELECTED};
+use crate::tui::theme::{ACCENT, BG, BG_ALT, BG_PANEL, FG, FG_DIM, GREEN, PINK, SELECTED, Theme};
 use crate::tui::toast::Toast;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -203,17 +203,19 @@ pub(crate) fn footer_area(terminal: Rect) -> Rect {
 
 pub(crate) fn render(
     frame: &mut Frame,
+    theme: &Theme,
     store: &TuiStore,
     widgets: &mut WidgetState,
     list: &mut ListSurface,
     view: &ViewState,
 ) {
-    render_surface(frame, store, widgets, list, view);
-    widgets.text_cursor = self::input::text_cursor_position(frame.buffer_mut());
+    render_surface(frame, theme, store, widgets, list, view);
+    widgets.text_cursor = self::input::text_cursor_position(frame.buffer_mut(), theme);
 }
 
 fn render_surface(
     frame: &mut Frame,
+    theme: &Theme,
     store: &TuiStore,
     widgets: &mut WidgetState,
     list: &mut ListSurface,
@@ -373,6 +375,7 @@ fn render_surface(
         } else {
             render_detail_underlay(
                 frame,
+                theme,
                 store,
                 widgets,
                 list.selected_task(),
@@ -391,6 +394,7 @@ fn render_surface(
     if let Some(overlay) = &view.overlay {
         render_overlay(
             frame,
+            theme,
             store,
             widgets,
             list,
@@ -917,6 +921,7 @@ fn render_overlay_content(
 #[allow(clippy::too_many_arguments)]
 fn render_overlay(
     frame: &mut Frame,
+    theme: &Theme,
     store: &TuiStore,
     widgets: &mut WidgetState,
     list: &mut ListSurface,
@@ -945,6 +950,7 @@ fn render_overlay(
         };
         render_detail_underlay(
             frame,
+            theme,
             store,
             widgets,
             list.selected_task(),

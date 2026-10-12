@@ -26,7 +26,7 @@ use super::{
     TextInputView, WidgetState, detail_target_is_actionable,
 };
 use crate::tui::detail_selection::text_cell_at_column;
-use crate::tui::theme::{ACCENT, BG, BG_PANEL, BORDER, FG, FG_DIM, FG_MUTED};
+use crate::tui::theme::{ACCENT, BG, BG_PANEL, BORDER, FG, FG_DIM, FG_MUTED, Theme};
 use unicode_width::UnicodeWidthStr;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,6 +38,7 @@ pub(super) struct DetailContentLayout {
 
 #[derive(Clone, Copy)]
 pub(crate) struct DetailRenderContext<'a> {
+    pub(crate) theme: &'a Theme,
     pub(crate) terminal_area: Rect,
     pub(crate) scroll: u16,
     pub(crate) detail_revision: DetailRevision,
@@ -78,6 +79,8 @@ pub(crate) struct DetailInteractiveRow {
 
 #[derive(Debug)]
 pub(super) struct DetailBodyGeometry {
+    /// Theme the styled body was built with.
+    pub(super) theme: Theme,
     pub(super) task_id: crate::ids::TaskId,
     pub(super) detail_revision: DetailRevision,
     pub(super) content_width: usize,
@@ -118,6 +121,7 @@ impl DetailBodyGeometry {
         );
         let selectable = detail_selectable_document_from_body(item, content_width, true, &body);
         Self {
+            theme: context.theme.clone(),
             task_id: item.task.id.clone(),
             detail_revision: context.detail_revision,
             content_width,
@@ -193,7 +197,8 @@ impl DetailDocument {
     fn geometry_matches(&self, item: &TaskListItem, context: &DetailRenderContext<'_>) -> bool {
         let layout = context.content_layout();
         let geometry = &self.geometry;
-        geometry.task_id == item.task.id
+        geometry.theme == *context.theme
+            && geometry.task_id == item.task.id
             && geometry.detail_revision == context.detail_revision
             && geometry.content_width == layout.content_area.width as usize
             && geometry.expanded_sections == *context.expanded_sections

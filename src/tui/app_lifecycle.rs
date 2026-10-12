@@ -511,7 +511,7 @@ impl App {
         let store = &self.store;
         let widgets = &mut self.widgets;
         let list = &mut self.list;
-        ui::render(frame, store, widgets, list, &view);
+        ui::render(frame, &self.theme, store, widgets, list, &view);
     }
 
     pub(super) fn inline_image_context(&self) -> Option<ui::DetailInlineImageContext> {

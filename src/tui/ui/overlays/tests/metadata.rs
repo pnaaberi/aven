@@ -132,7 +132,9 @@ fn input_uses_shared_cursor_and_footer_packs_visible_actions() {
     let buffer = terminal.backend().buffer();
     assert_eq!(layout.body.height, 1);
     assert_eq!(layout.body.y, layout.header.bottom());
-    let cursor = crate::tui::ui::input::text_cursor_position(buffer).unwrap();
+    let cursor =
+        crate::tui::ui::input::text_cursor_position(buffer, &crate::tui::theme::Theme::dark())
+            .unwrap();
     assert_eq!(cursor.x, layout.body.x + 3);
     assert_eq!(cursor.y, layout.body.y);
     assert_eq!(layout.actions[1].area.x, layout.actions[0].area.right() + 2);

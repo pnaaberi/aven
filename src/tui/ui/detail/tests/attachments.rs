@@ -428,7 +428,7 @@ fn duplicate_hash_hit_uses_the_visible_attachment_frame() {
         layout.content_area.width,
         layout.content_area.height.saturating_sub(sticky_height),
     );
-    let cap = detail_scroll_cap_with_images(&item, 80, 30, Some(&context));
+    let cap = detail_scroll_cap_with_images(&Theme::dark(), &item, 80, 30, Some(&context));
     let (scroll, image) = (0..=cap)
         .find_map(|scroll| {
             let model = build_detail_content_model(
@@ -469,7 +469,8 @@ fn framed_preview_overflow_expands_scroll_and_reaches_hit_target() {
     let width = 80;
     let height = 26;
     let text_only_cap = detail_scroll_cap(&item, width, height);
-    let preview_cap = detail_scroll_cap_with_images(&item, width, height, Some(&context));
+    let preview_cap =
+        detail_scroll_cap_with_images(&Theme::dark(), &item, width, height, Some(&context));
 
     assert!(preview_cap > text_only_cap);
     let target =
@@ -500,6 +501,7 @@ fn large_attachment_preview_stays_inside_its_border() {
     terminal
         .draw(|frame| {
             let render_context = DetailRenderContext {
+                theme: &Theme::dark(),
                 terminal_area: frame.area(),
                 scroll: 0,
                 detail_revision: DetailRevision::UNCACHED,

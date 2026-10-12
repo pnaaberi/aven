@@ -26,6 +26,7 @@ impl App {
         let inline_images = self.inline_image_context();
         let pending_attachments = self.attachment_controller.views();
         let context = DetailRenderContext {
+            theme: &self.theme,
             terminal_area: Rect::new(0, 0, terminal_size.width, terminal_size.height),
             scroll: detail.scroll(),
             detail_revision: self.store.tasks.revision(),
@@ -217,7 +218,7 @@ impl App {
                     .or_else(|| {
                         self.store
                             .selected_task(self.list.selected_task())
-                            .and_then(|item| detail_selected_text(item, selection))
+                            .and_then(|item| detail_selected_text(&self.theme, item, selection))
                     })
             });
         let Some(value) = value.filter(|value| !value.is_empty()) else {

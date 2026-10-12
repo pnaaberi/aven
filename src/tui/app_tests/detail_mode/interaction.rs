@@ -739,7 +739,7 @@ async fn detail_drag_selects_rendered_text_and_coexists_with_scrolling() {
         .unwrap();
     let selected_text = {
         let item = app.store.selected_task(app.list.selected_task()).unwrap();
-        crate::tui::ui::detail_selected_text(item, &selection)
+        crate::tui::ui::detail_selected_text(&crate::tui::theme::Theme::dark(), item, &selection)
     };
     assert_eq!(selected_text.as_deref(), Some("Select"));
     assert!(!app.detail.state_mut().unwrap().text_dragging);
@@ -752,7 +752,8 @@ async fn detail_drag_selects_rendered_text_and_coexists_with_scrolling() {
     assert!(app.detail.is_active());
     let item = app.store.selected_task(app.list.selected_task()).unwrap();
     assert_eq!(
-        crate::tui::ui::detail_selected_text(item, &selection).as_deref(),
+        crate::tui::ui::detail_selected_text(&crate::tui::theme::Theme::dark(), item, &selection)
+            .as_deref(),
         Some("Select")
     );
 

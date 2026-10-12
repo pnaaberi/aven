@@ -531,6 +531,7 @@ impl App {
                 scroll_with_delta(scroll, delta, cap)
             } else {
                 detail_scroll_with_delta_with_images(
+                    &self.theme,
                     scroll,
                     delta,
                     terminal_size.width,

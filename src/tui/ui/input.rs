@@ -8,7 +8,7 @@ use ratatui::text::{Line, Span};
 use crate::tui::text::{
     char_boundary_at_or_before, char_cells, str_cells, take_leading_cells, take_trailing_cells,
 };
-use crate::tui::theme::{BG_ALT, FG};
+use crate::tui::theme::Theme;
 
 pub(in crate::tui::ui) fn input_line(
     prefix: &'static str,
@@ -82,9 +82,8 @@ pub(in crate::tui::ui) fn input_cursor_spans(
     ]
 }
 
-/// Style of the drawn cursor cell. [`text_cursor_position`] locates the caret by
-/// this exact foreground/background pair, so nothing else may use it.
-pub(in crate::tui::ui) const CURSOR_STYLE: Style = Style::new().fg(BG_ALT).bg(FG);
+// Alias of `Theme::dark().cursor()` kept while render code migrates to `&Theme`.
+pub(in crate::tui::ui) const CURSOR_STYLE: Style = Theme::dark().cursor();
 
 pub(in crate::tui::ui) fn cursor_cell(content: impl Into<Cow<'static, str>>) -> Span<'static> {
     Span::styled(content, CURSOR_STYLE)
@@ -102,10 +101,11 @@ pub(in crate::tui::ui) fn cursor_cell(content: impl Into<Cow<'static, str>>) -> 
 /// Cursor cells covered by a stacked dialog no longer retain this exact style:
 /// dialog dimming changes their modifiers or colors, so only the topmost active
 /// input qualifies.
-pub(crate) fn text_cursor_position(buffer: &Buffer) -> Option<Position> {
+pub(crate) fn text_cursor_position(buffer: &Buffer, theme: &Theme) -> Option<Position> {
+    let cursor = theme.cursor();
     let index = buffer.content().iter().position(|cell| {
-        Some(cell.fg) == CURSOR_STYLE.fg
-            && Some(cell.bg) == CURSOR_STYLE.bg
+        Some(cell.fg) == cursor.fg
+            && Some(cell.bg) == cursor.bg
             && !cell.modifier.contains(Modifier::DIM)
     })?;
     let (x, y) = buffer.pos_of(index);
@@ -120,8 +120,8 @@ mod tests {
     fn cursor_cell_has_correct_style() {
         let span = cursor_cell("a");
         assert_eq!(span.content.as_ref(), "a");
-        assert_eq!(span.style.fg, Some(BG_ALT));
-        assert_eq!(span.style.bg, Some(FG));
+        assert_eq!(span.style.fg, Theme::dark().cursor().fg);
+        assert_eq!(span.style.bg, Theme::dark().cursor().bg);
     }
 
     #[test]
@@ -129,8 +129,8 @@ mod tests {
         let line = input_line("", "abc", 1);
         assert_eq!(line.spans[0].content.as_ref(), "a");
         assert_eq!(line.spans[1].content.as_ref(), "b");
-        assert_eq!(line.spans[1].style.fg, Some(BG_ALT));
-        assert_eq!(line.spans[1].style.bg, Some(FG));
+        assert_eq!(line.spans[1].style.fg, Theme::dark().cursor().fg);
+        assert_eq!(line.spans[1].style.bg, Theme::dark().cursor().bg);
         assert_eq!(line.spans[2].content.as_ref(), "c");
     }
 
@@ -139,7 +139,7 @@ mod tests {
         let spans = input_cursor_spans("abc", 3, InputWidth::Full);
         assert_eq!(spans[0].content.as_ref(), "abc");
         assert_eq!(spans[1].content.as_ref(), " ");
-        assert_eq!(spans[1].style.bg, Some(FG));
+        assert_eq!(spans[1].style.bg, Theme::dark().cursor().bg);
     }
 
     #[test]
@@ -154,7 +154,7 @@ mod tests {
         let line = input_line("", "aéz", 3);
         assert_eq!(line.spans[0].content.as_ref(), "aé");
         assert_eq!(line.spans[1].content.as_ref(), "z");
-        assert_eq!(line.spans[1].style.bg, Some(FG));
+        assert_eq!(line.spans[1].style.bg, Theme::dark().cursor().bg);
     }
 
     #[test]

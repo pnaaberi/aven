@@ -942,6 +942,7 @@ async fn detail_lifecycle_preserves_parent_state_and_reopens_cleanly() {
         .clone()
         .unwrap();
     let parent_text = crate::tui::ui::detail_selected_text(
+        &crate::tui::theme::Theme::dark(),
         app.store.selected_task(Some(parent)).unwrap(),
         &parent_selection,
     )
@@ -955,7 +956,14 @@ async fn detail_lifecycle_preserves_parent_state_and_reopens_cleanly() {
     assert!(app.detail.state_mut().unwrap().focused_target.is_none());
     assert!(app.detail.state_mut().unwrap().expanded_sections.is_empty());
     assert!(app.detail.state_mut().unwrap().text_selection.is_some());
-    assert!(crate::tui::ui::detail_selected_text(&app.store.tasks[0], &parent_selection).is_none());
+    assert!(
+        crate::tui::ui::detail_selected_text(
+            &crate::tui::theme::Theme::dark(),
+            &app.store.tasks[0],
+            &parent_selection
+        )
+        .is_none()
+    );
     assert!(app.detail_has_parent());
 
     app.dispatch_key(key(KeyCode::Char('g')), size)
@@ -991,6 +999,7 @@ async fn detail_lifecycle_preserves_parent_state_and_reopens_cleanly() {
     );
     assert_eq!(
         crate::tui::ui::detail_selected_text(
+            &crate::tui::theme::Theme::dark(),
             app.store.selected_task(app.list.selected_task()).unwrap(),
             &parent_selection,
         )
