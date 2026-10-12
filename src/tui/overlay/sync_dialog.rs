@@ -613,7 +613,7 @@ mod tests {
             [SyncAction::SyncNow, SyncAction::CancelInvitation]
         );
         let with_invitation = TuiSyncStatus {
-            invitation: refused_with_invitation.invitation.clone(),
+            invitation: refused_with_invitation.invitation,
             ..status(LocalPhase::SetUp)
         };
         assert_eq!(
