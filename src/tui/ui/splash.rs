@@ -2,7 +2,7 @@ use std::sync::OnceLock;
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
 
@@ -143,8 +143,13 @@ fn splash_cell(
     let purple = afterglow_color(purple, theme.splash_afterglow, glow);
     let white = check_color(theme, visual.dim);
 
+    let dim = if theme.is_terminal() && visual.dim > 0.0 {
+        Modifier::DIM
+    } else {
+        Modifier::empty()
+    };
     if white_mask > 0 {
-        let mut style = Style::new().fg(white);
+        let mut style = Style::new().fg(white).add_modifier(dim);
         if occupied_mask == 0b1111 && purple_mask > 0 {
             style = style.bg(purple);
         }
@@ -152,7 +157,7 @@ fn splash_cell(
     } else if purple_mask > 0 {
         Span::styled(
             quadrant_glyph(purple_mask).to_string(),
-            Style::new().fg(purple),
+            Style::new().fg(purple).add_modifier(dim),
         )
     } else {
         Span::raw(" ")

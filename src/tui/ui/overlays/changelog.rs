@@ -193,7 +193,7 @@ fn installed_badge(theme: &Theme) -> [Span<'static>; 4] {
     let [left, dot, label, right] = INSTALLED_BADGE;
     [
         Span::styled(
-            left,
+            theme.pill_edge(left),
             Style::new()
                 .fg(theme.badge_installed_bg)
                 .bg(theme.bg_raised),
@@ -202,12 +202,9 @@ fn installed_badge(theme: &Theme) -> [Span<'static>; 4] {
             dot,
             Style::new().fg(theme.info).bg(theme.badge_installed_bg),
         ),
+        Span::styled(label, theme.muted().bg(theme.badge_installed_bg)),
         Span::styled(
-            label,
-            Style::new().fg(theme.fg_muted).bg(theme.badge_installed_bg),
-        ),
-        Span::styled(
-            right,
+            theme.pill_edge(right),
             Style::new()
                 .fg(theme.badge_installed_bg)
                 .bg(theme.bg_raised),

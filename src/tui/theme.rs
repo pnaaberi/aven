@@ -7,6 +7,7 @@ use ratatui::style::{Color, Modifier, Style};
 /// also changes every composite built from it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Theme {
+    terminal_palette: bool,
     /// Main surface. `Color::Reset` inherits the terminal background.
     pub(crate) bg: Color,
     /// Raised surfaces: dialogs, overlays, kanban cards, sidebar headers.
@@ -92,6 +93,7 @@ pub(crate) enum Appearance {
     #[default]
     Dark,
     Light,
+    Terminal,
 }
 
 impl Appearance {
@@ -99,13 +101,15 @@ impl Appearance {
         match self {
             Self::Dark => Theme::dark(),
             Self::Light => Theme::light(),
+            Self::Terminal => Theme::terminal(),
         }
     }
 
     pub(crate) const fn toggled(self) -> Self {
         match self {
             Self::Dark => Self::Light,
-            Self::Light => Self::Dark,
+            Self::Light => Self::Terminal,
+            Self::Terminal => Self::Dark,
         }
     }
 }
@@ -116,6 +120,7 @@ impl Theme {
         let border = Color::Rgb(88, 88, 83);
         let blue = Color::Rgb(70, 128, 203);
         Self {
+            terminal_palette: false,
             bg: Color::Reset,
             bg_raised,
             bg_panel: Color::Rgb(39, 40, 38),
@@ -198,6 +203,7 @@ impl Theme {
         let green = Color::Rgb(52, 128, 24);
         let red = Color::Rgb(200, 44, 50);
         Self {
+            terminal_palette: false,
             bg: Color::Reset,
             bg_raised,
             bg_panel: Color::Rgb(229, 229, 223),
@@ -274,20 +280,113 @@ impl Theme {
         }
     }
 
+    pub(crate) const fn terminal() -> Self {
+        Self {
+            terminal_palette: true,
+            bg: Color::Reset,
+            bg_raised: Color::Reset,
+            bg_panel: Color::Reset,
+            bg_selected: Color::Reset,
+            bg_row_marked: Color::Reset,
+            bg_row_group: Color::Reset,
+            bg_lane: Color::Reset,
+            bg_lane_active: Color::Reset,
+            lane_divider: Color::Reset,
+            fg: Color::Reset,
+            fg_muted: Color::Reset,
+            fg_dim: Color::Reset,
+            inverse_fg: Color::Reset,
+            border: Color::Reset,
+            scrollbar_track: Color::Reset,
+            table_header_bg: Color::Reset,
+            badge_bg: Color::Reset,
+            badge_installed_bg: Color::Reset,
+            accent: Color::Magenta,
+            info: Color::Blue,
+            success: Color::Green,
+            warning: Color::Yellow,
+            danger: Color::Red,
+            attention: Color::Yellow,
+            conflict: Color::Magenta,
+            code: Color::Blue,
+            link: Color::Blue,
+            status_todo: Color::Blue,
+            priority_medium: Color::Magenta,
+            priority_none: Color::Reset,
+            custom_command_name: Color::Yellow,
+            custom_command_tag: Color::Yellow,
+            field_label_active: Color::Magenta,
+            field_error: Color::Red,
+            task_label: Color::Cyan,
+            splash_gradient: [Color::Magenta; 3],
+            splash_check: Color::Reset,
+            splash_check_dimmed: Color::Reset,
+            splash_afterglow: Color::Magenta,
+            project_palette: [
+                Color::Magenta,
+                Color::Cyan,
+                Color::Yellow,
+                Color::Red,
+                Color::Magenta,
+                Color::Green,
+                Color::Blue,
+                Color::Yellow,
+                Color::Cyan,
+                Color::Magenta,
+                Color::Red,
+                Color::Green,
+                Color::Blue,
+                Color::Magenta,
+            ],
+            quote: Color::Green,
+            dim_target: Color::Reset,
+        }
+    }
+
+    pub(crate) const fn is_terminal(&self) -> bool {
+        self.terminal_palette
+    }
+
     pub(crate) const fn selected(&self) -> Style {
-        Style::new()
+        let style = Style::new()
             .fg(self.fg)
             .bg(self.bg_selected)
-            .add_modifier(Modifier::BOLD)
+            .add_modifier(Modifier::BOLD);
+        if self.terminal_palette {
+            style
+                .add_modifier(Modifier::REVERSED)
+                .remove_modifier(Modifier::DIM)
+        } else {
+            style
+        }
+    }
+
+    /// Highlighted menu rows and the focused sidebar entry.
+    pub(crate) const fn highlight(&self) -> Style {
+        if self.terminal_palette {
+            self.selected()
+        } else {
+            Style::new().bg(self.bg_selected)
+        }
     }
 
     pub(crate) const fn selected_inactive(&self) -> Style {
-        Style::new().fg(self.fg_muted).bg(self.bg_panel)
+        let style = Style::new().fg(self.fg_muted).bg(self.bg_panel);
+        if self.terminal_palette {
+            style.add_modifier(Modifier::UNDERLINED)
+        } else {
+            style
+        }
     }
 
     /// Rows related to the selected task.
     pub(crate) const fn related(&self) -> Style {
-        Style::new().fg(self.fg).bg(self.bg_lane_active)
+        let style = Style::new().fg(self.fg).bg(self.bg_lane_active);
+        if self.terminal_palette {
+            style.add_modifier(Modifier::UNDERLINED)
+        } else {
+            style
+        }
     }
 
     /// Inline code and commands inside plain text.
@@ -295,10 +394,99 @@ impl Theme {
         Style::new().fg(self.code).bg(self.bg_panel)
     }
 
-    /// Drawn text cursor. `text_cursor_position` finds the caret by this exact
-    /// foreground/background pair, so nothing else may use it.
+    /// Visible caret; input rendering tracks its location separately.
     pub(crate) const fn cursor(&self) -> Style {
-        Style::new().fg(self.bg_raised).bg(self.fg)
+        let style = Style::new().fg(self.bg_raised).bg(self.fg);
+        if self.terminal_palette {
+            style.add_modifier(Modifier::REVERSED)
+        } else {
+            style
+        }
+    }
+
+    pub(crate) const fn dim(&self) -> Style {
+        let style = Style::new().fg(self.fg_dim);
+        if self.terminal_palette {
+            style.add_modifier(Modifier::DIM)
+        } else {
+            style
+        }
+    }
+
+    pub(crate) const fn muted(&self) -> Style {
+        let style = Style::new().fg(self.fg_muted);
+        if self.terminal_palette {
+            style.add_modifier(Modifier::DIM)
+        } else {
+            style
+        }
+    }
+
+    pub(crate) const fn badge(&self, fill: Color) -> Style {
+        if self.terminal_palette {
+            Style::new()
+                .fg(fill)
+                .bg(Color::Reset)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::new().fg(self.inverse_fg).bg(fill)
+        }
+    }
+
+    pub(crate) const fn table_header(&self) -> Style {
+        let style = self
+            .badge(self.table_header_bg)
+            .add_modifier(Modifier::BOLD);
+        if self.terminal_palette {
+            style.add_modifier(Modifier::UNDERLINED)
+        } else {
+            style
+        }
+    }
+
+    pub(crate) const fn pill_edge(&self, glyph: &'static str) -> &'static str {
+        if self.terminal_palette { " " } else { glyph }
+    }
+
+    /// Apply selection after semantic spans, so reverse video has a uniform fill.
+    pub(crate) fn paint_selection(
+        &self,
+        buffer: &mut ratatui::buffer::Buffer,
+        area: ratatui::layout::Rect,
+        focused: bool,
+    ) {
+        if !self.terminal_palette {
+            return;
+        }
+        let area = area.intersection(buffer.area);
+        for y in area.y..area.bottom() {
+            for x in area.x..area.right() {
+                let cell = &mut buffer[(x, y)];
+                if focused {
+                    cell.set_style(self.selected());
+                    if cell.modifier.contains(crate::tui::ui::CARET_MARKER) {
+                        cell.modifier.remove(Modifier::REVERSED);
+                    }
+                } else {
+                    cell.modifier.insert(Modifier::UNDERLINED);
+                }
+            }
+        }
+    }
+
+    /// Reversed spans inherit semantic colors; default colors keep their fill uniform.
+    pub(crate) fn finish_selection(&self, buffer: &mut ratatui::buffer::Buffer) {
+        if !self.terminal_palette {
+            return;
+        }
+        for cell in &mut buffer.content {
+            if cell.modifier.contains(Modifier::REVERSED)
+                && !cell.modifier.contains(crate::tui::ui::CARET_MARKER)
+            {
+                cell.fg = Color::Reset;
+                cell.bg = Color::Reset;
+            }
+        }
     }
 
     pub(crate) fn priority(&self, priority: &str) -> Style {
@@ -309,7 +497,11 @@ impl Theme {
             "low" => self.fg_dim,
             _ => self.priority_none,
         };
-        Style::new().fg(color)
+        if self.terminal_palette && matches!(priority, "low" | "none" | "") {
+            self.dim()
+        } else {
+            Style::new().fg(color)
+        }
     }
 
     pub(crate) fn status(&self, status: &str) -> Style {
@@ -322,7 +514,11 @@ impl Theme {
             "canceled" => self.danger,
             _ => self.fg_dim,
         };
-        Style::new().fg(color)
+        if self.terminal_palette && !matches!(status, "active" | "todo" | "done" | "canceled") {
+            self.dim()
+        } else {
+            Style::new().fg(color)
+        }
     }
 
     pub(crate) fn project(&self, key: &str) -> Color {
@@ -330,5 +526,93 @@ impl Theme {
             .bytes()
             .fold(5381usize, |acc, byte| acc.wrapping_mul(33) ^ byte as usize);
         self.project_palette[hash % self.project_palette.len()]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::{buffer::Buffer, layout::Rect};
+
+    #[test]
+    fn curated_composite_styles_remain_unchanged() {
+        for theme in [Theme::dark(), Theme::light()] {
+            assert_eq!(theme.dim(), Style::new().fg(theme.fg_dim));
+            assert_eq!(theme.muted(), Style::new().fg(theme.fg_muted));
+            assert_eq!(
+                theme.badge(theme.accent),
+                Style::new().fg(theme.inverse_fg).bg(theme.accent)
+            );
+            assert_eq!(
+                theme.cursor(),
+                Style::new().fg(theme.bg_raised).bg(theme.fg)
+            );
+            assert_eq!(
+                theme.selected(),
+                Style::new()
+                    .fg(theme.fg)
+                    .bg(theme.bg_selected)
+                    .add_modifier(Modifier::BOLD)
+            );
+            assert_eq!(
+                theme.selected_inactive(),
+                Style::new().fg(theme.fg_muted).bg(theme.bg_panel)
+            );
+            assert_eq!(
+                theme.related(),
+                Style::new().fg(theme.fg).bg(theme.bg_lane_active)
+            );
+            let mut buffer = Buffer::empty(Rect::new(0, 0, 4, 1));
+            buffer[(0, 0)].set_style(theme.cursor());
+            let old = buffer.clone();
+            theme.paint_selection(&mut buffer, Rect::new(0, 0, 4, 1), true);
+            theme.finish_selection(&mut buffer);
+            assert_eq!(buffer, old);
+        }
+    }
+
+    #[test]
+    fn terminal_styles_use_defaults_and_portable_accents() {
+        let theme = Theme::terminal();
+        assert!(!format!("{theme:?}").contains("Rgb("));
+        assert!(!format!("{theme:?}").contains("DarkGray"));
+        assert_eq!(theme.bg, Color::Reset);
+        assert_eq!(
+            theme.dim(),
+            Style::new().fg(Color::Reset).add_modifier(Modifier::DIM)
+        );
+        assert_eq!(theme.badge(theme.accent).bg, Some(Color::Reset));
+        assert!(theme.selected().add_modifier.contains(Modifier::REVERSED));
+        assert!(
+            theme
+                .selected_inactive()
+                .add_modifier
+                .contains(Modifier::UNDERLINED)
+        );
+        assert_eq!(theme.status("inbox"), theme.dim());
+        assert_eq!(theme.priority("low"), theme.dim());
+    }
+
+    #[test]
+    fn terminal_selection_normalizes_spans_and_inverts_the_caret() {
+        let theme = Theme::terminal();
+        let area = Rect::new(0, 0, 4, 1);
+        let mut buffer = Buffer::empty(area);
+        buffer[(0, 0)].set_style(Style::new().fg(Color::Red).add_modifier(Modifier::DIM));
+        buffer[(1, 0)].set_style(theme.cursor().add_modifier(crate::tui::ui::CARET_MARKER));
+        theme.paint_selection(&mut buffer, area, true);
+        assert_eq!(buffer[(0, 0)].fg, Color::Reset);
+        assert_eq!(buffer[(0, 0)].bg, Color::Reset);
+        assert!(buffer[(0, 0)].modifier.contains(Modifier::REVERSED));
+        assert!(!buffer[(0, 0)].modifier.contains(Modifier::DIM));
+        assert!(!buffer[(1, 0)].modifier.contains(Modifier::REVERSED));
+        assert!(
+            buffer[(1, 0)]
+                .modifier
+                .contains(crate::tui::ui::CARET_MARKER)
+        );
+        buffer[(2, 0)].fg = Color::Blue;
+        theme.finish_selection(&mut buffer);
+        assert_eq!(buffer[(2, 0)].fg, Color::Reset);
     }
 }

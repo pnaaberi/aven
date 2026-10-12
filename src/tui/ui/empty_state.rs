@@ -459,7 +459,7 @@ pub(crate) fn render_empty_state(frame: &mut Frame, theme: &Theme, area: Rect, s
                             max_width.saturating_sub(UnicodeWidthStr::width(key) + 4),
                         )
                     ),
-                    Style::new().fg(theme.fg_muted),
+                    theme.muted(),
                 ),
             ])
         })
@@ -509,7 +509,7 @@ pub(crate) fn render_empty_state(frame: &mut Frame, theme: &Theme, area: Rect, s
     } else {
         vec![
             title_line.clone(),
-            Line::from(Span::styled(detail, Style::new().fg(theme.fg_dim))),
+            Line::from(Span::styled(detail, theme.dim())),
         ]
     };
     if area.height >= 5 && action_line.is_some() {

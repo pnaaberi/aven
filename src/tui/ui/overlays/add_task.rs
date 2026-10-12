@@ -349,7 +349,7 @@ fn add_task_attachment_line(theme: &Theme, state: &AddTaskView, width: usize) ->
             if active {
                 Style::new().fg(theme.fg).add_modifier(Modifier::BOLD)
             } else {
-                Style::new().fg(theme.fg_dim)
+                theme.dim()
             },
         ),
     ];
@@ -357,28 +357,25 @@ fn add_task_attachment_line(theme: &Theme, state: &AddTaskView, width: usize) ->
         spans.push(Span::raw("  "));
         if count > 1 {
             if active {
-                spans.push(Span::styled("◀ ", Style::new().fg(theme.fg_muted)));
+                spans.push(Span::styled("◀ ", theme.muted()));
             }
             spans.push(Span::styled(
                 format!("{}/{} ", selected + 1, count),
-                Style::new().fg(theme.fg_dim),
+                theme.dim(),
             ));
         }
         spans.push(Span::raw(attachment.filename.clone()));
         if let Some((width, height)) = attachment.dimensions {
-            spans.push(Span::styled(" · ", Style::new().fg(theme.fg_dim)));
-            spans.push(Span::styled(
-                format!("{width}×{height}"),
-                Style::new().fg(theme.fg_muted),
-            ));
+            spans.push(Span::styled(" · ", theme.dim()));
+            spans.push(Span::styled(format!("{width}×{height}"), theme.muted()));
         }
-        spans.push(Span::styled(" · ", Style::new().fg(theme.fg_dim)));
+        spans.push(Span::styled(" · ", theme.dim()));
         spans.push(Span::styled(
             human_file_size(attachment.byte_size),
-            Style::new().fg(theme.fg_muted),
+            theme.muted(),
         ));
         if active && count > 1 {
-            spans.push(Span::styled(" ▶", Style::new().fg(theme.fg_muted)));
+            spans.push(Span::styled(" ▶", theme.muted()));
         }
     }
     fit_line_to_width(theme, Line::from(spans), width)
@@ -392,7 +389,7 @@ fn compact_text_field(theme: &Theme, label: &str, value: &str, active: bool) -> 
             if active {
                 Style::new().fg(theme.fg).add_modifier(Modifier::BOLD)
             } else {
-                Style::new().fg(theme.fg_dim)
+                theme.dim()
             },
         ),
         Span::raw(value.to_string()),
@@ -473,8 +470,7 @@ fn status_metadata_field(
 ) -> Line<'static> {
     let mut line = metadata_field(theme, AddTaskStep::Status, "Status", status, focus);
     if automatic {
-        line.spans
-            .push(Span::styled(" (auto)", Style::new().fg(theme.fg_muted)));
+        line.spans.push(Span::styled(" (auto)", theme.muted()));
     }
     line
 }
@@ -537,7 +533,7 @@ pub(in crate::tui::ui) fn metadata_field(
             if field == focus {
                 Style::new().fg(theme.fg).add_modifier(Modifier::BOLD)
             } else {
-                Style::new().fg(theme.fg_dim)
+                theme.dim()
             },
         ),
     ];
@@ -560,12 +556,9 @@ fn metadata_value_spans(theme: &Theme, field: AddTaskStep, value: &str) -> Vec<S
             theme.priority(value).add_modifier(Modifier::BOLD),
         )],
         AddTaskStep::Labels if value == "none" => {
-            vec![Span::styled("none", Style::new().fg(theme.fg_dim))]
+            vec![Span::styled("none", theme.dim())]
         }
-        AddTaskStep::Labels => vec![Span::styled(
-            label_summary(value),
-            Style::new().fg(theme.fg_dim),
-        )],
+        AddTaskStep::Labels => vec![Span::styled(label_summary(value), theme.dim())],
         _ => vec![Span::raw(value.to_string())],
     }
 }
@@ -606,7 +599,7 @@ fn fit_line_to_width(theme: &Theme, line: Line<'static>, width: usize) -> Line<'
         spans.push(Span::raw(" ".repeat(padding)));
         return Line::from(spans);
     }
-    truncate_line_width(line, width, Style::new().fg(theme.fg_dim))
+    truncate_line_width(line, width, theme.dim())
 }
 
 fn join_lines(lines: Vec<Line<'static>>, separator: &'static str) -> Line<'static> {
@@ -685,15 +678,12 @@ pub(crate) fn composer_help_scroll_cap(
 
 fn schedule_editor_lines(theme: &Theme, editor: &ScheduleEditorState) -> Vec<Line<'static>> {
     let active = Style::new().fg(theme.fg).add_modifier(Modifier::BOLD);
-    let inactive = Style::new().fg(theme.fg_dim);
+    let inactive = theme.dim();
     let mode = |label: &'static str, selected| {
         Span::styled(
             format!(" {label} "),
             if selected {
-                Style::new()
-                    .fg(theme.inverse_fg)
-                    .bg(theme.accent)
-                    .add_modifier(Modifier::BOLD)
+                theme.badge(theme.accent).add_modifier(Modifier::BOLD)
             } else {
                 Style::new().fg(theme.fg).bg(theme.badge_bg)
             },
@@ -783,7 +773,7 @@ fn schedule_editor_lines(theme: &Theme, editor: &ScheduleEditorState) -> Vec<Lin
             if !editor.preview.is_empty() {
                 lines.push(Line::from(Span::styled(
                     format!("  Next      {}", editor.preview.join(", ")),
-                    Style::new().fg(theme.fg_dim),
+                    theme.dim(),
                 )));
             }
         }
@@ -840,7 +830,7 @@ fn schedule_editor_input_line(
         if focused {
             Style::new().fg(theme.fg).add_modifier(Modifier::BOLD)
         } else {
-            Style::new().fg(theme.fg_dim)
+            theme.dim()
         },
     )];
     spans.extend(
@@ -984,10 +974,7 @@ pub(in crate::tui::ui) fn composer_help_line(
                 .add_modifier(Modifier::UNDERLINED),
         )
     } else {
-        (
-            Style::new().fg(theme.fg_muted),
-            Style::new().fg(theme.fg_dim),
-        )
+        (theme.muted(), theme.dim())
     };
     Line::from(vec![
         Span::styled(format!("{keys:<22}"), key_style),
@@ -1054,7 +1041,7 @@ fn add_task_picker_lines(
     if state.visible_indices.is_empty() {
         lines.push(Line::from(Span::styled(
             "  no matching options",
-            Style::new().fg(theme.fg_dim),
+            theme.dim(),
         )));
     }
     lines.push(Line::from(""));
@@ -1089,10 +1076,10 @@ fn placeholder_input_line(
         if cursor.is_some() {
             return Line::from(vec![
                 cursor_cell(theme, &placeholder[..1]),
-                Span::styled(&placeholder[1..], Style::new().fg(theme.fg_dim)),
+                Span::styled(&placeholder[1..], theme.dim()),
             ]);
         }
-        return Line::from(Span::styled(placeholder, Style::new().fg(theme.fg_dim)));
+        return Line::from(Span::styled(placeholder, theme.dim()));
     }
     match cursor {
         Some(cursor) => clipped_input_line(theme, input, cursor, width),
@@ -1110,7 +1097,7 @@ pub(in crate::tui::ui) fn add_task_field_label(
             .fg(theme.field_label_active)
             .add_modifier(Modifier::BOLD)
     } else {
-        Style::new().fg(theme.fg_muted).add_modifier(Modifier::BOLD)
+        theme.muted().add_modifier(Modifier::BOLD)
     };
     Line::from(vec![
         Span::styled(if active { "▶ " } else { "  " }, style),
@@ -1182,7 +1169,7 @@ fn add_task_description_viewport_line(
     line: Line<'static>,
 ) -> Line<'static> {
     let mut spans = Vec::with_capacity(line.spans.len() + 1);
-    spans.push(Span::styled(marker, Style::new().fg(theme.fg_dim)));
+    spans.push(Span::styled(marker, theme.dim()));
     spans.extend(line.spans);
     Line::from(spans)
 }
@@ -1273,7 +1260,7 @@ fn colored_add_task_hint_line(
     let mut spans = Vec::new();
     for (index, (key, label)) in items.iter().enumerate() {
         if index > 0 {
-            spans.push(Span::styled("  ", Style::new().fg(theme.fg_muted)));
+            spans.push(Span::styled("  ", theme.muted()));
         }
         spans.push(Span::styled(
             key.to_string(),
@@ -1281,12 +1268,12 @@ fn colored_add_task_hint_line(
         ));
         spans.push(Span::styled(format!(" {label}"), label_style(theme, label)));
     }
-    spans.push(Span::styled("  ", Style::new().fg(theme.fg_muted)));
+    spans.push(Span::styled("  ", theme.muted()));
     spans.push(Span::styled(
         "Esc".to_string(),
         Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
     ));
-    spans.push(Span::styled(" cancel", Style::new().fg(theme.fg_muted)));
+    spans.push(Span::styled(" cancel", theme.muted()));
     Line::from(spans)
 }
 
@@ -1450,28 +1437,28 @@ pub(in crate::tui::ui) fn add_task_metadata_title(
     let label_style = Style::new().fg(theme.task_label);
     if width < 60 {
         return Line::from(vec![
-            Span::styled(" status: ", Style::new().fg(theme.fg_muted)),
+            Span::styled(" status: ", theme.muted()),
             Span::styled(truncate_width(status, 8), status_style),
-            Span::styled(" · ", Style::new().fg(theme.fg_dim)),
-            Span::styled("prio: ", Style::new().fg(theme.fg_muted)),
+            Span::styled(" · ", theme.dim()),
+            Span::styled("prio: ", theme.muted()),
             Span::styled(truncate_width(priority, 6), priority_style),
         ]);
     }
     let value_width = (width as usize).saturating_sub(44).max(6) / 4;
     Line::from(vec![
-        Span::styled(" project: ", Style::new().fg(theme.fg_muted)),
+        Span::styled(" project: ", theme.muted()),
         Span::styled(
             truncate_width(project, value_width),
             Style::new().fg(theme.project(project)),
         ),
-        Span::styled(" · ", Style::new().fg(theme.fg_dim)),
-        Span::styled("status: ", Style::new().fg(theme.fg_muted)),
+        Span::styled(" · ", theme.dim()),
+        Span::styled("status: ", theme.muted()),
         Span::styled(truncate_width(status, value_width), status_style),
-        Span::styled(" · ", Style::new().fg(theme.fg_dim)),
-        Span::styled("prio: ", Style::new().fg(theme.fg_muted)),
+        Span::styled(" · ", theme.dim()),
+        Span::styled("prio: ", theme.muted()),
         Span::styled(truncate_width(priority, value_width), priority_style),
-        Span::styled(" · ", Style::new().fg(theme.fg_dim)),
-        Span::styled("labels: ", Style::new().fg(theme.fg_muted)),
+        Span::styled(" · ", theme.dim()),
+        Span::styled("labels: ", theme.muted()),
         Span::styled(truncate_width(&labels, value_width), label_style),
     ])
 }

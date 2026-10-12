@@ -14,14 +14,11 @@ pub(super) fn linked_task_ref_spans(
                 prefix.to_string(),
                 Style::new().fg(theme.project(project_key)),
             ),
-            Span::styled("-", Style::new().fg(theme.fg_dim)),
-            Span::styled(suffix.to_string(), Style::new().fg(theme.fg_dim)),
+            Span::styled("-", theme.dim()),
+            Span::styled(suffix.to_string(), theme.dim()),
         ]
     } else {
-        vec![Span::styled(
-            display_ref.to_string(),
-            Style::new().fg(theme.fg_dim),
-        )]
+        vec![Span::styled(display_ref.to_string(), theme.dim())]
     }
 }
 

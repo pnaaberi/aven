@@ -76,7 +76,7 @@ pub(super) fn extend_pending_attachment_section(
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
             "ATTACHMENTS",
-            Style::new().fg(theme.fg_dim).add_modifier(Modifier::BOLD),
+            theme.dim().add_modifier(Modifier::BOLD),
         )));
     }
     for attachment in pending {
@@ -115,7 +115,7 @@ pub(super) fn extend_attachment_section(
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "ATTACHMENTS",
-        Style::new().fg(theme.fg_dim).add_modifier(Modifier::BOLD),
+        theme.dim().add_modifier(Modifier::BOLD),
     )));
     let content_width = width.saturating_sub(3).max(1);
     for attachment in live {
@@ -157,11 +157,7 @@ pub(super) fn extend_attachment_section(
                 });
                 let frame_style =
                     Style::new().fg(if focused { theme.accent } else { theme.border });
-                lines.push(quoted_line(
-                    theme,
-                    placeholder,
-                    Style::new().fg(theme.fg_muted),
-                ));
+                lines.push(quoted_line(theme, placeholder, theme.muted()));
                 lines.push(quoted_line(
                     theme,
                     Line::from(format!("┌{}┐", "─".repeat(width as usize))),
@@ -176,7 +172,7 @@ pub(super) fn extend_attachment_section(
                             Span::raw(" ".repeat(width as usize)),
                             Span::styled("│", frame_style),
                         ]),
-                        Style::new().fg(theme.fg_muted),
+                        theme.muted(),
                     ));
                 }
                 lines.push(quoted_line(
@@ -325,7 +321,7 @@ pub(super) fn render_attachment_preview_message(
     frame.render_widget(
         Paragraph::new(message)
             .alignment(ratatui::layout::Alignment::Center)
-            .style(Style::new().fg(theme.fg_muted).bg(theme.bg)),
+            .style(theme.muted().bg(theme.bg)),
         area,
     );
 }

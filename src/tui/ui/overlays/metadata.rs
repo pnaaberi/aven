@@ -43,10 +43,7 @@ pub(in crate::tui::ui) fn render(frame: &mut Frame, theme: &Theme, view: &Metada
         .count();
     let dialog = Dialog::new(theme, title, 72, layout.area.height);
     let dialog = if view.editor.is_none() {
-        dialog.right_title(Line::styled(
-            format!("{assigned} assigned"),
-            Style::new().fg(theme.fg_dim),
-        ))
+        dialog.right_title(Line::styled(format!("{assigned} assigned"), theme.dim()))
     } else {
         dialog
     };
@@ -57,7 +54,7 @@ pub(in crate::tui::ui) fn render(frame: &mut Frame, theme: &Theme, view: &Metada
         frame.render_widget(
             Paragraph::new(Line::from(vec![Span::styled(
                 truncate_width(&entry.field.key, layout.header.width as usize),
-                Style::new().fg(theme.fg_dim),
+                theme.dim(),
             )]))
             .style(style),
             layout.header,
@@ -113,14 +110,14 @@ pub(in crate::tui::ui) fn render(frame: &mut Frame, theme: &Theme, view: &Metada
             let selected = editor.focus == action.focus;
             let disabled = !action.enabled;
             let mut line = if key.is_empty() {
-                Line::styled(label, Style::new().fg(theme.fg_muted))
+                Line::styled(label, theme.muted())
             } else {
                 dialog_hint_line(theme, &[(key, label)])
             };
             for span in &mut line.spans {
                 if disabled {
                     if !span.style.add_modifier.contains(Modifier::BOLD) {
-                        span.style = span.style.fg(theme.fg_dim);
+                        span.style = span.style.patch(theme.dim());
                     }
                 } else if selected {
                     span.style = span.style.add_modifier(Modifier::UNDERLINED);
@@ -130,7 +127,7 @@ pub(in crate::tui::ui) fn render(frame: &mut Frame, theme: &Theme, view: &Metada
         }
     } else {
         let filter = if view.filter.text.is_empty() {
-            Line::styled("Type to filter fields…", Style::new().fg(theme.fg_dim))
+            Line::styled("Type to filter fields…", theme.dim())
         } else {
             Line::from(vec![
                 Span::styled("/ ", Style::new().fg(theme.accent)),
@@ -150,7 +147,7 @@ pub(in crate::tui::ui) fn render(frame: &mut Frame, theme: &Theme, view: &Metada
             };
             frame.render_widget(
                 Paragraph::new(message)
-                    .style(Style::new().fg(theme.fg_muted))
+                    .style(theme.muted())
                     .wrap(Wrap { trim: false }),
                 layout.body,
             );

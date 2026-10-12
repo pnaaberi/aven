@@ -226,9 +226,7 @@ pub(super) fn render_sidebar(
     let conflict_count = store.tasks.iter().filter(|task| task.has_conflict).count() as i64;
     items.extend([
         ListItem::new(Line::from("")),
-        ListItem::new(
-            Line::from("FILTERS").style(Style::new().fg(theme.fg_dim).add_modifier(Modifier::BOLD)),
-        ),
+        ListItem::new(Line::from("FILTERS").style(theme.dim().add_modifier(Modifier::BOLD))),
         filter_item(theme, "▲", "urgent", urgent_count, theme.danger, area.width),
         filter_item(
             theme,
@@ -241,7 +239,7 @@ pub(super) fn render_sidebar(
     ]);
 
     let highlight_style = if focus == Focus::Sidebar {
-        Style::new().bg(theme.bg_selected)
+        theme.highlight()
     } else {
         theme.selected_inactive()
     };
@@ -276,12 +274,7 @@ fn sidebar_section_line(
         let spacer = " ".repeat(width - label.width() - 3);
         format!(" {label}{spacer}{indicator} ")
     };
-    Line::from(text).style(
-        Style::new()
-            .fg(theme.fg_dim)
-            .bg(theme.bg_raised)
-            .add_modifier(Modifier::BOLD),
-    )
+    Line::from(text).style(theme.dim().bg(theme.bg_raised).add_modifier(Modifier::BOLD))
 }
 
 fn badge(theme: &Theme, count: i64, active: bool) -> Span<'static> {
@@ -391,7 +384,7 @@ fn sidebar_entry_line(
     let count_style = if active {
         Style::new().fg(theme.accent).add_modifier(Modifier::BOLD)
     } else {
-        Style::new().fg(theme.fg_muted).add_modifier(Modifier::BOLD)
+        theme.muted().add_modifier(Modifier::BOLD)
     };
     Line::from(vec![
         Span::styled(marker_cell, Style::new().fg(marker_color)),
@@ -418,10 +411,7 @@ fn filter_item(
     let label_width = (width as usize).saturating_sub(icon_cell.width() + count_width + 2);
     ListItem::new(Line::from(vec![
         Span::styled(icon_cell, Style::new().fg(color)),
-        Span::styled(
-            format!("{label:<label_width$}"),
-            Style::new().fg(theme.fg_muted),
-        ),
+        Span::styled(format!("{label:<label_width$}"), theme.muted()),
         badge(theme, count, false),
     ]))
 }

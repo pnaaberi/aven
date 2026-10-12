@@ -114,7 +114,7 @@ pub(super) fn extend_epic_parent_section(
     };
     lines.push(Line::from(Span::styled(
         "EPIC PARENT",
-        Style::new().fg(theme.fg_dim).add_modifier(Modifier::BOLD),
+        theme.dim().add_modifier(Modifier::BOLD),
     )));
     let target = DetailTargetId::Task {
         section: DetailSection::EpicParent,
@@ -174,21 +174,15 @@ pub(super) fn extend_epic_children_section(
     }
     let counts = epic_child_counts(children);
     lines.push(Line::from(vec![
-        Span::styled(
-            "CHILD TASKS",
-            Style::new().fg(theme.fg_dim).add_modifier(Modifier::BOLD),
-        ),
+        Span::styled("CHILD TASKS", theme.dim().add_modifier(Modifier::BOLD)),
         Span::styled(
             format!(" open={} total={}", counts.open, counts.total),
-            Style::new().fg(theme.fg_dim),
+            theme.dim(),
         ),
     ]));
     let links = ordered_epic_children(children);
     if links.is_empty() {
-        lines.push(Line::from(Span::styled(
-            "none",
-            Style::new().fg(theme.fg_muted),
-        )));
+        lines.push(Line::from(Span::styled("none", theme.muted())));
         return;
     }
     let visible = if expanded {
@@ -252,7 +246,7 @@ pub(super) fn disclosure_line(theme: &Theme, label: &str, active: bool) -> Line<
             .bg(theme.bg_panel)
             .add_modifier(Modifier::BOLD)
     } else {
-        Style::new().fg(theme.fg_muted)
+        theme.muted()
     };
     let tree_style = if active {
         Style::new().fg(theme.border).bg(theme.bg_panel)
@@ -281,7 +275,7 @@ pub(super) fn epic_child_tree_item_lines(
     let title_style = if hovered {
         Style::new().fg(theme.fg).bg(theme.bg_panel)
     } else if removed {
-        Style::new().fg(theme.fg_muted).add_modifier(Modifier::DIM)
+        theme.muted().add_modifier(Modifier::DIM)
     } else {
         Style::new().fg(theme.fg)
     };
@@ -291,9 +285,9 @@ pub(super) fn epic_child_tree_item_lines(
         Style::new().fg(theme.border)
     };
     let gap_style = if hovered {
-        Style::new().fg(theme.fg_dim).bg(theme.bg_panel)
+        theme.dim().bg(theme.bg_panel)
     } else {
-        Style::new().fg(theme.fg_dim)
+        theme.dim()
     };
     let mut prefix = vec![Span::styled(tree_glyph, tree_style)];
     if show_epic_marker {
@@ -312,7 +306,7 @@ pub(super) fn epic_child_tree_item_lines(
         if hovered {
             span.style = span.style.bg(theme.bg_panel).add_modifier(Modifier::BOLD);
         } else if removed {
-            span.style = span.style.fg(theme.fg_muted).add_modifier(Modifier::DIM);
+            span.style = span.style.patch(theme.muted()).add_modifier(Modifier::DIM);
         }
     }
     prefix.extend(reference);
@@ -385,7 +379,7 @@ pub(super) fn epic_child_dependency_lines(
         }
     }
     let rail_style = Style::new().fg(theme.border);
-    let dependency_style = Style::new().fg(theme.fg_dim);
+    let dependency_style = theme.dim();
     let background = if hovered {
         Style::new().bg(theme.bg_panel)
     } else {
@@ -529,14 +523,8 @@ pub(super) fn extend_related_section(
     }
     lines.push(Line::from(""));
     lines.push(Line::from(vec![
-        Span::styled(
-            "RELATED",
-            Style::new().fg(theme.fg_dim).add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            format!(" total={}", links.len()),
-            Style::new().fg(theme.fg_dim),
-        ),
+        Span::styled("RELATED", theme.dim().add_modifier(Modifier::BOLD)),
+        Span::styled(format!(" total={}", links.len()), theme.dim()),
     ]));
     let visible = if expanded {
         links.len()
@@ -601,14 +589,8 @@ pub(super) fn dependency_heading(
 ) -> Line<'static> {
     let open = links.iter().filter(|link| link.unresolved).count();
     Line::from(vec![
-        Span::styled(
-            label,
-            Style::new().fg(theme.fg_dim).add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            format!(" open={open} total={}", links.len()),
-            Style::new().fg(theme.fg_dim),
-        ),
+        Span::styled(label, theme.dim().add_modifier(Modifier::BOLD)),
+        Span::styled(format!(" open={open} total={}", links.len()), theme.dim()),
     ])
 }
 
@@ -622,15 +604,15 @@ pub(super) fn dependency_tree_item_lines(
     let tree_glyph = if is_last { "└─ " } else { "├─ " };
     let mut prefix = vec![
         Span::styled(tree_glyph, Style::new().fg(theme.border)),
-        Span::styled(direction.marker(), Style::new().fg(theme.fg_dim)),
-        Span::styled(" ", Style::new().fg(theme.fg_dim)),
+        Span::styled(direction.marker(), theme.dim()),
+        Span::styled(" ", theme.dim()),
     ];
     prefix.extend(linked_task_ref_spans(
         theme,
         &link.display_ref,
         &link.project_key,
     ));
-    prefix.push(Span::styled("  ", Style::new().fg(theme.fg_dim)));
+    prefix.push(Span::styled("  ", theme.dim()));
     dependency_node_lines(
         theme,
         prefix,
@@ -675,9 +657,9 @@ pub(super) fn dependency_node_lines_with_title_style(
             truncate_width(title, title_width),
             title_style,
         ));
-        spans.push(Span::styled("  ", Style::new().fg(theme.fg_dim)));
+        spans.push(Span::styled("  ", theme.dim()));
         spans.push(status_span(theme, status));
-        spans.push(Span::styled("  ", Style::new().fg(theme.fg_dim)));
+        spans.push(Span::styled("  ", theme.dim()));
         spans.push(Span::styled(
             priority_short(priority),
             theme.priority(priority).add_modifier(Modifier::BOLD),
@@ -697,7 +679,7 @@ pub(super) fn dependency_node_lines_with_title_style(
     lines.push(Line::from(vec![
         Span::styled(continuation_prefix.clone(), Style::new().fg(theme.border)),
         status_span(theme, status),
-        Span::styled("  ", Style::new().fg(theme.fg_dim)),
+        Span::styled("  ", theme.dim()),
         Span::styled(
             priority_short(priority),
             theme.priority(priority).add_modifier(Modifier::BOLD),

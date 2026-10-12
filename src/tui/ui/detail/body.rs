@@ -122,7 +122,7 @@ pub(super) fn build_detail_body_document(
         }
         match block {
             DetailBodyBlock::Line(line) => {
-                lines.push(quoted_line(theme, line, Style::new().fg(theme.fg_muted)));
+                lines.push(quoted_line(theme, line, theme.muted()));
             }
             DetailBodyBlock::Image {
                 placeholder,
@@ -132,11 +132,7 @@ pub(super) fn build_detail_body_document(
                 height,
             } => {
                 let line_index = lines.len().saturating_add(1);
-                lines.push(quoted_line(
-                    theme,
-                    placeholder,
-                    Style::new().fg(theme.fg_muted),
-                ));
+                lines.push(quoted_line(theme, placeholder, theme.muted()));
                 for _ in 0..height {
                     lines.push(Line::from(vec![Span::styled(
                         "│ ",
@@ -163,15 +159,12 @@ pub(super) fn build_detail_body_document(
             height: 1,
         });
         lines.push(Line::from(vec![
-            Span::styled(
-                "CUSTOM METADATA",
-                Style::new().fg(theme.fg_dim).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(" (", Style::new().fg(theme.fg_dim)),
+            Span::styled("CUSTOM METADATA", theme.dim().add_modifier(Modifier::BOLD)),
+            Span::styled(" (", theme.dim()),
             Span::styled("e", keycap_style(theme)),
             Span::raw(" "),
             Span::styled("m", keycap_style(theme)),
-            Span::styled(" edit)", Style::new().fg(theme.fg_dim)),
+            Span::styled(" edit)", theme.dim()),
         ]));
         let key_width = item
             .metadata
@@ -184,11 +177,9 @@ pub(super) fn build_detail_body_document(
         for value in &item.metadata {
             let long_key = value.key.width() > key_width;
             if long_key {
-                for mut line in plain_metadata_lines(
-                    &value.key,
-                    width.saturating_sub(2),
-                    Style::new().fg(theme.fg_dim),
-                ) {
+                for mut line in
+                    plain_metadata_lines(&value.key, width.saturating_sub(2), theme.dim())
+                {
                     line.spans.insert(0, Span::raw("  "));
                     lines.push(line);
                 }
@@ -204,8 +195,7 @@ pub(super) fn build_detail_body_document(
                 } else {
                     " ".repeat(indent)
                 };
-                line.spans
-                    .insert(0, Span::styled(prefix, Style::new().fg(theme.fg_dim)));
+                line.spans.insert(0, Span::styled(prefix, theme.dim()));
                 lines.push(line);
             }
             if value.value.contains('\n') || long_key {
@@ -315,36 +305,30 @@ pub(super) fn extend_detail_note_section(
     width: usize,
 ) {
     let mut header = vec![
-        Span::styled(
-            "NOTES",
-            Style::new().fg(theme.fg_dim).add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(" (", Style::new().fg(theme.fg_dim)),
+        Span::styled("NOTES", theme.dim().add_modifier(Modifier::BOLD)),
+        Span::styled(" (", theme.dim()),
         Span::styled("n", keycap_style(theme)),
-        Span::styled(" add", Style::new().fg(theme.fg_dim)),
+        Span::styled(" add", theme.dim()),
     ];
     if !item.notes.is_empty() && width >= 42 {
         header.extend([
-            Span::styled(" · ", Style::new().fg(theme.fg_dim)),
+            Span::styled(" · ", theme.dim()),
             Span::styled("e", keycap_style(theme)),
-            Span::styled(" edit · ", Style::new().fg(theme.fg_dim)),
+            Span::styled(" edit · ", theme.dim()),
             Span::styled("D", keycap_style(theme)),
-            Span::styled(" delete", Style::new().fg(theme.fg_dim)),
+            Span::styled(" delete", theme.dim()),
         ]);
     }
-    header.push(Span::styled(")", Style::new().fg(theme.fg_dim)));
+    header.push(Span::styled(")", theme.dim()));
     lines.push(Line::from(header));
     if item.notes.is_empty() {
-        lines.push(Line::from(Span::styled(
-            "none",
-            Style::new().fg(theme.fg_muted),
-        )));
+        lines.push(Line::from(Span::styled("none", theme.muted())));
     } else {
         for note in &item.notes {
             lines.push(Line::from(""));
             let mut rendered = vec![Line::from(Span::styled(
                 local_timestamp_display(&note.created_at),
-                Style::new().fg(theme.fg_dim),
+                theme.dim(),
             ))];
             let note_lines =
                 quoted_block_lines(theme, &note.body, width, Style::new().fg(theme.fg));
@@ -383,12 +367,12 @@ pub(super) fn extend_activity_section(
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "ACTIVITY",
-        Style::new().fg(theme.fg_dim).add_modifier(Modifier::BOLD),
+        theme.dim().add_modifier(Modifier::BOLD),
     )));
     if item.activity.is_empty() {
         lines.push(Line::from(Span::styled(
             "No recorded task activity.",
-            Style::new().fg(theme.fg_muted),
+            theme.muted(),
         )));
         return;
     }
@@ -419,7 +403,7 @@ pub(super) fn extend_activity_section(
     if available && let Some(tag) = idle_tag.as_deref() {
         lines.push(Line::from(Span::styled(
             truncate_width(&format!("{tag} · since becoming available"), width),
-            Style::new().fg(theme.fg_dim),
+            theme.dim(),
         )));
     } else if anchored_idle.is_none()
         && let Some((index, tag)) = idle_index.zip(idle_tag.as_deref())
@@ -432,14 +416,14 @@ pub(super) fn extend_activity_section(
                 ),
                 width,
             ),
-            Style::new().fg(theme.fg_dim),
+            theme.dim(),
         )));
     } else if idle_index.is_none()
         && let Some(tag) = idle_tag.as_deref()
     {
         lines.push(Line::from(Span::styled(
             truncate_width(&format!("{tag} · based on recent task activity"), width),
-            Style::new().fg(theme.fg_dim),
+            theme.dim(),
         )));
     }
 
@@ -463,7 +447,7 @@ pub(super) fn extend_activity_section(
         );
         let mut spans = vec![
             Span::raw("  "),
-            Span::styled(timestamp, Style::new().fg(theme.fg_dim)),
+            Span::styled(timestamp, theme.dim()),
             Span::raw("  "),
             Span::styled(icon, recent_actions::action_style(theme, action)),
             Span::raw(" "),
@@ -476,7 +460,7 @@ pub(super) fn extend_activity_section(
                     + UnicodeWidthStr::width(tag),
             );
             spans.push(Span::raw(" ".repeat(padding.max(2))));
-            spans.push(Span::styled(tag.to_string(), Style::new().fg(theme.fg_dim)));
+            spans.push(Span::styled(tag.to_string(), theme.dim()));
         }
         lines.push(Line::from(spans));
     }

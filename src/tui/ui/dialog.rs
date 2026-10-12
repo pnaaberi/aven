@@ -129,6 +129,7 @@ pub(super) fn dim_rendered_area(frame: &mut Frame, theme: &Theme, area: Rect) {
     for row in area.top()..area.bottom() {
         for column in area.left()..area.right() {
             let cell = &mut buffer[(column, row)];
+            cell.modifier.remove(super::input::CARET_MARKER);
             if cell
                 .symbol()
                 .chars()
@@ -175,16 +176,13 @@ pub(super) fn dialog_hint_line(theme: &Theme, items: &[(&str, &str)]) -> Line<'s
     let mut spans = Vec::new();
     for (index, (key, label)) in items.iter().enumerate() {
         if index > 0 {
-            spans.push(Span::styled("  ", Style::new().fg(theme.fg_muted)));
+            spans.push(Span::styled("  ", theme.muted()));
         }
         spans.push(Span::styled(
             key.to_string(),
             Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
         ));
-        spans.push(Span::styled(
-            format!(" {label}"),
-            Style::new().fg(theme.fg_muted),
-        ));
+        spans.push(Span::styled(format!(" {label}"), theme.muted()));
     }
     Line::from(spans)
 }

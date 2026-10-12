@@ -324,10 +324,8 @@ fn cached_detail_document_rebuilds_only_when_theme_differs() {
     let reused = DetailDocument::reuse_or_build(Some(&cached), &item, &equal_context);
     assert!(std::rc::Rc::ptr_eq(&reused, &cached));
 
-    let changed = Theme {
-        accent: ratatui::style::Color::Rgb(1, 2, 3),
-        ..Theme::dark()
-    };
+    let mut changed = Theme::dark();
+    changed.accent = ratatui::style::Color::Rgb(1, 2, 3);
     let changed_context = DetailRenderContext {
         theme: &changed,
         ..context

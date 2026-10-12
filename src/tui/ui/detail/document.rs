@@ -709,7 +709,7 @@ pub(super) fn apply_active_style(
                         1 => {
                             span.style = span.style.fg(theme.accent).add_modifier(Modifier::BOLD);
                         }
-                        2 => span.style = span.style.fg(theme.fg_dim),
+                        2 => span.style = span.style.patch(theme.dim()),
                         _ => {}
                     }
                 }
@@ -803,8 +803,8 @@ pub(super) fn render_detail_content_from_model(
     if model.content_height > body_visible {
         frame.render_stateful_widget(
             Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                .style(Style::new().fg(theme.fg_dim).bg(theme.bg))
-                .thumb_style(Style::new().fg(theme.fg_muted)),
+                .style(theme.dim().bg(theme.bg))
+                .thumb_style(theme.muted()),
             body_area,
             &mut ScrollbarState::new(model.content_height)
                 .position(model.scrollbar_position)

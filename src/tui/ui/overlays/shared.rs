@@ -39,10 +39,7 @@ pub(super) fn value_row(
     value_style: Style,
 ) -> Line<'static> {
     Line::from(vec![
-        Span::styled(
-            format!("{label:<label_width$}"),
-            Style::new().fg(theme.fg_dim),
-        ),
+        Span::styled(format!("{label:<label_width$}"), theme.dim()),
         Span::styled(value.into(), value_style),
     ])
 }

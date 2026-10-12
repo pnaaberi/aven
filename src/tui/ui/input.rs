@@ -10,6 +10,10 @@ use crate::tui::text::{
 };
 use crate::tui::theme::Theme;
 
+/// Render-only caret metadata, removed before a frame reaches the backend.
+/// No visible style may use this modifier.
+pub(crate) const CARET_MARKER: Modifier = Modifier::RAPID_BLINK;
+
 pub(in crate::tui::ui) fn input_line(
     theme: &Theme,
     prefix: &'static str,
@@ -91,7 +95,7 @@ pub(in crate::tui::ui) fn cursor_cell(
     theme: &Theme,
     content: impl Into<Cow<'static, str>>,
 ) -> Span<'static> {
-    Span::styled(content, theme.cursor())
+    Span::styled(content, theme.cursor().add_modifier(CARET_MARKER))
 }
 
 /// Finds the drawn cursor cell in a rendered frame so the caller can park the
@@ -103,18 +107,22 @@ pub(in crate::tui::ui) fn cursor_cell(
 /// composition at the terminal cursor, so without this the preedit text appears
 /// somewhere unrelated to the field being typed into.
 ///
-/// Cursor cells covered by a stacked dialog no longer retain this exact style:
-/// dialog dimming changes their modifiers or colors, so only the topmost active
-/// input qualifies.
-pub(crate) fn text_cursor_position(buffer: &Buffer, theme: &Theme) -> Option<Position> {
-    let cursor = theme.cursor();
-    let index = buffer.content().iter().position(|cell| {
-        Some(cell.fg) == cursor.fg
-            && Some(cell.bg) == cursor.bg
-            && !cell.modifier.contains(Modifier::DIM)
-    })?;
+/// Modal dimming invalidates underlay markers even on blank caret cells.
+pub(crate) fn text_cursor_position(buffer: &Buffer) -> Option<Position> {
+    let index = buffer
+        .content()
+        .iter()
+        .position(|cell| cell.modifier.contains(CARET_MARKER))?;
     let (x, y) = buffer.pos_of(index);
     Some(Position { x, y })
+}
+
+pub(super) fn finish_input_frame(buffer: &mut Buffer) -> Option<Position> {
+    let position = text_cursor_position(buffer);
+    for cell in &mut buffer.content {
+        cell.modifier.remove(CARET_MARKER);
+    }
+    position
 }
 
 #[cfg(test)]
@@ -195,5 +203,27 @@ mod tests {
         assert_eq!(line.spans[0].content.as_ref(), "/");
         assert_eq!(line.spans[1].content.as_ref(), "a");
         assert_eq!(line.spans[2].content.as_ref(), "b");
+    }
+    #[test]
+    fn caret_metadata_survives_layout_but_never_reaches_the_backend() {
+        use ratatui::layout::Rect;
+        use ratatui::widgets::{Paragraph, Widget};
+        for theme in [Theme::dark(), Theme::light(), Theme::terminal()] {
+            let area = Rect::new(4, 8, 6, 1);
+            let mut buffer = Buffer::empty(area);
+            assert_eq!(text_cursor_position(&buffer), None);
+            Paragraph::new(clipped_input_line(&theme, "한글입력", 3, 6)).render(area, &mut buffer);
+            let caret = text_cursor_position(&buffer).unwrap();
+            assert_eq!(caret, Position::new(4, 8));
+            assert_eq!(buffer[(caret.x, caret.y)].symbol(), "글");
+            assert_eq!(finish_input_frame(&mut buffer), Some(caret));
+            assert!(
+                buffer
+                    .content
+                    .iter()
+                    .all(|cell| !cell.modifier.contains(CARET_MARKER))
+            );
+            assert_eq!(text_cursor_position(&buffer), None);
+        }
     }
 }

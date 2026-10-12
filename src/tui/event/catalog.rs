@@ -324,7 +324,7 @@ pub(crate) const COMMANDS: &[BuiltInCommand] = &[
     ),
     BuiltInCommand::implemented_global_in_detail(
         "toggle-background",
-        "switch between the light and dark theme",
+        "cycle through dark, light, and terminal themes",
         "General",
         &[],
         Action::ToggleBackground,

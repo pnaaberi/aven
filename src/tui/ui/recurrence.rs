@@ -151,10 +151,7 @@ pub(super) fn render_recurrence_series(
 }
 
 fn render_header(frame: &mut Frame, theme: &Theme, area: Rect) {
-    let style = Style::new()
-        .fg(theme.fg_dim)
-        .bg(theme.bg_raised)
-        .add_modifier(Modifier::BOLD);
+    let style = theme.dim().bg(theme.bg_raised).add_modifier(Modifier::BOLD);
     let cells = Layout::horizontal(columns()).areas::<5>(area);
     for (cell, label) in
         cells
@@ -176,14 +173,11 @@ fn display_ref_spans(
                 prefix.to_string(),
                 Style::new().fg(prefix_color).add_modifier(Modifier::BOLD),
             ),
-            Span::styled("-", Style::new().fg(theme.fg_dim)),
-            Span::styled(suffix.to_string(), Style::new().fg(theme.fg_muted)),
+            Span::styled("-", theme.dim()),
+            Span::styled(suffix.to_string(), theme.muted()),
         ]
     } else {
-        vec![Span::styled(
-            display_ref.to_string(),
-            Style::new().fg(theme.fg_muted),
-        )]
+        vec![Span::styled(display_ref.to_string(), theme.muted())]
     }
 }
 
@@ -199,7 +193,7 @@ fn occurrence_line(theme: &Theme, item: &RecurrenceSeriesListItem) -> Line<'stat
     };
     let mut spans = vec![
         Span::raw(" "),
-        Span::styled(occurrence.slot_on.clone(), Style::new().fg(theme.fg_muted)),
+        Span::styled(occurrence.slot_on.clone(), theme.muted()),
         Span::raw(" "),
     ];
     spans.extend(display_ref_spans(
@@ -243,6 +237,9 @@ fn render_row(
     {
         frame.render_widget(Paragraph::new(value).style(style), cell);
     }
+    if selected {
+        theme.paint_selection(frame.buffer_mut(), area, focused);
+    }
 }
 
 fn render_recurrence_preview(
@@ -284,14 +281,14 @@ fn recurrence_preview_lines(
     ));
 
     let mut fields = vec![
-        Span::styled("project ", Style::new().fg(theme.fg_dim)),
+        Span::styled("project ", theme.dim()),
         Span::styled(
             item.project_key.clone(),
             Style::new()
                 .fg(theme.project(&item.project_key))
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled("  state ", Style::new().fg(theme.fg_dim)),
+        Span::styled("  state ", theme.dim()),
         Span::styled(
             item.series.state.as_str().to_string(),
             Style::new().fg(theme.accent).add_modifier(Modifier::BOLD),
@@ -299,7 +296,7 @@ fn recurrence_preview_lines(
     ];
     if item.series.priority.as_str() != "none" {
         fields.extend([
-            Span::styled("  priority ", Style::new().fg(theme.fg_dim)),
+            Span::styled("  priority ", theme.dim()),
             Span::styled(
                 item.series.priority.as_str().to_string(),
                 theme
@@ -320,24 +317,24 @@ fn recurrence_preview_lines(
     };
     let schedule = crate::recurrence_input::natural_rule_label(item.series.rule);
     let timing = Line::from(vec![
-        Span::styled("repeat ", Style::new().fg(theme.fg_dim)),
+        Span::styled("repeat ", theme.dim()),
         Span::styled(schedule, Style::new().fg(theme.fg)),
-        Span::styled("  available ", Style::new().fg(theme.fg_dim)),
-        Span::styled(available, Style::new().fg(theme.fg_muted)),
-        Span::styled("  due ", Style::new().fg(theme.fg_dim)),
-        Span::styled(due, Style::new().fg(theme.fg_muted)),
-        Span::styled("  starts ", Style::new().fg(theme.fg_dim)),
+        Span::styled("  available ", theme.dim()),
+        Span::styled(available, theme.muted()),
+        Span::styled("  due ", theme.dim()),
+        Span::styled(due, theme.muted()),
+        Span::styled("  starts ", theme.dim()),
         Span::styled(
             item.series.start_on.format("%b %-d").to_string(),
-            Style::new().fg(theme.fg_muted),
+            theme.muted(),
         ),
     ]);
 
     let mut lines = vec![Line::from(heading), Line::from(fields), timing];
     if let Some(occurrence) = item.current_occurrence.as_ref() {
         let mut occurrence_spans = vec![
-            Span::styled("current task ", Style::new().fg(theme.fg_dim)),
-            Span::styled(occurrence.slot_on.clone(), Style::new().fg(theme.fg_muted)),
+            Span::styled("current task ", theme.dim()),
+            Span::styled(occurrence.slot_on.clone(), theme.muted()),
             Span::raw(" "),
         ];
         occurrence_spans.extend(display_ref_spans(
@@ -349,12 +346,12 @@ fn recurrence_preview_lines(
     }
     if !item.series.description.is_empty() && lines.len() < height {
         lines.push(Line::from(""));
-        lines.extend(item.series.description.lines().map(|line| {
-            Line::from(Span::styled(
-                line.to_string(),
-                Style::new().fg(theme.fg_muted),
-            ))
-        }));
+        lines.extend(
+            item.series
+                .description
+                .lines()
+                .map(|line| Line::from(Span::styled(line.to_string(), theme.muted()))),
+        );
     }
     lines.truncate(height);
     lines
@@ -388,7 +385,7 @@ fn recurrence_detail_field(
     value: Span<'static>,
 ) -> Line<'static> {
     Line::from(vec![
-        Span::styled(format!("{label:<13}"), Style::new().fg(theme.fg_dim)),
+        Span::styled(format!("{label:<13}"), theme.dim()),
         value,
     ])
 }
@@ -437,7 +434,7 @@ fn recurrence_detail_lines(theme: &Theme, detail: &RecurrenceSeriesDetail) -> Ve
     };
 
     let mut identity = display_ref_spans(theme, &detail.summary.series_ref, theme.accent);
-    identity.push(Span::styled("  ", Style::new().fg(theme.fg_dim)));
+    identity.push(Span::styled("  ", theme.dim()));
     identity.push(Span::styled(
         detail.series.state.as_str().to_string(),
         recurrence_state_style(theme, detail.series.state),
@@ -451,7 +448,7 @@ fn recurrence_detail_lines(theme: &Theme, detail: &RecurrenceSeriesDetail) -> Ve
         Line::from(""),
         Line::from(Span::styled(
             "SCHEDULE",
-            Style::new().fg(theme.fg_dim).add_modifier(Modifier::BOLD),
+            theme.dim().add_modifier(Modifier::BOLD),
         )),
         recurrence_detail_field(
             theme,
@@ -461,21 +458,9 @@ fn recurrence_detail_lines(theme: &Theme, detail: &RecurrenceSeriesDetail) -> Ve
                 Style::new().fg(theme.fg),
             ),
         ),
-        recurrence_detail_field(
-            theme,
-            "Available",
-            Span::styled(available, Style::new().fg(theme.fg_muted)),
-        ),
-        recurrence_detail_field(
-            theme,
-            "Due",
-            Span::styled(due, Style::new().fg(theme.fg_muted)),
-        ),
-        recurrence_detail_field(
-            theme,
-            "Starts",
-            Span::styled(starts, Style::new().fg(theme.fg_muted)),
-        ),
+        recurrence_detail_field(theme, "Available", Span::styled(available, theme.muted())),
+        recurrence_detail_field(theme, "Due", Span::styled(due, theme.muted())),
+        recurrence_detail_field(theme, "Starts", Span::styled(starts, theme.muted())),
     ];
     if detail.series.priority.as_str() != "none" {
         lines.push(recurrence_detail_field(
@@ -500,12 +485,9 @@ fn recurrence_detail_lines(theme: &Theme, detail: &RecurrenceSeriesDetail) -> Ve
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
             "CURRENT OCCURRENCE",
-            Style::new().fg(theme.fg_dim).add_modifier(Modifier::BOLD),
+            theme.dim().add_modifier(Modifier::BOLD),
         )));
-        let mut occurrence = vec![
-            Span::styled(slot.clone(), Style::new().fg(theme.fg_muted)),
-            Span::raw("  "),
-        ];
+        let mut occurrence = vec![Span::styled(slot.clone(), theme.muted()), Span::raw("  ")];
         occurrence.extend(display_ref_spans(theme, task_ref, theme.accent));
         lines.push(Line::from(occurrence));
     }
@@ -513,14 +495,15 @@ fn recurrence_detail_lines(theme: &Theme, detail: &RecurrenceSeriesDetail) -> Ve
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
             "DESCRIPTION",
-            Style::new().fg(theme.fg_dim).add_modifier(Modifier::BOLD),
+            theme.dim().add_modifier(Modifier::BOLD),
         )));
-        lines.extend(detail.series.description.lines().map(|line| {
-            Line::from(Span::styled(
-                line.to_string(),
-                Style::new().fg(theme.fg_muted),
-            ))
-        }));
+        lines.extend(
+            detail
+                .series
+                .description
+                .lines()
+                .map(|line| Line::from(Span::styled(line.to_string(), theme.muted()))),
+        );
     }
     if !detail.lifecycle_conflicts.is_empty() {
         lines.push(Line::from(""));
@@ -530,13 +513,10 @@ fn recurrence_detail_lines(theme: &Theme, detail: &RecurrenceSeriesDetail) -> Ve
         )));
         lines.extend(detail.lifecycle_conflicts.iter().map(|conflict| {
             Line::from(vec![
-                Span::styled(
-                    format!("{}  ", conflict.field),
-                    Style::new().fg(theme.fg_dim),
-                ),
+                Span::styled(format!("{}  ", conflict.field), theme.dim()),
                 Span::styled(
                     format!("{} / {}", conflict.local_value, conflict.remote_value),
-                    Style::new().fg(theme.fg_muted),
+                    theme.muted(),
                 ),
             ])
         }));

@@ -206,10 +206,7 @@ fn header_layout(
         Some(HeaderTarget::Home),
     );
     layout.push_text(
-        Span::styled(
-            format!(" v{}", crate::update::CURRENT_VERSION),
-            Style::new().fg(theme.fg_dim),
-        ),
+        Span::styled(format!(" v{}", crate::update::CURRENT_VERSION), theme.dim()),
         Some(HeaderTarget::Changelog),
     );
     if let Some(update) = update {
@@ -219,10 +216,7 @@ fn header_layout(
     layout.push_text(separator(theme), None);
     layout.push(
         vec![
-            Span::styled(
-                if compact { "ws " } else { "workspace " },
-                Style::new().fg(theme.fg_dim),
-            ),
+            Span::styled(if compact { "ws " } else { "workspace " }, theme.dim()),
             Span::styled(
                 store.active_workspace.key.clone(),
                 Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
@@ -231,11 +225,11 @@ fn header_layout(
         Some(HeaderTarget::Workspace { column: 0 }),
     );
     layout.push_text(separator(theme), None);
-    let mut scope = vec![Span::styled("scope ", Style::new().fg(theme.fg_dim))];
+    let mut scope = vec![Span::styled("scope ", theme.dim())];
     scope.extend(scope_badge(theme, store));
     layout.push(scope, Some(HeaderTarget::Scope { column: 0 }));
     layout.push_text(separator(theme), None);
-    let mut view = vec![Span::styled("view ", Style::new().fg(theme.fg_dim))];
+    let mut view = vec![Span::styled("view ", theme.dim())];
     view.extend(view_badge(theme, store));
     layout.push(view, Some(HeaderTarget::Query { column: 0 }));
     layout.push_text(separator(theme), None);
@@ -251,7 +245,7 @@ fn header_layout(
             .bg(theme.bg_panel)
             .add_modifier(Modifier::BOLD)
     } else {
-        Style::new().fg(theme.fg_muted).bg(theme.bg_panel)
+        theme.muted().bg(theme.bg_panel)
     };
     layout.push(
         vec![Span::styled(layout_label, layout_style)],
@@ -381,14 +375,11 @@ fn update_badge(
         theme.accent
     };
     let edge = Style::new().fg(fill).bg(theme.bg);
-    let label = Style::new()
-        .fg(theme.inverse_fg)
-        .bg(fill)
-        .add_modifier(Modifier::BOLD);
+    let label = theme.badge(fill).add_modifier(Modifier::BOLD);
     vec![
-        Span::styled("".to_string(), edge),
+        Span::styled(theme.pill_edge("").to_string(), edge),
         Span::styled(update.label.clone(), label),
-        Span::styled("".to_string(), edge),
+        Span::styled(theme.pill_edge("").to_string(), edge),
     ]
 }
 
@@ -449,12 +440,20 @@ fn metric(
 ) -> Vec<Span<'static>> {
     let fill = if active { color } else { theme.bg_panel };
     let fg = if active { theme.inverse_fg } else { color };
-    let style = Style::new().fg(fg).bg(fill).add_modifier(Modifier::BOLD);
+    let style = if theme.is_terminal() {
+        Style::new().fg(color).bg(theme.bg).add_modifier(if active {
+            Modifier::BOLD | Modifier::UNDERLINED
+        } else {
+            Modifier::BOLD
+        })
+    } else {
+        Style::new().fg(fg).bg(fill).add_modifier(Modifier::BOLD)
+    };
     let edge_style = Style::new().fg(fill).bg(theme.bg);
     vec![
-        Span::styled("".to_string(), edge_style),
+        Span::styled(theme.pill_edge("").to_string(), edge_style),
         Span::styled(format!("{label} {count}"), style),
-        Span::styled("".to_string(), edge_style),
+        Span::styled(theme.pill_edge("").to_string(), edge_style),
     ]
 }
 
@@ -464,10 +463,10 @@ fn active_order_spans(theme: &Theme, store: &TuiStore) -> Vec<Span<'static>> {
     }
     let mut spans = vec![
         separator(theme),
-        Span::styled("order ", Style::new().fg(theme.fg_dim)),
+        Span::styled("order ", theme.dim()),
         Span::styled(
             store.sort_label(),
-            Style::new().fg(theme.fg_muted).add_modifier(Modifier::BOLD),
+            theme.muted().add_modifier(Modifier::BOLD),
         ),
     ];
     if !matches!(
@@ -476,7 +475,7 @@ fn active_order_spans(theme: &Theme, store: &TuiStore) -> Vec<Span<'static>> {
     ) {
         spans.push(Span::styled(
             format!(" {}", store.sort_direction_label()),
-            Style::new().fg(theme.fg_dim),
+            theme.dim(),
         ));
     }
     spans
@@ -494,10 +493,7 @@ fn active_filter_spans(theme: &Theme, store: &TuiStore) -> Vec<Span<'static>> {
         if let Some(search) = store.view_state.recurring.search.as_deref() {
             parts.push(vec![filter_part(theme, format!("search={search}"))]);
         }
-        let mut spans = vec![
-            separator(theme),
-            Span::styled("filter ", Style::new().fg(theme.fg_dim)),
-        ];
+        let mut spans = vec![separator(theme), Span::styled("filter ", theme.dim())];
         spans.extend(join_filter_parts(theme, parts));
         return spans;
     }
@@ -529,20 +525,14 @@ fn active_filter_spans(theme: &Theme, store: &TuiStore) -> Vec<Span<'static>> {
     if parts.is_empty() {
         Vec::new()
     } else {
-        let mut spans = vec![
-            separator(theme),
-            Span::styled("filter ", Style::new().fg(theme.fg_dim)),
-        ];
+        let mut spans = vec![separator(theme), Span::styled("filter ", theme.dim())];
         spans.extend(join_filter_parts(theme, parts));
         spans
     }
 }
 
 fn filter_part(theme: &Theme, content: impl Into<std::borrow::Cow<'static, str>>) -> Span<'static> {
-    Span::styled(
-        content,
-        Style::new().fg(theme.fg_muted).add_modifier(Modifier::BOLD),
-    )
+    Span::styled(content, theme.muted().add_modifier(Modifier::BOLD))
 }
 
 fn join_filter_parts(theme: &Theme, parts: Vec<Vec<Span<'static>>>) -> Vec<Span<'static>> {
@@ -566,11 +556,11 @@ fn header_status(theme: &Theme, store: &TuiStore) -> Paragraph<'static> {
     let spans = vec![
         Span::raw(" "),
         Span::styled("●", Style::new().fg(dot_color)),
-        Span::styled(format!(" {label}"), Style::new().fg(theme.fg_dim)),
+        Span::styled(format!(" {label}"), theme.dim()),
     ];
     Paragraph::new(Line::from(spans))
         .alignment(Alignment::Right)
-        .style(Style::new().fg(theme.fg_dim).bg(theme.bg))
+        .style(theme.dim().bg(theme.bg))
 }
 
 fn sync_status_label(theme: &Theme, store: &TuiStore) -> (Color, String) {

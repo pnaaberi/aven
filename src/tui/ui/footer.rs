@@ -101,10 +101,7 @@ fn bulk_action_segment(theme: &Theme, label: &str, action: Action) -> BulkFooter
             .map_or("", |keys| keys.label)
     };
     let mut spans = key(theme, keys);
-    spans.push(Span::styled(
-        format!(" {label}  "),
-        Style::new().fg(theme.fg_dim),
-    ));
+    spans.push(Span::styled(format!(" {label}  "), theme.dim()));
     BulkFooterSegment {
         spans,
         action: Some(action),
@@ -471,20 +468,20 @@ fn footer_hints(mode: FooterMode, width: u16) -> &'static [(&'static str, &'stat
 }
 
 fn key(theme: &Theme, label: &str) -> Vec<Span<'static>> {
-    let key_style = Style::new()
-        .fg(theme.fg_muted)
+    let key_style = theme
+        .muted()
         .bg(theme.bg_panel)
         .add_modifier(Modifier::BOLD);
-    let separator_style = Style::new().fg(theme.fg_dim).bg(theme.bg_panel);
+    let separator_style = theme.dim().bg(theme.bg_panel);
     let edge_style = Style::new().fg(theme.bg_panel).bg(theme.bg);
-    let mut spans = vec![Span::styled("".to_string(), edge_style)];
+    let mut spans = vec![Span::styled(theme.pill_edge("").to_string(), edge_style)];
     for (index, part) in label.split('/').enumerate() {
         if index > 0 {
             spans.push(Span::styled("/".to_string(), separator_style));
         }
         spans.push(Span::styled(part.to_string(), key_style));
     }
-    spans.push(Span::styled("".to_string(), edge_style));
+    spans.push(Span::styled(theme.pill_edge("").to_string(), edge_style));
     spans
 }
 
@@ -507,7 +504,7 @@ fn cmd(theme: &Theme, mode: FooterMode, label: &str) -> Span<'static> {
         | FooterMode::DetailAttachment
         | FooterMode::DetailEpicChild
         | FooterMode::AttachmentPreview
-        | FooterMode::DetailSelection => Style::new().fg(theme.fg_dim),
+        | FooterMode::DetailSelection => theme.dim(),
     };
     Span::styled(format!(" {label}  "), style)
 }

@@ -249,10 +249,7 @@ impl HelpLayout {
         let scroll = scroll.min(self.cap());
         let mut dialog = Dialog::new(theme, title, self.area.width, self.area.height);
         if let Some(position) = detail_help_scroll_title(scroll, self.content.height, rows) {
-            dialog = dialog.right_title(Line::from(Span::styled(
-                position,
-                Style::new().fg(theme.fg_muted),
-            )));
+            dialog = dialog.right_title(Line::from(Span::styled(position, theme.muted())));
         }
         dialog.render_block_at(frame, self.area);
         for (area, lines) in self.columns {
@@ -625,17 +622,14 @@ fn detail_help_lines(theme: &Theme, undo_description: &str) -> Vec<Line<'static>
 
 fn detail_help_line(theme: &Theme, topic: &HelpTopic, undo_description: &str) -> Line<'static> {
     Line::from(vec![
-        Span::styled(
-            format!("{:<18}", topic.keys),
-            Style::new().fg(theme.fg_muted),
-        ),
+        Span::styled(format!("{:<18}", topic.keys), theme.muted()),
         Span::styled(
             if topic.keys == "u" {
                 undo_description.to_string()
             } else {
                 topic.description.to_string()
             },
-            Style::new().fg(theme.fg_dim),
+            theme.dim(),
         ),
     ])
 }
@@ -716,10 +710,7 @@ fn command_hint_line(
             command_name_style(theme),
         ),
     ];
-    spans.push(Span::styled(
-        command.description,
-        Style::new().fg(theme.fg_dim),
-    ));
+    spans.push(Span::styled(command.description, theme.dim()));
     Line::from(spans)
 }
 
@@ -747,10 +738,7 @@ fn catalog_command_hint_line(
             Style::new().fg(theme.custom_command_tag),
         ));
     }
-    spans.push(Span::styled(
-        command.description().to_string(),
-        Style::new().fg(theme.fg_dim),
-    ));
+    spans.push(Span::styled(command.description().to_string(), theme.dim()));
     Line::from(spans)
 }
 
@@ -786,56 +774,33 @@ fn help_command_line(
         CommandContext::Normal => 14,
         CommandContext::Detail => 18,
     };
-    let mut spans = vec![Span::styled(
-        format!("{keys:<key_width$}"),
-        Style::new().fg(theme.fg_muted),
-    )];
+    let mut spans = vec![Span::styled(format!("{keys:<key_width$}"), theme.muted())];
     spans.push(Span::styled(
         if command.action == Action::Undo {
             undo_description.to_string()
         } else {
             command.description.to_string()
         },
-        Style::new().fg(theme.fg_dim),
+        theme.dim(),
     ));
     Line::from(spans)
 }
 
 #[cfg(test)]
 fn command_line(command: &BuiltInCommand, context: CommandContext) -> Line<'static> {
-    command_line_with_highlight(&Theme::dark(), command, context, false)
-}
-
-#[cfg(test)]
-fn command_line_with_highlight(
-    theme: &Theme,
-    command: &BuiltInCommand,
-    context: CommandContext,
-    highlighted: bool,
-) -> Line<'static> {
+    let theme = Theme::dark();
     let keys = command
         .keys(context)
         .iter()
         .map(|key| key.label)
         .collect::<Vec<_>>()
         .join("/");
-    let mut line = command_hint_line(
-        theme,
-        Span::styled(format!("{keys:<10}"), Style::new().fg(theme.fg_muted)),
+    command_hint_line(
+        &theme,
+        Span::styled(format!("{keys:<10}"), theme.muted()),
         command,
         19,
-    );
-    if highlighted {
-        line.style = line.style.bg(theme.bg_selected);
-        for span in &mut line.spans {
-            span.style = span.style.bg(theme.bg_selected);
-        }
-        line.spans.push(Span::styled(
-            " ".repeat(80),
-            Style::new().bg(theme.bg_selected),
-        ));
-    }
-    line
+    )
 }
 
 struct CommandPaletteOptions<'a> {
@@ -865,7 +830,7 @@ fn command_palette_line(
         .min_by_key(|key| unicode_width::UnicodeWidthStr::width(key.label))
         .map_or("", |key| key.label);
     let mut spans = vec![
-        Span::styled(format!("{keys:<10}"), Style::new().fg(theme.fg_muted)),
+        Span::styled(format!("{keys:<10}"), theme.muted()),
         Span::styled(
             format!("{:<command_name_width$}", command_label(command.name())),
             if command.is_custom() {
@@ -878,13 +843,10 @@ fn command_palette_line(
         ),
     ];
     if let Some(annotation) = annotation {
-        spans.push(Span::styled(annotation, Style::new().fg(theme.fg_muted)));
+        spans.push(Span::styled(annotation, theme.muted()));
     }
     if let Some(reason) = unavailable_reason {
-        spans.push(Span::styled(
-            format!("disabled: {reason} · "),
-            Style::new().fg(theme.fg_dim),
-        ));
+        spans.push(Span::styled(format!("disabled: {reason} · "), theme.dim()));
     }
     let used_width = spans
         .iter()
@@ -901,7 +863,7 @@ fn command_palette_line(
         description_override.unwrap_or_else(|| command.description()),
         line_width.saturating_sub(used_width.saturating_add(origin_width)),
     );
-    spans.push(Span::styled(description, Style::new().fg(theme.fg_dim)));
+    spans.push(Span::styled(description, theme.dim()));
     if let Some(tag) = origin_tag {
         let used_width = spans
             .iter()
@@ -922,19 +884,17 @@ fn command_palette_line(
     }
     if unavailable_reason.is_some() {
         for span in &mut spans {
-            span.style = span.style.fg(theme.fg_dim);
+            span.style = span.style.patch(theme.dim());
         }
     }
     let mut line = Line::from(spans);
     if highlighted {
-        line.style = line.style.bg(theme.bg_selected);
+        line.style = line.style.patch(theme.highlight());
         for span in &mut line.spans {
-            span.style = span.style.bg(theme.bg_selected);
+            span.style = span.style.patch(theme.highlight());
         }
-        line.spans.push(Span::styled(
-            " ".repeat(80),
-            Style::new().bg(theme.bg_selected),
-        ));
+        line.spans
+            .push(Span::styled(" ".repeat(80), theme.highlight()));
     }
     line
 }
@@ -1004,10 +964,7 @@ pub(super) fn render_command(
             || format!("{match_count} commands"),
             |_| format!("{}/{match_count}", selected + 1),
         );
-        dialog = dialog.right_title(Line::from(Span::styled(
-            position,
-            Style::new().fg(theme.fg_muted),
-        )));
+        dialog = dialog.right_title(Line::from(Span::styled(position, theme.muted())));
     }
     dialog.render_block_at(frame, layout.area);
     let content = layout.inner;
@@ -1070,7 +1027,7 @@ pub(super) fn render_command(
     if match_count > 0 {
         lines.push(Line::from(Span::styled(
             "  ↑/↓ browse · Enter run · Tab complete",
-            Style::new().fg(theme.fg_muted),
+            theme.muted(),
         )));
     }
 
@@ -1214,16 +1171,13 @@ fn prefix_hint_lines_for_catalog_in_domain(
                 theme,
                 Span::styled(
                     format!(" {:<6} ", key_hint),
-                    Style::new().fg(theme.fg_muted).bg(theme.bg_panel),
+                    theme.muted().bg(theme.bg_panel),
                 ),
                 command,
                 command_name_width,
             );
             if copy_mark_limit {
-                line.spans.push(Span::styled(
-                    " · 1 task only",
-                    Style::new().fg(theme.fg_dim),
-                ));
+                line.spans.push(Span::styled(" · 1 task only", theme.dim()));
             } else if matches!(
                 command.custom_target(),
                 Some(CustomTuiCommandTarget::Marked | CustomTuiCommandTarget::MarkedOrFocused)
@@ -1231,29 +1185,27 @@ fn prefix_hint_lines_for_catalog_in_domain(
             {
                 line.spans.push(Span::styled(
                     format!(" · {}", marked_task_label(target_marked_task_count)),
-                    Style::new().fg(theme.fg_muted),
+                    theme.muted(),
                 ));
             } else if command.custom_target() == Some(CustomTuiCommandTarget::MarkedOrFocused)
                 && has_primary_task
             {
-                line.spans.push(Span::styled(
-                    " · focused task",
-                    Style::new().fg(theme.fg_muted),
-                ));
+                line.spans
+                    .push(Span::styled(" · focused task", theme.muted()));
             } else {
                 match support {
-                    BulkSupport::SingleOnly(_) if target_marked_task_count > 1 => line.spans.push(
-                        Span::styled(" · 1 task only", Style::new().fg(theme.fg_dim)),
-                    ),
+                    BulkSupport::SingleOnly(_) if target_marked_task_count > 1 => {
+                        line.spans.push(Span::styled(" · 1 task only", theme.dim()))
+                    }
                     BulkSupport::Batch if target_marked_task_count > 0 => {
                         line.spans.push(Span::styled(
                             format!(" · {}", marked_task_label(target_marked_task_count)),
-                            Style::new().fg(theme.fg_muted),
+                            theme.muted(),
                         ));
                     }
-                    BulkSupport::Focused if target_marked_task_count > 0 => line.spans.push(
-                        Span::styled(" · focused task", Style::new().fg(theme.fg_muted)),
-                    ),
+                    BulkSupport::Focused if target_marked_task_count > 0 => line
+                        .spans
+                        .push(Span::styled(" · focused task", theme.muted())),
                     BulkSupport::Batch
                     | BulkSupport::SingleOnly(_)
                     | BulkSupport::Focused
@@ -1263,7 +1215,7 @@ fn prefix_hint_lines_for_catalog_in_domain(
             }
             if unavailable {
                 for span in &mut line.spans {
-                    span.style = span.style.fg(theme.fg_dim);
+                    span.style = span.style.patch(theme.dim());
                 }
             }
             line

@@ -2,7 +2,6 @@
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::Style;
 use ratatui::widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState};
 
 use crate::tui::theme::Theme;
@@ -43,8 +42,8 @@ pub(in crate::tui::ui) fn render_vertical_scrollbar(
         let start = clamp_scroll_start(scroll, content_height, visible_rows);
         frame.render_stateful_widget(
             Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                .style(Style::new().fg(theme.fg_dim).bg(theme.bg_raised))
-                .thumb_style(Style::new().fg(theme.fg_muted)),
+                .style(theme.dim().bg(theme.bg_raised))
+                .thumb_style(theme.muted()),
             area,
             &mut ScrollbarState::new(content_height)
                 .position(scrollbar_thumb_position(

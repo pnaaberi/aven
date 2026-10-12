@@ -739,7 +739,7 @@ fn line_with_ellipsis(theme: &Theme, line: &Line<'_>, max_width: usize) -> Line<
             spans.push(Span::styled(content, span.style));
         }
     }
-    spans.push(Span::styled("…", Style::new().fg(theme.fg_dim)));
+    spans.push(Span::styled("…", theme.dim()));
     Line::from(spans)
 }
 
@@ -778,7 +778,7 @@ fn layout_lines_to_ratatui(
 fn attrs_to_style(theme: &Theme, attrs: &Attrs) -> Style {
     let mut style = attrs_modifiers(attrs);
     if attrs.dimmed {
-        style = style.fg(theme.fg_dim);
+        style = style.patch(theme.dim());
     }
     if is_code(attrs) {
         style = style.patch(theme.code());

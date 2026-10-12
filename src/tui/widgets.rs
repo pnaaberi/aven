@@ -114,9 +114,7 @@ pub(crate) fn title_cell(theme: &Theme, item: &TaskListItem, max_width: usize) -
     }
     let content_width = max_width.saturating_sub(1);
     let title_style = if item.task.deleted {
-        Style::new()
-            .fg(theme.fg_muted)
-            .add_modifier(Modifier::CROSSED_OUT)
+        theme.muted().add_modifier(Modifier::CROSSED_OUT)
     } else {
         Style::new().fg(theme.fg)
     };
@@ -157,7 +155,7 @@ pub(crate) fn label_cell(theme: &Theme, labels: &[String], max_width: usize) -> 
     let padding = max_width.saturating_sub(text_width + trailing_gap);
     let mut spans = vec![
         Span::raw(" ".repeat(padding)),
-        Span::styled(text, Style::new().fg(theme.fg_dim)),
+        Span::styled(text, theme.dim()),
     ];
     if trailing_gap > 0 {
         spans.push(Span::raw(" "));

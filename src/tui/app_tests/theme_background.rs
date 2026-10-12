@@ -65,5 +65,114 @@ async fn toggle_background_switches_theme_and_keeps_terminal_background() {
     assert_eq!(buf[(119, 10)].bg, Color::Reset);
 
     app.toggle_appearance();
+    assert_eq!(app.theme, crate::tui::theme::Theme::terminal());
+    app.toggle_appearance();
     assert_eq!(app.theme, crate::tui::theme::Theme::dark());
+}
+
+#[tokio::test]
+async fn terminal_selection_and_caret_are_uniform_and_color_independent() {
+    let mut app = test_app().await;
+    create_and_select_task(&mut app, test_task_draft("Terminal selection")).await;
+    app.set_appearance(crate::tui::theme::Appearance::Terminal);
+    let buffer = render_app_buffer(&mut app, 120, 30);
+    let reversed = buffer
+        .content
+        .iter()
+        .filter(|cell| cell.modifier.contains(Modifier::REVERSED))
+        .collect::<Vec<_>>();
+    assert!(!reversed.is_empty());
+    assert!(
+        reversed
+            .iter()
+            .all(|cell| cell.fg == Color::Reset && cell.bg == Color::Reset)
+    );
+    assert_eq!(app.widgets.text_cursor, None);
+    assert!(
+        buffer
+            .content
+            .iter()
+            .all(|cell| !matches!(cell.fg, Color::Rgb(..)) && cell.bg == Color::Reset)
+    );
+
+    app.handle_normal_key(KeyCode::Char('a')).await.unwrap();
+    type_chars(&mut app, "한글").await;
+    let buffer = render_app_buffer(&mut app, 120, 30);
+    let caret = app.widgets.text_cursor.expect("active caret");
+    assert_eq!(buffer[(caret.x - 4, caret.y)].symbol(), "한");
+    assert_eq!(buffer[(caret.x - 2, caret.y)].symbol(), "글");
+    assert!(
+        buffer[(caret.x, caret.y)]
+            .modifier
+            .contains(Modifier::REVERSED)
+    );
+    assert!(
+        buffer
+            .content
+            .iter()
+            .all(|cell| !cell.modifier.contains(crate::tui::ui::CARET_MARKER))
+    );
+}
+
+#[tokio::test]
+async fn blank_caret_is_invalidated_by_stacked_dialogs_in_every_theme() {
+    for appearance in [
+        crate::tui::theme::Appearance::Dark,
+        crate::tui::theme::Appearance::Light,
+        crate::tui::theme::Appearance::Terminal,
+    ] {
+        let mut app = test_app().await;
+        app.set_appearance(appearance);
+        app.handle_normal_key(KeyCode::Char('a')).await.unwrap();
+        type_chars(&mut app, "ab").await;
+        render_app_buffer(&mut app, 120, 30);
+        assert!(app.widgets.text_cursor.is_some());
+        app.handle_overlay_key(key(KeyCode::Esc)).await.unwrap();
+        let buffer = render_app_buffer(&mut app, 120, 30);
+        assert_eq!(app.widgets.text_cursor, None);
+        assert!(
+            buffer
+                .content
+                .iter()
+                .all(|cell| !cell.modifier.contains(crate::tui::ui::CARET_MARKER))
+        );
+        app.handle_overlay_key(key(KeyCode::Char('n')))
+            .await
+            .unwrap();
+        render_app_buffer(&mut app, 120, 30);
+        assert!(app.widgets.text_cursor.is_some());
+    }
+}
+
+#[tokio::test]
+async fn terminal_inline_caret_remains_visible_inside_selected_rows_and_cards() {
+    for columns in [false, true] {
+        let mut app = test_app().await;
+        create_and_select_task(&mut app, test_task_draft("Inline caret")).await;
+        app.set_appearance(crate::tui::theme::Appearance::Terminal);
+        if columns {
+            app.set_layout(TaskLayout::Columns);
+        }
+        app.handle_normal_key(KeyCode::Char('e')).await.unwrap();
+        app.handle_normal_key(KeyCode::Char('t')).await.unwrap();
+        let buffer = render_app_buffer(&mut app, 120, 30);
+        let caret = app.widgets.text_cursor.expect("inline caret reported");
+        assert_eq!(buffer[(caret.x, caret.y)].symbol(), " ");
+        assert!(
+            !buffer[(caret.x, caret.y)]
+                .modifier
+                .contains(Modifier::REVERSED)
+        );
+        assert!(
+            buffer[(caret.x - 1, caret.y)]
+                .modifier
+                .contains(Modifier::REVERSED)
+        );
+        assert!(
+            buffer
+                .content
+                .iter()
+                .all(|cell| !cell.modifier.contains(crate::tui::ui::CARET_MARKER))
+        );
+    }
 }

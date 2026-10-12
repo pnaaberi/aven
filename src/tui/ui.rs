@@ -11,6 +11,7 @@ mod header;
 pub(crate) use self::header::{HeaderTarget, header_target_at};
 mod inline_code;
 mod input;
+pub(super) use input::CARET_MARKER;
 mod overlays;
 mod recent_actions;
 mod recurrence;
@@ -210,7 +211,8 @@ pub(crate) fn render(
     view: &ViewState,
 ) {
     render_surface(frame, theme, store, widgets, list, view);
-    widgets.text_cursor = self::input::text_cursor_position(frame.buffer_mut(), theme);
+    theme.finish_selection(frame.buffer_mut());
+    widgets.text_cursor = self::input::finish_input_frame(frame.buffer_mut());
 }
 
 fn render_surface(
@@ -707,7 +709,7 @@ fn render_order_menu(frame: &mut Frame, theme: &Theme, state: &OrderMenuView) {
             "Esc",
             Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
         ),
-        Span::styled(" close", Style::new().fg(theme.fg_dim)),
+        Span::styled(" close", theme.dim()),
     ]));
     frame.render_widget(
         Paragraph::new(Text::from(lines)).style(Style::new().fg(theme.fg).bg(theme.bg_raised)),

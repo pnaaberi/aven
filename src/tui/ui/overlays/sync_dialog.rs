@@ -143,7 +143,7 @@ pub(in crate::tui::ui) fn render_sync_dialog(
     if layout.scrolling() {
         dialog = dialog.right_title(Line::from(Span::styled(
             scroll_title(layout.start, layout.body.lines.len(), layout.visible_rows),
-            Style::new().fg(theme.fg_muted),
+            theme.muted(),
         )));
     }
     dialog.render_block_at(frame, layout.area);
@@ -291,7 +291,7 @@ fn body(theme: &Theme, view: &SyncDialogView<'_>, width: usize) -> Body {
                 theme,
                 "Last error",
                 &failure.message,
-                Style::new().fg(theme.fg_muted),
+                theme.muted(),
                 width,
             ));
         }
@@ -307,7 +307,7 @@ fn home_lines(theme: &Theme, body: &mut Body, view: &SyncDialogView<'_>, width: 
             theme,
             "Keep your tasks in sync across devices. Set up sync from this computer's \
              tasks, or join sync that another device already uses.",
-            Style::new().fg(theme.fg_muted),
+            theme.muted(),
             width,
         ));
         push_last_result(theme, lines, view.activity, width);
@@ -336,10 +336,7 @@ fn home_lines(theme: &Theme, body: &mut Body, view: &SyncDialogView<'_>, width: 
         ),
     ]));
     if let Some(state) = state_line(status, summary.health) {
-        lines.push(Line::from(Span::styled(
-            state,
-            Style::new().fg(theme.fg_muted),
-        )));
+        lines.push(Line::from(Span::styled(state, theme.muted())));
     }
     if summary.health == SyncHealth::AccessRefused {
         lines.extend(paragraph(
@@ -375,22 +372,16 @@ fn home_lines(theme: &Theme, body: &mut Body, view: &SyncDialogView<'_>, width: 
         theme,
         "Automatic",
         if status.enabled { "on" } else { "off" },
-        Style::new().fg(theme.fg_muted),
+        theme.muted(),
         width,
     ));
     if status.devices == Some(1) {
-        lines.extend(wrapped_row(
-            theme,
-            "Devices",
-            "1",
-            Style::new().fg(theme.fg_muted),
-            width,
-        ));
+        lines.extend(wrapped_row(theme, "Devices", "1", theme.muted(), width));
         lines.extend(wrapped_row(
             theme,
             "Recovery",
             crate::sync::encrypted::SINGLE_DEVICE_HINT,
-            Style::new().fg(theme.fg_muted),
+            theme.muted(),
             width,
         ));
     }
@@ -516,7 +507,7 @@ fn progress_lines(
         let line = if index < current {
             Line::from(vec![
                 Span::styled("✓ ", Style::new().fg(theme.success)),
-                Span::styled(*done, Style::new().fg(theme.fg_muted)),
+                Span::styled(*done, theme.muted()),
             ])
         } else if index == current {
             Line::from(vec![
@@ -528,8 +519,8 @@ fn progress_lines(
             ])
         } else {
             Line::from(vec![
-                Span::styled("· ", Style::new().fg(theme.fg_dim)),
-                Span::styled(*active, Style::new().fg(theme.fg_dim)),
+                Span::styled("· ", theme.dim()),
+                Span::styled(*active, theme.dim()),
             ])
         };
         lines.push(line);
@@ -538,7 +529,7 @@ fn progress_lines(
         {
             lines.push(Line::from(Span::styled(
                 format!("  {}", amount_text(amount)),
-                Style::new().fg(theme.fg_muted),
+                theme.muted(),
             )));
         }
     }
@@ -554,12 +545,7 @@ fn progress_lines(
         }
         _ => "You can close this dialog and keep working.",
     };
-    lines.extend(paragraph(
-        theme,
-        note,
-        Style::new().fg(theme.fg_muted),
-        width,
-    ));
+    lines.extend(paragraph(theme, note, theme.muted(), width));
 }
 
 /// After a join timed out in this session, explains what to do if the
@@ -572,12 +558,7 @@ fn push_expired_join_guidance(
 ) {
     if activity.join_timed_out {
         lines.push(Line::from(""));
-        lines.extend(paragraph(
-            theme,
-            JOIN_TIMEOUT_EXPIRED,
-            Style::new().fg(theme.fg_muted),
-            width,
-        ));
+        lines.extend(paragraph(theme, JOIN_TIMEOUT_EXPIRED, theme.muted(), width));
     }
 }
 
@@ -633,12 +614,7 @@ fn push_last_result(
                 headline,
                 width,
             ));
-            lines.extend(paragraph(
-                theme,
-                text,
-                Style::new().fg(theme.fg_muted),
-                width,
-            ));
+            lines.extend(paragraph(theme, text, theme.muted(), width));
         }
         OperationResult::Removed(_) | OperationResult::RemovalFinished { .. } => {}
         OperationResult::Failed(failure) => {
@@ -675,12 +651,7 @@ fn failure_lines(
         Style::new().fg(theme.fg),
         width,
     ));
-    lines.extend(paragraph(
-        theme,
-        "Press d for details.",
-        Style::new().fg(theme.fg_dim),
-        width,
-    ));
+    lines.extend(paragraph(theme, "Press d for details.", theme.dim(), width));
 }
 
 fn listed_devices(activity: &SyncActivity) -> &[crate::sync::encrypted::Device] {
@@ -725,12 +696,7 @@ fn devices_lines(theme: &Theme, body: &mut Body, view: &SyncDialogView<'_>, widt
         (None, _) => None,
     };
     if let Some(freshness) = freshness {
-        lines.extend(paragraph(
-            theme,
-            &freshness,
-            Style::new().fg(theme.fg_muted),
-            width,
-        ));
+        lines.extend(paragraph(theme, &freshness, theme.muted(), width));
     }
     if let Some(running) = &activity.running {
         lines.push(spinner_line(theme, running));
@@ -753,7 +719,7 @@ fn devices_lines(theme: &Theme, body: &mut Body, view: &SyncDialogView<'_>, widt
                 lines.extend(paragraph(
                     theme,
                     "Try again later. Any remaining device also finishes it when it syncs.",
-                    Style::new().fg(theme.fg_muted),
+                    theme.muted(),
                     width,
                 ));
             } else {
@@ -795,7 +761,7 @@ fn devices_lines(theme: &Theme, body: &mut Body, view: &SyncDialogView<'_>, widt
     if devices.is_empty() && activity.running.is_none() && !listing_failed {
         lines.push(Line::from(Span::styled(
             "No devices listed yet. Press r to check with the server.",
-            Style::new().fg(theme.fg_dim),
+            theme.dim(),
         )));
     }
     let columns = DeviceColumns::new(devices, &short_ids, width);
@@ -839,12 +805,7 @@ fn devices_lines(theme: &Theme, body: &mut Body, view: &SyncDialogView<'_>, widt
     {
         lines.push(Line::from(""));
         lines.push(super::shared::section_line(theme, "details"));
-        lines.extend(paragraph(
-            theme,
-            &failure.message,
-            Style::new().fg(theme.fg_muted),
-            width,
-        ));
+        lines.extend(paragraph(theme, &failure.message, theme.muted(), width));
     }
 }
 
@@ -874,7 +835,7 @@ fn device_detail_lines(
         lines.extend(paragraph(
             theme,
             "Remove it from another device.",
-            Style::new().fg(theme.fg_dim),
+            theme.dim(),
             width,
         ));
     }
@@ -926,7 +887,7 @@ impl DeviceColumns {
         } else {
             Style::new().fg(theme.fg)
         };
-        let dim = base.fg(theme.fg_dim);
+        let dim = base.patch(theme.dim());
         let (name, name_style) = match &device.label {
             Some(label) => (label.as_str(), base),
             None => (UNNAMED_DEVICE, dim),
@@ -988,7 +949,7 @@ fn removal_lines(
                 theme,
                 "Future changes use new keys. The removed device keeps what it already \
                  downloaded.",
-                Style::new().fg(theme.fg_muted),
+                theme.muted(),
                 width,
             ));
         }
@@ -1020,7 +981,7 @@ fn removal_lines(
             lines.extend(paragraph(
                 theme,
                 "Resume removal to continue it.",
-                Style::new().fg(theme.fg_muted),
+                theme.muted(),
                 width,
             ));
         }
@@ -1055,14 +1016,11 @@ fn confirm_remove_lines(
         theme,
         "This device will lose access to future synced changes. Tasks and images it \
          already downloaded will remain on it.",
-        Style::new().fg(theme.fg_muted),
+        theme.muted(),
         width,
     ));
     lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "Device ID",
-        Style::new().fg(theme.fg_dim),
-    )));
+    lines.push(Line::from(Span::styled("Device ID", theme.dim())));
     lines.extend(paragraph(
         theme,
         &hex::encode(device),
@@ -1130,23 +1088,15 @@ fn invitation_lines(
              then paste the invitation here."
         }
     };
-    lines.extend(paragraph(
-        theme,
-        guidance,
-        Style::new().fg(theme.fg_muted),
-        width,
-    ));
+    lines.extend(paragraph(theme, guidance, theme.muted(), width));
     lines.push(Line::from(""));
     let (text, color) = match (kind, input.check()) {
         (_, InvitationCheck::Empty) => {
             // The same cursor-on-placeholder cell other TUI inputs draw.
             lines.push(Line::from(vec![
-                Span::styled(
-                    format!("{:<LABEL_WIDTH$}", "Invitation"),
-                    Style::new().fg(theme.fg_dim),
-                ),
+                Span::styled(format!("{:<LABEL_WIDTH$}", "Invitation"), theme.dim()),
                 cursor_cell(theme, "P"),
-                Span::styled("aste the invitation here", Style::new().fg(theme.fg_dim)),
+                Span::styled("aste the invitation here", theme.dim()),
             ]));
             if let Some(error) = error {
                 lines.extend(paragraph(
@@ -1216,7 +1166,7 @@ fn confirm_setup_lines(
     lines.extend(indented(
         theme,
         &plural(preview.workspaces as u64, "workspace"),
-        Style::new().fg(theme.fg_muted),
+        theme.muted(),
         width,
     ));
     lines.extend(indented(
@@ -1225,7 +1175,7 @@ fn confirm_setup_lines(
             "{} tasks (including scheduled and recurring)",
             preview.tasks.max(0)
         ),
-        Style::new().fg(theme.fg_muted),
+        theme.muted(),
         width,
     ));
     if preview.missing_images > 0 {
@@ -1248,14 +1198,14 @@ fn confirm_setup_lines(
     lines.extend(paragraph(
         theme,
         "Other devices will receive this data when they join.",
-        Style::new().fg(theme.fg_muted),
+        theme.muted(),
         width,
     ));
     if preview.leaves_unencrypted_server {
         lines.extend(paragraph(
             theme,
             "This database stops using its previous unencrypted sync server.",
-            Style::new().fg(theme.fg_muted),
+            theme.muted(),
             width,
         ));
     }
@@ -1277,7 +1227,7 @@ fn confirm_join_lines(theme: &Theme, body: &mut Body, server: &str, replace: boo
             "This device keeps its identity. The earlier invitation is kept too, so if \
              the other device already added this device with it, joining finishes with \
              that.",
-            Style::new().fg(theme.fg_muted),
+            theme.muted(),
             width,
         ));
         lines.push(Line::from(""));
@@ -1286,7 +1236,7 @@ fn confirm_join_lines(theme: &Theme, body: &mut Body, server: &str, replace: boo
         theme,
         "This computer will download the synced tasks, then their images. Keep Add \
          device or `aven sync invite` open on the other device until joining finishes.",
-        Style::new().fg(theme.fg_muted),
+        theme.muted(),
         width,
     ));
 }
@@ -1299,7 +1249,7 @@ fn confirm_automatic_sync_lines(
     width: usize,
 ) {
     let lines = &mut body.lines;
-    let muted = Style::new().fg(theme.fg_muted);
+    let muted = theme.muted();
     match service {
         AutomaticSyncService::Install => {
             let service_kind = if cfg!(target_os = "linux") {
@@ -1424,7 +1374,13 @@ fn button_span(theme: &Theme, label: String, focused: bool, primary: bool) -> Sp
     } else {
         theme.fg_muted
     };
-    let mut style = Style::new().fg(foreground).bg(fill);
+    let mut style = if focused {
+        theme.badge(fill)
+    } else if primary {
+        Style::new().fg(foreground).bg(fill)
+    } else {
+        theme.muted().bg(fill)
+    };
     if focused {
         style = style.add_modifier(Modifier::BOLD);
     }
@@ -1498,7 +1454,7 @@ fn detail_lines(theme: &Theme, status: &TuiSyncStatus, width: usize) -> Vec<Line
             theme,
             "Interval",
             &format!("{} seconds", status.interval_seconds),
-            Style::new().fg(theme.fg_muted),
+            theme.muted(),
             width,
         ));
         let wake_style = Style::new().fg(if status.daemon_wake.ok {
@@ -1518,14 +1474,14 @@ fn detail_lines(theme: &Theme, status: &TuiSyncStatus, width: usize) -> Vec<Line
         theme,
         "Sync cursor",
         status.sync_cursor.as_deref().unwrap_or("missing"),
-        Style::new().fg(theme.fg_muted),
+        theme.muted(),
         width,
     ));
     lines.extend(wrapped_row(
         theme,
         "Local sequence",
         status.local_sequence.as_deref().unwrap_or("missing"),
-        Style::new().fg(theme.fg_muted),
+        theme.muted(),
         width,
     ));
     if let Some(at) = &status.access_refused_at {
@@ -1553,10 +1509,7 @@ fn wrapped_row(
         let label = if index == 0 { label } else { "" };
         line.spans.insert(
             0,
-            Span::styled(
-                format!("{label:<LABEL_WIDTH$}"),
-                Style::new().fg(theme.fg_dim),
-            ),
+            Span::styled(format!("{label:<LABEL_WIDTH$}"), theme.dim()),
         );
     }
     lines

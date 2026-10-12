@@ -204,7 +204,7 @@ fn render_available_update(
         install_label(plan)
     );
     frame.render_widget(
-        Paragraph::new(metadata_text).style(Style::new().fg(theme.fg_dim).bg(theme.bg_raised)),
+        Paragraph::new(metadata_text).style(theme.dim().bg(theme.bg_raised)),
         metadata,
     );
     if let Some(lines) = plan.guidance() {
@@ -216,7 +216,7 @@ fn render_available_update(
             })
             .unwrap_or_else(|| lines.into_iter().skip(1).collect::<Vec<_>>().join(" "));
         frame.render_widget(
-            Paragraph::new(detail).style(Style::new().fg(theme.fg_muted).bg(theme.bg_raised)),
+            Paragraph::new(detail).style(theme.muted().bg(theme.bg_raised)),
             Rect::new(content.x, content.y.saturating_add(2), content.width, 1),
         );
     }
@@ -234,7 +234,7 @@ fn render_available_update(
         UpdateNotesState::Loading => frame.render_widget(
             Paragraph::new("◌ Loading release notes…")
                 .alignment(Alignment::Center)
-                .style(Style::new().fg(theme.fg_dim).bg(theme.bg_raised)),
+                .style(theme.dim().bg(theme.bg_raised)),
             notes_text_area,
         ),
         UpdateNotesState::Failed => frame.render_widget(
@@ -293,7 +293,7 @@ fn render_available_update(
             theme,
             &[("j/k", "scroll"), ("Tab", "action")],
         ))
-        .style(Style::new().fg(theme.fg_muted).bg(theme.bg_raised)),
+        .style(theme.muted().bg(theme.bg_raised)),
         hints_area,
     );
     frame.render_widget(
@@ -337,7 +337,13 @@ fn action_span(theme: &Theme, label: &'static str, focused: bool, primary: bool)
     } else {
         theme.fg_muted
     };
-    let mut style = Style::new().fg(foreground).bg(fill);
+    let mut style = if focused {
+        theme.badge(fill)
+    } else if primary {
+        Style::new().fg(foreground).bg(fill)
+    } else {
+        theme.muted().bg(fill)
+    };
     if focused {
         style = style.add_modifier(Modifier::BOLD);
     }
@@ -374,7 +380,7 @@ fn update_lines(theme: &Theme, state: &UpdateOverlayState) -> Vec<Line<'static>>
         } => {
             let mut lines = vec![
                 Line::from(vec![
-                    Span::styled("target  ", Style::new().fg(theme.fg_dim)),
+                    Span::styled("target  ", theme.dim()),
                     Span::styled(format!("v{version}"), Style::new().fg(theme.accent)),
                 ]),
                 Line::from(""),
@@ -399,7 +405,7 @@ fn update_lines(theme: &Theme, state: &UpdateOverlayState) -> Vec<Line<'static>>
             } else {
                 Line::from(Span::styled(
                     "Finishing the installation. Keep aven open.",
-                    Style::new().fg(theme.fg_dim),
+                    theme.dim(),
                 ))
             });
             lines
@@ -436,7 +442,7 @@ fn update_lines(theme: &Theme, state: &UpdateOverlayState) -> Vec<Line<'static>>
             Line::from(""),
             Line::from(Span::styled(
                 "The existing aven executable is unchanged.",
-                Style::new().fg(theme.fg_dim),
+                theme.dim(),
             )),
             Line::from(""),
             dialog_hint_line(theme, &[("Enter", "retry"), ("Esc", "close")]),
@@ -470,7 +476,7 @@ fn cached_line(theme: &Theme, cached: bool) -> Line<'static> {
     if cached {
         Line::from(Span::styled(
             "Showing cached release information because a live check was unavailable.",
-            Style::new().fg(theme.fg_dim),
+            theme.dim(),
         ))
     } else {
         Line::from("")

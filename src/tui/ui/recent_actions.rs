@@ -172,10 +172,7 @@ fn render_action_list(
 }
 
 fn render_header(frame: &mut Frame, theme: &Theme, area: Rect) {
-    let style = Style::new()
-        .fg(theme.fg_dim)
-        .bg(theme.bg_raised)
-        .add_modifier(Modifier::BOLD);
+    let style = theme.dim().bg(theme.bg_raised).add_modifier(Modifier::BOLD);
     let columns = action_columns(area.width);
     let cells = Layout::horizontal(columns).areas::<5>(area);
     for (cell, label) in
@@ -225,9 +222,7 @@ fn render_action_row(
     let values = [
         Line::from(vec![Span::styled(
             format!(" {when}"),
-            Style::new()
-                .fg(theme.fg_muted)
-                .bg(row_style.bg.unwrap_or(theme.bg)),
+            theme.muted().bg(row_style.bg.unwrap_or(theme.bg)),
         )]),
         Line::from(vec![
             Span::styled(" ", row_style),
@@ -249,14 +244,15 @@ fn render_action_row(
             Span::styled(summary, row_style.fg(theme.fg)),
             Span::styled(
                 format!(" {sync_marker}"),
-                Style::new()
-                    .fg(theme.fg_dim)
-                    .bg(row_style.bg.unwrap_or(theme.bg)),
+                theme.dim().bg(row_style.bg.unwrap_or(theme.bg)),
             ),
         ]),
     ];
     for (cell, value) in cells.into_iter().zip(values) {
         frame.render_widget(Paragraph::new(value).style(row_style), cell);
+    }
+    if selected {
+        theme.paint_selection(frame.buffer_mut(), area, focused);
     }
 }
 
@@ -268,13 +264,13 @@ fn action_ref_cell(
     let Some(display_ref) = &action.target.display_ref else {
         return Line::from(Span::styled(
             format!(" {}", short_id(&action.entity_id)),
-            Style::new().fg(theme.fg_muted).bg(bg),
+            theme.muted().bg(bg),
         ));
     };
     let Some((project, suffix)) = display_ref.split_once('-') else {
         return Line::from(Span::styled(
             format!(" {display_ref}"),
-            Style::new().fg(theme.fg_muted).bg(bg),
+            theme.muted().bg(bg),
         ));
     };
     let project_key = action.target.project_key.as_deref().unwrap_or(project);
@@ -284,8 +280,8 @@ fn action_ref_cell(
             project.to_string(),
             Style::new().fg(theme.project(project_key)).bg(bg),
         ),
-        Span::styled("-", Style::new().fg(theme.fg_dim).bg(bg)),
-        Span::styled(suffix.to_string(), Style::new().fg(theme.fg_muted).bg(bg)),
+        Span::styled("-", theme.dim().bg(bg)),
+        Span::styled(suffix.to_string(), theme.muted().bg(bg)),
     ])
 }
 
@@ -300,7 +296,7 @@ fn action_project_cell(
     };
     let project = truncate_width(project_key, max_width.saturating_sub(1));
     Line::from(vec![
-        Span::styled(project, Style::new().fg(theme.fg_muted).bg(bg)),
+        Span::styled(project, theme.muted().bg(bg)),
         Span::styled(" ", Style::new().bg(bg)),
     ])
 }
@@ -328,54 +324,48 @@ fn render_action_detail(
             ),
         ]),
         Line::from(vec![
-            Span::styled("at ", Style::new().fg(theme.fg_dim)),
-            Span::styled(
-                local_timestamp_display(&action.created_at),
-                Style::new().fg(theme.fg_muted),
-            ),
-            Span::styled("  kind ", Style::new().fg(theme.fg_dim)),
-            Span::styled(action.entity_type.clone(), Style::new().fg(theme.fg_muted)),
-            Span::styled("  id ", Style::new().fg(theme.fg_dim)),
-            Span::styled(short_id(&action.change_id), Style::new().fg(theme.fg_muted)),
+            Span::styled("at ", theme.dim()),
+            Span::styled(local_timestamp_display(&action.created_at), theme.muted()),
+            Span::styled("  kind ", theme.dim()),
+            Span::styled(action.entity_type.clone(), theme.muted()),
+            Span::styled("  id ", theme.dim()),
+            Span::styled(short_id(&action.change_id), theme.muted()),
         ]),
     ];
     lines.push(Line::from(vec![
-        Span::styled("op ", Style::new().fg(theme.fg_dim)),
-        Span::styled(action.op_type.clone(), Style::new().fg(theme.fg_muted)),
+        Span::styled("op ", theme.dim()),
+        Span::styled(action.op_type.clone(), theme.muted()),
     ]));
     if let Some(display_ref) = &action.target.display_ref {
         lines.push(Line::from(vec![
-            Span::styled("task ", Style::new().fg(theme.fg_dim)),
+            Span::styled("task ", theme.dim()),
             Span::styled(
                 display_ref.clone(),
                 Style::new().fg(theme.accent).add_modifier(Modifier::BOLD),
             ),
-            Span::styled("  title ", Style::new().fg(theme.fg_dim)),
+            Span::styled("  title ", theme.dim()),
             Span::styled(
                 action.target.title.clone().unwrap_or_default(),
-                Style::new().fg(theme.fg_muted),
+                theme.muted(),
             ),
         ]));
         lines.push(Line::from(vec![
-            Span::styled("status ", Style::new().fg(theme.fg_dim)),
+            Span::styled("status ", theme.dim()),
             Span::styled(
                 action.target.status.clone().unwrap_or_default(),
-                Style::new().fg(theme.fg_muted),
+                theme.muted(),
             ),
         ]));
     }
     if let Some(field) = &action.field {
         lines.push(Line::from(vec![
-            Span::styled("field ", Style::new().fg(theme.fg_dim)),
-            Span::styled(field.clone(), Style::new().fg(theme.fg_muted)),
+            Span::styled("field ", theme.dim()),
+            Span::styled(field.clone(), theme.muted()),
         ]));
     }
     if let Some(detail) = crate::tui::time::action_detail_display(action) {
         lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled(
-            detail,
-            Style::new().fg(theme.fg_muted),
-        )));
+        lines.push(Line::from(Span::styled(detail, theme.muted())));
     }
     let title = if action.target.deleted {
         " ACTION DETAIL × "

@@ -76,10 +76,7 @@ pub(in crate::tui::ui) fn render_picker(frame: &mut Frame, theme: &Theme, state:
     if state.visible_indices.is_empty()
         && let Some(label) = picker_empty_label(state.kind)
     {
-        lines.push(Line::from(Span::styled(
-            label,
-            Style::new().fg(theme.fg_dim),
-        )));
+        lines.push(Line::from(Span::styled(label, theme.dim())));
     }
     lines.push(Line::from(""));
     lines.push(picker_hint_line_with_escape(
@@ -112,6 +109,11 @@ pub(in crate::tui::ui) fn priority_picker_line(
         ),
         Span::styled(item.label.clone(), theme.priority(&item.value)),
     ])
+    .style(if theme.is_terminal() && selected {
+        theme.selected()
+    } else {
+        Style::new()
+    })
 }
 
 fn blocker_picker_columns(item: &PickerItem) -> Option<(&str, &str, &str)> {
@@ -127,7 +129,13 @@ pub(in crate::tui::ui) fn blocker_picker_line(
 ) -> Line<'static> {
     let marker = if selected { "▸ " } else { "  " };
     let Some((project_key, display_ref, title)) = blocker_picker_columns(item) else {
-        return Line::raw(format!("{marker}{}", item.label));
+        return Line::raw(format!("{marker}{}", item.label)).style(
+            if theme.is_terminal() && selected {
+                theme.selected()
+            } else {
+                Style::new()
+            },
+        );
     };
     let mut spans = vec![Span::raw(marker)];
     spans.extend(linked_task_ref_spans(theme, display_ref, project_key));
@@ -139,7 +147,11 @@ pub(in crate::tui::ui) fn blocker_picker_line(
         title.to_string(),
         Style::new().fg(if selected { theme.fg } else { theme.fg_muted }),
     ));
-    Line::from(spans)
+    Line::from(spans).style(if theme.is_terminal() && selected {
+        theme.selected()
+    } else {
+        Style::new()
+    })
 }
 
 pub(in crate::tui::ui) fn picker_filter_line(
@@ -201,13 +213,10 @@ fn render_label_picker(frame: &mut Frame, theme: &Theme, state: &PickerView) {
     lines.push(Line::from(vec![
         Span::styled(
             "  LABEL                         ",
-            Style::new().fg(theme.fg_dim).bg(theme.bg_panel),
+            theme.dim().bg(theme.bg_panel),
         ),
-        Span::styled("   TASKS", Style::new().fg(theme.fg_dim).bg(theme.bg_panel)),
-        Span::styled(
-            "  RECURRING SERIES",
-            Style::new().fg(theme.fg_dim).bg(theme.bg_panel),
-        ),
+        Span::styled("   TASKS", theme.dim().bg(theme.bg_panel)),
+        Span::styled("  RECURRING SERIES", theme.dim().bg(theme.bg_panel)),
     ]));
     for index in state
         .visible_indices
@@ -224,7 +233,7 @@ fn render_label_picker(frame: &mut Frame, theme: &Theme, state: &PickerView) {
     if state.visible_indices.is_empty() {
         lines.push(Line::from(Span::styled(
             "  no matching labels",
-            Style::new().fg(theme.fg_dim),
+            theme.dim(),
         )));
     }
     lines.push(Line::from(""));
@@ -288,11 +297,8 @@ fn render_project_picker(
         ));
     }
     lines.push(Line::from(vec![
-        Span::styled(
-            "  PREFIX ",
-            Style::new().fg(theme.fg_dim).bg(theme.bg_panel),
-        ),
-        Span::styled("PROJECT", Style::new().fg(theme.fg_dim).bg(theme.bg_panel)),
+        Span::styled("  PREFIX ", theme.dim().bg(theme.bg_panel)),
+        Span::styled("PROJECT", theme.dim().bg(theme.bg_panel)),
     ]));
     let list_start = lines.len();
     for index in state
@@ -310,7 +316,7 @@ fn render_project_picker(
     if state.visible_indices.is_empty() {
         lines.push(Line::from(Span::styled(
             "  no matching projects",
-            Style::new().fg(theme.fg_dim),
+            theme.dim(),
         )));
     }
     while lines.len().saturating_sub(list_start) < layout.list_rows {
@@ -381,6 +387,11 @@ pub(in crate::tui::ui) fn project_picker_line(
         Span::styled(" ", row_style),
         Span::styled(name.to_string(), name_style),
     ])
+    .style(if theme.is_terminal() && selected {
+        theme.selected()
+    } else {
+        Style::new()
+    })
 }
 
 pub(in crate::tui::ui) fn project_picker_hint_line(

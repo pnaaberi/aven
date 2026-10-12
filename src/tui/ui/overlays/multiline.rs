@@ -236,10 +236,7 @@ pub(in crate::tui::ui) fn description_input_line(
     if show_placeholder && line.is_empty() && cursor == 0 {
         return Line::from(vec![
             super::super::input::cursor_cell(theme, "E"),
-            Span::styled(
-                "nter task description here...",
-                Style::new().fg(theme.fg_dim),
-            ),
+            Span::styled("nter task description here...", theme.dim()),
         ]);
     }
     input_line(theme, "", line, cursor)
@@ -271,10 +268,10 @@ pub(in crate::tui::ui) fn add_task_free_text_input_line(
         if cursor.is_some() {
             return Line::from(vec![
                 super::super::input::cursor_cell(theme, &placeholder[..1]),
-                Span::styled(&placeholder[1..], Style::new().fg(theme.fg_dim)),
+                Span::styled(&placeholder[1..], theme.dim()),
             ]);
         }
-        return Line::from(Span::styled(placeholder, Style::new().fg(theme.fg_dim)));
+        return Line::from(Span::styled(placeholder, theme.dim()));
     }
     match cursor {
         Some(cursor) => Line::from(input_cursor_spans(theme, line, cursor, InputWidth::Full)),
@@ -403,7 +400,7 @@ pub(in crate::tui::ui) fn add_note_input_line(
     if show_placeholder && line.is_empty() && cursor.is_some() {
         return Line::from(vec![
             super::super::input::cursor_cell(theme, "E"),
-            Span::styled("nter note body here...", Style::new().fg(theme.fg_dim)),
+            Span::styled("nter note body here...", theme.dim()),
         ]);
     }
     match cursor {
@@ -433,7 +430,6 @@ pub(in crate::tui::ui) fn description_hint_line(
             ("Esc", "cancel"),
         ],
     );
-    line.spans
-        .push(Span::styled(position, Style::new().fg(theme.fg_muted)));
+    line.spans.push(Span::styled(position, theme.muted()));
     line
 }

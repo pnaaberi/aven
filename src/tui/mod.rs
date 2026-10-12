@@ -169,6 +169,7 @@ async fn run_with_welcome_intro(
         crate::config::TuiAppearance::Auto => platform::detect_appearance(),
         crate::config::TuiAppearance::Dark => theme::Appearance::Dark,
         crate::config::TuiAppearance::Light => theme::Appearance::Light,
+        crate::config::TuiAppearance::Terminal => theme::Appearance::Terminal,
     };
     let mut app =
         app::App::new_with_view_state_and_config(database, workspace, launch.view_state, config)

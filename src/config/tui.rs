@@ -27,6 +27,7 @@ pub enum TuiAppearance {
     Auto,
     Dark,
     Light,
+    Terminal,
 }
 
 impl Default for TuiConfig {
@@ -394,6 +395,13 @@ mod tests {
             TuiAppearance::Light
         );
 
+        let config = load_config("tui:\n  appearance: terminal\n").unwrap();
+        assert_eq!(config.tui.appearance, TuiAppearance::Terminal);
+        let text = serde_saphyr::to_string(&config).unwrap();
+        assert_eq!(
+            load_config(&text).unwrap().tui.appearance,
+            TuiAppearance::Terminal
+        );
         assert!(load_config("tui:\n  appearance: sepia\n").is_err());
     }
 

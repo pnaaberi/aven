@@ -88,12 +88,7 @@ pub(in crate::tui::ui) fn render_text_input(
         let mut lines = state
             .prompt
             .lines()
-            .map(|line| {
-                Line::from(Span::styled(
-                    line.to_string(),
-                    Style::new().fg(theme.fg_dim),
-                ))
-            })
+            .map(|line| Line::from(Span::styled(line.to_string(), theme.dim())))
             .collect::<Vec<_>>();
         lines.extend([
             Line::from(""),
@@ -106,12 +101,7 @@ pub(in crate::tui::ui) fn render_text_input(
         let mut lines = state
             .prompt
             .lines()
-            .map(|line| {
-                Line::from(Span::styled(
-                    line.to_string(),
-                    Style::new().fg(theme.fg_dim),
-                ))
-            })
+            .map(|line| Line::from(Span::styled(line.to_string(), theme.dim())))
             .collect::<Vec<_>>();
         let hints = if state.prompt.starts_with("Current: varies") {
             &[
@@ -126,7 +116,7 @@ pub(in crate::tui::ui) fn render_text_input(
         lines
     } else {
         vec![
-            Line::from(Span::styled(&state.prompt, Style::new().fg(theme.fg_dim))),
+            Line::from(Span::styled(&state.prompt, theme.dim())),
             input,
             Line::from(""),
             dialog_hint_line(theme, &[("Enter", "submit"), ("Esc", "cancel")]),
@@ -147,7 +137,7 @@ fn render_project_path_input(frame: &mut Frame, theme: &Theme, state: &TextInput
     let content = dialog.render_block(frame);
     let input = project_path_input_line(theme, &state.input, state.cursor, content.width as usize);
     let text = Text::from(vec![
-        Line::from(Span::styled(&state.prompt, Style::new().fg(theme.fg_dim))),
+        Line::from(Span::styled(&state.prompt, theme.dim())),
         input,
         Line::from(""),
         dialog_hint_line(theme, &[("Enter", "submit"), ("Esc", "cancel")]),
@@ -170,7 +160,7 @@ pub(in crate::tui::ui) fn project_path_input_line(
     let cursor = char_boundary_at_or_before(input, cursor);
     let cursor_cells = str_cells(&input[..cursor]);
     let mut line = clipped_input_line(theme, input, cursor, width.saturating_sub(1));
-    let marker = Span::styled("…", Style::new().fg(theme.fg_dim));
+    let marker = Span::styled("…", theme.dim());
     if cursor_cells >= width.saturating_sub(1) {
         line.spans.insert(0, marker);
     } else {
@@ -244,7 +234,7 @@ pub(in crate::tui::ui) fn placeholder_text_input_line(
     if input.is_empty() {
         return Line::from(vec![
             super::super::input::cursor_cell(theme, &placeholder[..1]),
-            Span::styled(&placeholder[1..], Style::new().fg(theme.fg_dim)),
+            Span::styled(&placeholder[1..], theme.dim()),
         ]);
     }
     Line::from(input_cursor_spans(

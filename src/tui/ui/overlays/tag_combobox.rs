@@ -67,14 +67,11 @@ pub(in crate::tui::ui) fn tag_combobox_lines_with_viewport(
 fn tag_chip(theme: &Theme, label: &str) -> Vec<Span<'static>> {
     let fill = theme.accent;
     let edge_style = Style::new().fg(fill).bg(theme.bg_panel);
-    let label_style = Style::new()
-        .fg(theme.inverse_fg)
-        .bg(fill)
-        .add_modifier(Modifier::BOLD);
+    let label_style = theme.badge(fill).add_modifier(Modifier::BOLD);
     vec![
-        Span::styled("", edge_style),
+        Span::styled(theme.pill_edge(""), edge_style),
         Span::styled(label.to_string(), label_style),
-        Span::styled("", edge_style),
+        Span::styled(theme.pill_edge(""), edge_style),
     ]
 }
 
@@ -88,10 +85,7 @@ fn tag_combobox_input_line(theme: &Theme, state: &TagComboboxView) -> Line<'stat
     let normalized = normalize_label(&state.input);
     if state.selected.is_empty() && normalized.is_empty() {
         spans.push(cursor_cell(theme, "E"));
-        spans.push(Span::styled(
-            "nter labels here...",
-            Style::new().fg(theme.fg_dim),
-        ));
+        spans.push(Span::styled("nter labels here...", theme.dim()));
     } else if (normalized.len() == state.input_cursor || state.input_cursor == state.input.len())
         && state.completion.is_some()
     {
@@ -102,7 +96,7 @@ fn tag_combobox_input_line(theme: &Theme, state: &TagComboboxView) -> Line<'stat
             spans.push(cursor_cell(theme, cursor.to_string()));
             let rest = chars.collect::<String>();
             if !rest.is_empty() {
-                spans.push(Span::styled(rest, Style::new().fg(theme.fg_dim)));
+                spans.push(Span::styled(rest, theme.dim()));
             }
         }
     } else {
@@ -113,7 +107,7 @@ fn tag_combobox_input_line(theme: &Theme, state: &TagComboboxView) -> Line<'stat
             InputWidth::Full,
         ));
     }
-    spans.push(Span::styled(" ▾", Style::new().fg(theme.fg_dim)));
+    spans.push(Span::styled(" ▾", theme.dim()));
     Line::from(spans)
 }
 
@@ -178,7 +172,7 @@ fn option_line(theme: &Theme, state: &TagComboboxView, index: usize) -> Line<'st
 fn create_option_line(theme: &Theme, state: &TagComboboxView) -> Line<'static> {
     let value = normalize_label(&state.input);
     if value.is_empty() {
-        return Line::from(Span::styled("  no labels", Style::new().fg(theme.fg_dim)));
+        return Line::from(Span::styled("  no labels", theme.dim()));
     }
     Line::from(vec![
         Span::styled("▸ + ", theme.selected()),

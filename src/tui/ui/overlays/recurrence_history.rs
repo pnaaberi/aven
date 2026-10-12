@@ -1,7 +1,7 @@
 use aven_core::query::{RecurrenceHistoryEntry, RecurrenceHistoryKind};
 use ratatui::Frame;
 use ratatui::layout::{Rect, Size};
-use ratatui::style::{Modifier, Style};
+use ratatui::style::Style;
 use ratatui::text::{Line, Text};
 
 use super::super::dialog::{Dialog, dialog_hint_line};
@@ -125,10 +125,7 @@ pub(in crate::tui::ui) fn render_recurrence_history(
         })
         .collect::<Vec<_>>();
     if lines.is_empty() {
-        lines.push(Line::styled(
-            "No recurrence history",
-            Style::new().fg(theme.fg_muted),
-        ));
+        lines.push(Line::styled("No recurrence history", theme.muted()));
     }
     lines.push(Line::default());
     lines.push(dialog_hint_line(
@@ -179,10 +176,7 @@ fn history_lines(
     .collect::<Vec<_>>()
     .join(",");
     let style = if is_selected {
-        Style::new()
-            .fg(theme.fg)
-            .bg(theme.bg_selected)
-            .add_modifier(Modifier::BOLD)
+        theme.selected()
     } else {
         Style::new().fg(theme.fg)
     };

@@ -44,10 +44,7 @@ fn toast_message_spans(theme: &Theme, message: &str, fill: Color) -> Vec<Span<'s
         .fg(theme.fg)
         .bg(fill)
         .add_modifier(Modifier::BOLD);
-    let separator_style = Style::new()
-        .fg(theme.fg_dim)
-        .bg(fill)
-        .add_modifier(Modifier::BOLD);
+    let separator_style = theme.dim().bg(fill).add_modifier(Modifier::BOLD);
     let mut spans = Vec::new();
     for (index, part) in message.split(" · ").enumerate() {
         if index > 0 {
@@ -62,7 +59,7 @@ pub(super) fn render_toast(frame: &mut Frame, theme: &Theme, toast: &Toast) {
     let tone = toast_tone(theme, toast.severity);
     let fill = theme.bg_panel;
     let mut spans = vec![
-        Span::styled("", Style::new().fg(fill).bg(theme.bg)),
+        Span::styled(theme.pill_edge(""), Style::new().fg(fill).bg(theme.bg)),
         Span::styled("▌", Style::new().fg(tone.color).bg(fill)),
         Span::styled(" ", Style::new().bg(fill)),
     ];
@@ -75,7 +72,7 @@ pub(super) fn render_toast(frame: &mut Frame, theme: &Theme, toast: &Toast) {
     spans.extend(toast_message_spans(theme, toast.message.as_str(), fill));
     spans.extend([
         Span::styled(" ", Style::new().bg(fill)),
-        Span::styled("", Style::new().fg(fill).bg(theme.bg)),
+        Span::styled(theme.pill_edge(""), Style::new().fg(fill).bg(theme.bg)),
     ]);
     let content = Line::from(spans);
     let width = toast_width(&content, frame.area().width);

@@ -385,10 +385,7 @@ pub(super) fn render_task_header(
     due_order: bool,
     compact_status: bool,
 ) {
-    let style = Style::new()
-        .fg(theme.inverse_fg)
-        .bg(theme.table_header_bg)
-        .add_modifier(Modifier::BOLD);
+    let style = theme.table_header();
     frame.render_widget(Block::new().style(style), area);
     let time_header = match render_mode {
         TaskListRenderMode::Queue => "IDLE",
@@ -521,6 +518,9 @@ pub(super) fn render_task_row_cells(
     for (column, value) in TableColumn::ALL.into_iter().zip(values) {
         let area = layout.cell(column, area);
         frame.render_widget(Paragraph::new(value.clone()).style(style), area);
+    }
+    if state.selected {
+        theme.paint_selection(frame.buffer_mut(), area, state.focused);
     }
 }
 

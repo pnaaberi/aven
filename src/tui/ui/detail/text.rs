@@ -148,7 +148,11 @@ pub(super) fn highlight_selectable_line(
         if selected_start < selected_end {
             rebuilt.push(Span::styled(
                 content[selected_start..selected_end].to_string(),
-                span.style.fg(theme.inverse_fg).bg(theme.accent),
+                span.style.patch(if theme.is_terminal() {
+                    theme.selected()
+                } else {
+                    theme.badge(theme.accent)
+                }),
             ));
         }
         if selected_end < content.len() {
@@ -174,7 +178,7 @@ pub(super) fn detail_header_options(
             item.task.project_key.clone(),
             Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
         ),
-        Span::styled(" / ", Style::new().fg(theme.fg_dim)),
+        Span::styled(" / ", theme.dim()),
     ];
     summary_spans.extend(linked_task_ref_spans(
         theme,
@@ -183,14 +187,14 @@ pub(super) fn detail_header_options(
     ));
     if item.task.is_epic {
         summary_spans.extend([
-            Span::styled("  ", Style::new().fg(theme.fg_dim)),
+            Span::styled("  ", theme.dim()),
             Span::styled(EPIC_MARKER, Style::new().fg(theme.attention)),
         ]);
     }
     summary_spans.extend([
-        Span::styled("   ", Style::new().fg(theme.fg_dim)),
+        Span::styled("   ", theme.dim()),
         status_span(theme, item.task.status.as_str()),
-        Span::styled("   ", Style::new().fg(theme.fg_dim)),
+        Span::styled("   ", theme.dim()),
         Span::styled(
             priority_short(item.task.priority.as_str()),
             theme

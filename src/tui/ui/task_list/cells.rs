@@ -309,7 +309,7 @@ pub(super) fn epic_summary_candidate(
         ));
     }
 
-    spans.push(Span::styled(" · ", Style::new().fg(theme.fg_dim)));
+    spans.push(Span::styled(" · ", theme.dim()));
     spans.push(Span::styled(
         if compact {
             format!("✓{}/{}", rollup.done, rollup.total)
@@ -335,7 +335,7 @@ pub(super) fn epic_summary_cell(
     max_width: usize,
 ) -> Line<'static> {
     if rollup.total == 0 {
-        return Line::from(Span::styled("-", Style::new().fg(theme.fg_muted)));
+        return Line::from(Span::styled("-", theme.muted()));
     }
 
     let candidates = [
@@ -515,19 +515,13 @@ pub(super) fn build_epic_child_row_cells_for_columns(
     } else {
         Vec::new()
     };
-    ref_spans.extend([
-        Span::styled(branch, Style::new().fg(theme.fg_dim)),
-        Span::raw(" "),
-    ]);
+    ref_spans.extend([Span::styled(branch, theme.dim()), Span::raw(" ")]);
     let prefix_width = spans_width(&ref_spans);
     let display_ref = truncate_width(
         &item.display_ref,
         column_widths[TableColumn::Ref as usize].saturating_sub(prefix_width + 1),
     );
-    ref_spans.extend([
-        Span::styled(display_ref, Style::new().fg(theme.fg_muted)),
-        Span::raw(" "),
-    ]);
+    ref_spans.extend([Span::styled(display_ref, theme.muted()), Span::raw(" ")]);
     let ref_line = Line::from(ref_spans);
     TableColumn::ALL
         .into_iter()
@@ -611,9 +605,9 @@ impl MetadataMarker {
             Self::NeedsAction | Self::Deleted => {
                 Style::new().fg(theme.danger).add_modifier(Modifier::BOLD)
             }
-            Self::Blockers(_) | Self::Dependents(_) | Self::Notes => Style::new()
-                .fg(theme.fg_muted)
-                .remove_modifier(Modifier::BOLD),
+            Self::Blockers(_) | Self::Dependents(_) | Self::Notes => {
+                theme.muted().remove_modifier(Modifier::BOLD)
+            }
         }
     }
 }
@@ -744,11 +738,11 @@ pub(super) fn task_ref_spans(
                 project.to_string(),
                 Style::new().fg(theme.project(&item.task.project_key)),
             ),
-            Span::styled("-", Style::new().fg(theme.fg_dim)),
-            Span::styled(suffix.to_string(), Style::new().fg(theme.fg_muted)),
+            Span::styled("-", theme.dim()),
+            Span::styled(suffix.to_string(), theme.muted()),
         ]
     } else {
-        vec![Span::styled(display_ref, Style::new().fg(theme.fg_muted))]
+        vec![Span::styled(display_ref, theme.muted())]
     }
 }
 

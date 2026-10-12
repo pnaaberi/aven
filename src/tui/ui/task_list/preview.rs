@@ -19,8 +19,8 @@ use ratatui::widgets::{Block, Borders, Padding, Paragraph};
 
 fn task_heading_line(theme: &Theme, item: &TaskListItem) -> Line<'static> {
     let title_style = if item.task.deleted {
-        Style::new()
-            .fg(theme.fg_muted)
+        theme
+            .muted()
             .add_modifier(Modifier::BOLD | Modifier::CROSSED_OUT)
     } else {
         Style::new().fg(theme.fg).add_modifier(Modifier::BOLD)
@@ -37,31 +37,31 @@ fn task_heading_line(theme: &Theme, item: &TaskListItem) -> Line<'static> {
 
 pub(super) fn task_preview_fields_line(theme: &Theme, item: &TaskListItem) -> Line<'static> {
     let mut fields = vec![
-        Span::styled("project ", Style::new().fg(theme.fg_dim)),
+        Span::styled("project ", theme.dim()),
         Span::styled(
             item.task.project_key.clone(),
             Style::new()
                 .fg(theme.project(&item.task.project_key))
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled("  status ", Style::new().fg(theme.fg_dim)),
+        Span::styled("  status ", theme.dim()),
         status_span(theme, item.task.status.as_str()),
-        Span::styled("  priority ", Style::new().fg(theme.fg_dim)),
+        Span::styled("  priority ", theme.dim()),
         Span::styled(
             priority_short(item.task.priority.as_str()),
             theme
                 .priority(item.task.priority.as_str())
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled("  created ", Style::new().fg(theme.fg_dim)),
+        Span::styled("  created ", theme.dim()),
         Span::styled(
             local_timestamp_display(&item.task.created_at),
-            Style::new().fg(theme.fg_muted),
+            theme.muted(),
         ),
     ];
     if item.task.deleted {
         fields.extend([
-            Span::styled("  deleted ", Style::new().fg(theme.fg_dim)),
+            Span::styled("  deleted ", theme.dim()),
             Span::styled(
                 "yes",
                 Style::new().fg(theme.danger).add_modifier(Modifier::BOLD),
@@ -90,13 +90,13 @@ fn availability_preview_line(
     let local = truncate_width(&local, width.saturating_sub(fixed_width));
 
     Some(Line::from(vec![
-        Span::styled("available ", Style::new().fg(theme.fg_dim)),
+        Span::styled("available ", theme.dim()),
         Span::styled(
             countdown.to_string(),
             Style::new().fg(theme.accent).add_modifier(Modifier::BOLD),
         ),
-        Span::styled(" · ", Style::new().fg(theme.fg_dim)),
-        Span::styled(local, Style::new().fg(theme.fg_muted)),
+        Span::styled(" · ", theme.dim()),
+        Span::styled(local, theme.muted()),
     ]))
 }
 
@@ -123,13 +123,13 @@ fn due_preview_line(
     };
 
     Some(Line::from(vec![
-        Span::styled("due ", Style::new().fg(theme.fg_dim)),
+        Span::styled("due ", theme.dim()),
         Span::styled(
             relative.to_string(),
             Style::new().fg(color).add_modifier(Modifier::BOLD),
         ),
-        Span::styled(" · ", Style::new().fg(theme.fg_dim)),
-        Span::styled(date, Style::new().fg(theme.fg_muted)),
+        Span::styled(" · ", theme.dim()),
+        Span::styled(date, theme.muted()),
     ]))
 }
 
@@ -154,12 +154,12 @@ fn epic_rollup_preview_lines(
 ) -> Vec<Line<'static>> {
     let progress = if rollup.total == 0 {
         Line::from(vec![
-            Span::styled("children ", Style::new().fg(theme.fg_dim)),
+            Span::styled("children ", theme.dim()),
             Span::styled("none", Style::new().fg(theme.attention)),
         ])
     } else {
         Line::from(vec![
-            Span::styled("children ", Style::new().fg(theme.fg_dim)),
+            Span::styled("children ", theme.dim()),
             Span::styled(
                 format!("{} open", rollup.open),
                 Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
@@ -168,16 +168,13 @@ fn epic_rollup_preview_lines(
                 format!(" · {} done", rollup.done),
                 Style::new().fg(theme.accent),
             ),
-            Span::styled(
-                format!(" · {} canceled", rollup.canceled),
-                Style::new().fg(theme.fg_muted),
-            ),
+            Span::styled(format!(" · {} canceled", rollup.canceled), theme.muted()),
         ])
     };
     let mut lines = vec![progress];
     if rollup.total > 0 {
         lines.push(Line::from(vec![
-            Span::styled("signals ", Style::new().fg(theme.fg_dim)),
+            Span::styled("signals ", theme.dim()),
             Span::styled(
                 format!("{} overdue", rollup.overdue),
                 Style::new().fg(if rollup.overdue > 0 {
@@ -202,10 +199,10 @@ fn epic_rollup_preview_lines(
                     theme.fg_muted
                 }),
             ),
-            Span::styled(" · activity ", Style::new().fg(theme.fg_dim)),
+            Span::styled(" · activity ", theme.dim()),
             Span::styled(
                 local_timestamp_display(&rollup.latest_activity_at),
-                Style::new().fg(theme.fg_muted),
+                theme.muted(),
             ),
         ]));
     }
@@ -216,13 +213,13 @@ fn dependency_preview_lines(theme: &Theme, item: &TaskListItem) -> Vec<Line<'sta
     let mut lines = Vec::new();
     if !item.depends_on.is_empty() {
         lines.push(Line::from(vec![
-            Span::styled("blocked by ", Style::new().fg(theme.fg_dim)),
+            Span::styled("blocked by ", theme.dim()),
             dependency_links_summary(theme, &item.depends_on),
         ]));
     }
     if !item.blocks.is_empty() {
         lines.push(Line::from(vec![
-            Span::styled("blocks ", Style::new().fg(theme.fg_dim)),
+            Span::styled("blocks ", theme.dim()),
             dependency_links_summary(theme, &item.blocks),
         ]));
     }
@@ -245,7 +242,7 @@ fn dependency_links_summary(
     } else {
         summary
     };
-    Span::styled(summary, Style::new().fg(theme.fg_muted))
+    Span::styled(summary, theme.muted())
 }
 
 pub(crate) fn render_task_preview(
@@ -300,7 +297,7 @@ pub(super) fn task_preview_lines(
                     recurrence.rule_label,
                     recurrence.lifecycle.as_str()
                 ),
-                Style::new().fg(theme.fg_muted),
+                theme.muted(),
             ),
         ]));
     }
@@ -310,12 +307,12 @@ pub(super) fn task_preview_lines(
                 "series history ✓{} completed · ↷{} skipped · ×{} missed",
                 group.counts.completed, group.counts.skipped, group.counts.missed
             ),
-            Style::new().fg(theme.fg_muted),
+            theme.muted(),
         )));
     }
     lines.push(Line::from(vec![
-        Span::styled("labels ", Style::new().fg(theme.fg_dim)),
-        Span::styled(labels, Style::new().fg(theme.fg_muted)),
+        Span::styled("labels ", theme.dim()),
+        Span::styled(labels, theme.muted()),
     ]));
     lines.extend(dependency_preview_lines(theme, item));
     if let Some(rollup) = item.epic_rollup.as_ref() {
@@ -331,10 +328,7 @@ pub(super) fn task_preview_lines(
         .collect();
     if !open_child_links.is_empty() {
         lines.push(Line::from(vec![
-            Span::styled(
-                "CHILD TASKS ",
-                Style::new().fg(theme.fg_dim).add_modifier(Modifier::BOLD),
-            ),
+            Span::styled("CHILD TASKS ", theme.dim().add_modifier(Modifier::BOLD)),
             Span::styled(
                 format!(
                     "({} open of {})",
@@ -351,10 +345,7 @@ pub(super) fn task_preview_lines(
             } else {
                 "├─"
             };
-            let mut spans = vec![Span::styled(
-                format!("  {branch} "),
-                Style::new().fg(theme.fg_dim),
-            )];
+            let mut spans = vec![Span::styled(format!("  {branch} "), theme.dim())];
             spans.extend(linked_task_ref_spans(
                 theme,
                 &link.display_ref,
@@ -362,15 +353,15 @@ pub(super) fn task_preview_lines(
             ));
             spans.extend([
                 Span::raw(" "),
-                Span::styled(link.title.clone(), Style::new().fg(theme.fg_muted)),
-                Span::styled(format!(" {}", link.status), Style::new().fg(theme.fg_dim)),
+                Span::styled(link.title.clone(), theme.muted()),
+                Span::styled(format!(" {}", link.status), theme.dim()),
             ]);
             lines.push(Line::from(spans));
         }
         if open_child_links.len() > 5 {
             lines.push(Line::from(vec![Span::styled(
                 format!("  ... +{} more", open_child_links.len() - 5),
-                Style::new().fg(theme.fg_dim),
+                theme.dim(),
             )]));
         }
     }
@@ -396,12 +387,12 @@ fn epic_parent_preview_line(
     parent: &crate::query::TaskDependencyLink,
 ) -> Line<'static> {
     Line::from(vec![
-        Span::styled("part of ", Style::new().fg(theme.fg_dim)),
+        Span::styled("part of ", theme.dim()),
         Span::styled(EPIC_MARKER, Style::new().fg(theme.attention)),
-        Span::styled(" ", Style::new().fg(theme.fg_dim)),
+        Span::styled(" ", theme.dim()),
         Span::styled(
             format!("{} {}", parent.display_ref, parent.title),
-            Style::new().fg(theme.fg_muted),
+            theme.muted(),
         ),
     ])
 }

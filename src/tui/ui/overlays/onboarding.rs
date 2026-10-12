@@ -40,7 +40,7 @@ fn onboarding_lines(theme: &Theme) -> Vec<Line<'static>> {
     vec![
         Line::from(Span::styled(
             "Local-first tasks for power users and coding agents.",
-            Style::new().fg(theme.fg_muted),
+            theme.muted(),
         )),
         Line::default(),
         section_heading(theme, "Everyday keys"),
@@ -82,7 +82,7 @@ fn resource_line(theme: &Theme, label: &'static str, value: &'static str) -> Lin
             format!("  {label:<13}"),
             Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
         ),
-        Span::styled(value, Style::new().fg(theme.fg_muted)),
+        Span::styled(value, theme.muted()),
     ])
 }
 
@@ -92,7 +92,7 @@ fn shortcut_line(theme: &Theme, key: &'static str, label: &'static str) -> Line<
             format!("  {key:<7}"),
             Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
         ),
-        Span::styled(label, Style::new().fg(theme.fg_muted)),
+        Span::styled(label, theme.muted()),
     ])
 }
 

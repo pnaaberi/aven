@@ -143,8 +143,8 @@ fn search_summary_line(
         format!("{} of {}", format_count(shown), format_count(total))
     };
     Some(Line::from(vec![
-        Span::styled(" ", Style::new().fg(theme.fg_dim)),
-        Span::styled(label, Style::new().fg(theme.fg_dim)),
+        Span::styled(" ", theme.dim()),
+        Span::styled(label, theme.dim()),
     ]))
 }
 
@@ -188,7 +188,7 @@ fn search_input_line(
         let first = chars.next().unwrap_or_default().to_string();
         return Line::from(vec![
             cursor_cell(theme, first),
-            Span::styled(chars.collect::<String>(), Style::new().fg(theme.fg_dim)),
+            Span::styled(chars.collect::<String>(), theme.dim()),
         ]);
     }
     input_line(theme, "", input, cursor)
@@ -253,7 +253,11 @@ fn result_line(
             " ".repeat(width.saturating_sub(used_width)),
             style,
         ));
-        return Line::from(spans);
+        return Line::from(spans).style(if theme.is_terminal() {
+            style
+        } else {
+            Style::new()
+        });
     }
     let ref_width = 10;
     let epic_marker_width = usize::from(result.is_epic) * 2;
@@ -283,7 +287,11 @@ fn result_line(
         " ".repeat(width.saturating_sub(used_width)),
         style,
     ));
-    Line::from(spans)
+    Line::from(spans).style(if theme.is_terminal() {
+        style
+    } else {
+        Style::new()
+    })
 }
 
 fn result_ref_spans(
@@ -304,8 +312,8 @@ fn result_ref_spans(
                     .bg(bg)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled("-", Style::new().fg(theme.fg_dim).bg(bg)),
-            Span::styled(suffix.to_string(), style.fg(theme.fg_muted)),
+            Span::styled("-", theme.dim().bg(bg)),
+            Span::styled(suffix.to_string(), style.patch(theme.muted())),
             Span::styled(" ".repeat(width.saturating_sub(used_width)), style),
         ];
     }
@@ -390,12 +398,9 @@ fn result_meta_line(
 ) -> Line<'static> {
     let bg = row_bg(theme, selected);
     let muted = if stale && !selected {
-        Style::new()
-            .fg(theme.fg_dim)
-            .bg(bg)
-            .add_modifier(Modifier::DIM)
+        theme.dim().bg(bg).add_modifier(Modifier::DIM)
     } else {
-        Style::new().fg(theme.fg_dim).bg(bg)
+        theme.dim().bg(bg)
     };
     if result.create_new {
         return padded_meta_line("  Open task authoring", muted, width);
@@ -453,10 +458,7 @@ fn row_style(theme: &Theme, selected: bool, stale: bool) -> Style {
     if selected {
         theme.selected()
     } else if stale {
-        Style::new()
-            .fg(theme.fg_dim)
-            .bg(theme.bg)
-            .add_modifier(Modifier::DIM)
+        theme.dim().bg(theme.bg).add_modifier(Modifier::DIM)
     } else {
         Style::new().fg(theme.fg).bg(theme.bg)
     }
@@ -517,12 +519,12 @@ fn search_hint_line(
             select_keys,
             Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
         ),
-        Span::styled(" select", Style::new().fg(theme.fg_dim)),
+        Span::styled(" select", theme.dim()),
         Span::styled(
             "  Enter",
             Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
         ),
-        Span::styled(format!(" {enter_hint}"), Style::new().fg(theme.fg_dim)),
+        Span::styled(format!(" {enter_hint}"), theme.dim()),
     ];
     if let Some(tab_hint) = intent.tab_hint() {
         spans.extend([
@@ -530,7 +532,7 @@ fn search_hint_line(
                 "  Tab",
                 Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
             ),
-            Span::styled(format!(" {tab_hint}"), Style::new().fg(theme.fg_dim)),
+            Span::styled(format!(" {tab_hint}"), theme.dim()),
         ]);
     }
     spans.extend([
@@ -538,7 +540,7 @@ fn search_hint_line(
             "  Esc",
             Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
         ),
-        Span::styled(" close", Style::new().fg(theme.fg_dim)),
+        Span::styled(" close", theme.dim()),
     ]);
     Line::from(spans)
 }

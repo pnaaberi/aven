@@ -250,7 +250,7 @@ pub(super) fn render_columns(
         render_lane_header(frame, theme, column, lane, emphasized, header);
         if board_has_tasks && column.task_indices.is_empty() {
             frame.render_widget(
-                Paragraph::new("(empty)").style(Style::new().fg(theme.fg_dim).bg(lane_bg)),
+                Paragraph::new("(empty)").style(theme.dim().bg(lane_bg)),
                 lane.cards,
             );
         }
@@ -339,6 +339,9 @@ pub(super) fn render_columns(
                 card.height,
             );
             frame.render_widget(Paragraph::new(text).style(style), content);
+            if selected {
+                theme.paint_selection(frame.buffer_mut(), content, focus == Focus::Tasks);
+            }
             render_card_separator(
                 frame,
                 theme,
@@ -415,7 +418,11 @@ fn render_drag_card(
     let mut text = vec![card_heading_line(theme, item, &[], width)];
     text.extend(card_title_lines(theme, &item.task.title, width));
     text.push(card_metadata_line(theme, &labels, &markers, width));
-    let style = Style::new().fg(theme.fg).bg(theme.bg_selected);
+    let style = if theme.is_terminal() {
+        theme.selected()
+    } else {
+        Style::new().fg(theme.fg).bg(theme.bg_selected)
+    };
     frame.render_widget(Clear, area);
     frame.render_widget(Block::new().style(style), area);
     frame.render_widget(
@@ -498,7 +505,7 @@ fn render_lane_header(
         Paragraph::new(Line::from(vec![
             Span::styled(name, name_style),
             Span::styled(gap, Style::new().bg(theme.bg_raised)),
-            Span::styled(status, Style::new().fg(theme.fg_dim).bg(theme.bg_raised)),
+            Span::styled(status, theme.dim().bg(theme.bg_raised)),
         ]))
         .block(
             Block::new()
@@ -566,11 +573,11 @@ fn card_heading_line(
                 project.to_string(),
                 Style::new().fg(theme.project(&item.task.project_key)),
             ),
-            Span::styled("-", Style::new().fg(theme.fg_dim)),
-            Span::styled(suffix.to_string(), Style::new().fg(theme.fg_muted)),
+            Span::styled("-", theme.dim()),
+            Span::styled(suffix.to_string(), theme.muted()),
         ]
     } else {
-        vec![Span::styled(display_ref, Style::new().fg(theme.fg_muted))]
+        vec![Span::styled(display_ref, theme.muted())]
     };
     spans.push(Span::raw(" ".repeat(max_width.saturating_sub(used_width))));
     if !priority.is_empty() {
@@ -655,7 +662,7 @@ fn card_metadata_line(
         .sum::<usize>();
     let labels = truncate_width(labels, max_width.saturating_sub(marker_width));
     let labels_width = UnicodeWidthStr::width(labels.as_str());
-    let mut spans = vec![Span::styled(labels, Style::new().fg(theme.fg_muted))];
+    let mut spans = vec![Span::styled(labels, theme.muted())];
     spans.push(Span::raw(
         " ".repeat(max_width.saturating_sub(labels_width + marker_width)),
     ));

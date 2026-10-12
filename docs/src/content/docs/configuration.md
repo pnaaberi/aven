@@ -267,8 +267,15 @@ tui:
   appearance: light
 ```
 
-Both themes keep the terminal's own background on the main surface. The
-`:toggle-background` command switches between the themes until the TUI exits.
+Set `terminal` to use your terminal's default text and background colors with
+ANSI-colored accents. It follows your terminal color scheme without background
+detection. Panels use borders and spacing rather than tinted backgrounds;
+focused selection uses reverse video, inactive selection uses underlining, and
+muted text uses the terminal's dim attribute.
+
+All themes keep the terminal's own background on the main surface. The
+`:toggle-background` command cycles through `dark`, `light`, and `terminal`
+(in that order) for the current session without changing your config.
 Edit the local config file and restart the TUI to apply changes.
 
 ## TUI sidebar views

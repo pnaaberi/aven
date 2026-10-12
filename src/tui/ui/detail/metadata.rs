@@ -73,10 +73,7 @@ pub(super) fn detail_metadata_lines_with_children(
             } else {
                 " TASK "
             },
-            Style::new()
-                .fg(theme.inverse_fg)
-                .bg(theme.badge_bg)
-                .add_modifier(Modifier::BOLD),
+            theme.badge(theme.badge_bg).add_modifier(Modifier::BOLD),
         )),
         Line::from(""),
         metadata_label(theme, "PROJECT"),
@@ -111,7 +108,7 @@ pub(super) fn detail_metadata_lines_with_children(
     let availability_style = if availability.is_some() {
         Style::new().fg(theme.accent).add_modifier(Modifier::BOLD)
     } else {
-        Style::new().fg(theme.fg_muted)
+        theme.muted()
     };
     lines.extend([Line::from(""), metadata_label(theme, "AVAILABILITY")]);
     for value in availability
@@ -158,13 +155,13 @@ pub(super) fn detail_metadata_lines_with_children(
         metadata_label(theme, "CREATED"),
         Line::from(Span::styled(
             local_timestamp_display(&item.task.created_at),
-            Style::new().fg(theme.fg_muted),
+            theme.muted(),
         )),
         Line::from(""),
         metadata_label(theme, "UPDATED"),
         Line::from(Span::styled(
             local_timestamp_display(&item.task.updated_at),
-            Style::new().fg(theme.fg_muted),
+            theme.muted(),
         )),
     ]);
     if let Some(recurrence) = item.recurrence.as_ref() {
@@ -188,10 +185,7 @@ pub(super) fn detail_metadata_lines_with_children(
                 "projection {}",
                 recurrence.projection_state.as_str()
             )),
-            Line::from(Span::styled(
-                "history t r h",
-                Style::new().fg(theme.fg_muted),
-            )),
+            Line::from(Span::styled("history t r h", theme.muted())),
         ]);
     }
     if let Some(group) = item.recurrence_group.as_ref() {
@@ -233,7 +227,7 @@ pub(super) fn detail_metadata_lines_with_children(
                 )));
                 lines.push(Line::from(Span::styled(
                     "c a current · c r incoming · c m manual",
-                    Style::new().fg(theme.fg_muted),
+                    theme.muted(),
                 )));
             }
         }
@@ -273,7 +267,7 @@ fn detail_epic_metadata_lines(
     let mut lines = vec![
         Line::from(""),
         metadata_label(theme, "CHILDREN"),
-        Line::from(Span::styled(progress, Style::new().fg(theme.fg_dim))),
+        Line::from(Span::styled(progress, theme.dim())),
     ];
     if let Some(rollup) = item.epic_rollup.as_ref()
         && rollup.total > 0
@@ -283,7 +277,7 @@ fn detail_epic_metadata_lines(
                 "{} overdue · {} blocked · {} ready",
                 rollup.overdue, rollup.blocked, rollup.ready
             ),
-            Style::new().fg(theme.fg_dim),
+            theme.dim(),
         )));
     }
 
@@ -292,7 +286,7 @@ fn detail_epic_metadata_lines(
             .into_iter()
             .chain(std::iter::once(Line::from(Span::styled(
                 "none",
-                Style::new().fg(theme.fg_muted),
+                theme.muted(),
             ))))
             .collect();
     }
@@ -303,7 +297,7 @@ fn detail_epic_metadata_lines(
 pub(super) fn metadata_label(theme: &Theme, label: &'static str) -> Line<'static> {
     Line::from(Span::styled(
         label,
-        Style::new().fg(theme.fg_dim).add_modifier(Modifier::BOLD),
+        theme.dim().add_modifier(Modifier::BOLD),
     ))
 }
 
