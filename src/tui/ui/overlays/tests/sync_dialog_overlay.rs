@@ -4,7 +4,7 @@ use crate::tui::overlay::{AutomaticSyncService, InvitationKind, SecretText, Sync
 use crate::tui::sync_operations::{
     DrainSummary, OperationFailure, OperationKind, OperationResult, RunningOperation, SyncActivity,
 };
-use crate::tui::theme::{FG_DIM, FG_MUTED};
+use crate::tui::theme::Theme;
 
 #[test]
 fn idle_sync_renders_compact_summary_and_actions() {
@@ -52,11 +52,11 @@ fn single_device_hint_is_a_muted_recovery_field_that_wraps() {
         let mut hint = Vec::new();
         for line in &lines[recovery..pending] {
             assert!(line.width() <= width);
-            assert_eq!(line.spans[0].style.fg, Some(FG_DIM));
+            assert_eq!(line.spans[0].style.fg, Some(Theme::dark().fg_dim));
             assert!(
                 line.spans[1..]
                     .iter()
-                    .all(|span| span.style.fg == Some(FG_MUTED))
+                    .all(|span| span.style.fg == Some(Theme::dark().fg_muted))
             );
             hint.push(
                 line.spans[1..]
@@ -111,9 +111,9 @@ fn wake_failures_are_visible_without_expanding_details() {
             .any(|line| line.to_string().contains("Sync needs attention"))
     );
     assert!(lines.iter().any(|line| {
-        line.spans
-            .iter()
-            .any(|span| span.style.fg == Some(ORANGE) && span.content.contains("invalid"))
+        line.spans.iter().any(|span| {
+            span.style.fg == Some(Theme::dark().warning) && span.content.contains("invalid")
+        })
     }));
     assert!(!lines.iter().any(|line| line.to_string() == "DETAILS"));
 }
@@ -142,7 +142,7 @@ fn conflicts_use_attention_color() {
     let state = SyncDialogState::default();
     let lines = sync_dialog_lines_for_test(&sync_view(&state, status));
 
-    assert_eq!(lines[0].spans[0].style.fg, Some(ORANGE));
+    assert_eq!(lines[0].spans[0].style.fg, Some(Theme::dark().warning));
     assert!(lines.iter().any(|line| {
         let text = line.to_string();
         text.starts_with("Conflicts") && text.ends_with('2')
@@ -177,10 +177,14 @@ fn expanded_details_scroll_on_short_terminals() {
     };
     let view = sync_view(&state, sync_status());
 
-    assert!(sync_dialog_scroll_cap(&view, (52, 12).into()) > 0);
+    assert!(sync_dialog_scroll_cap(&Theme::dark(), &view, (52, 12).into()) > 0);
     let collapsed = SyncDialogState::default();
     assert_eq!(
-        sync_dialog_scroll_cap(&sync_view(&collapsed, sync_status()), (100, 30).into()),
+        sync_dialog_scroll_cap(
+            &Theme::dark(),
+            &sync_view(&collapsed, sync_status()),
+            (100, 30).into()
+        ),
         0
     );
     let rendered = render_overlay_view_at(OverlayView::Sync(Box::new(view)), 52, 12);
@@ -209,11 +213,11 @@ fn clicks_resolve_to_the_rendered_action_rows() {
     let column = line[..line.find("Add device").unwrap()].chars().count() as u16;
 
     assert_eq!(
-        sync_dialog_hit(&view, (80, 30).into(), column, row),
+        sync_dialog_hit(&Theme::dark(), &view, (80, 30).into(), column, row),
         SyncDialogHit::Action(1)
     );
     assert_eq!(
-        sync_dialog_hit(&view, (80, 30).into(), 0, 0),
+        sync_dialog_hit(&Theme::dark(), &view, (80, 30).into(), 0, 0),
         SyncDialogHit::Outside
     );
 }
@@ -489,7 +493,7 @@ fn empty_invitation_field_draws_an_input_cursor() {
         field
             .spans
             .iter()
-            .any(|span| span.content == "P" && span.style.bg == Some(crate::tui::theme::FG))
+            .any(|span| span.content == "P" && span.style.bg == Some(Theme::dark().fg))
     );
 }
 
@@ -813,7 +817,7 @@ fn manual_sync_spins_in_the_status_line_without_moving_rows() {
     assert_eq!(idle.len(), syncing.len());
     assert!(idle[0].to_string().contains("No changes waiting"));
     assert!(syncing[0].to_string().ends_with("Syncing…"));
-    assert_eq!(syncing[0].spans[1].style.fg, Some(ACCENT));
+    assert_eq!(syncing[0].spans[1].style.fg, Some(Theme::dark().accent));
     for (before, after) in idle.iter().zip(&syncing).skip(1) {
         assert_eq!(before.to_string(), after.to_string());
     }
@@ -831,7 +835,7 @@ fn nonzero_counts_show_as_attention_rows() {
         .find(|line| line.to_string().starts_with("Pending"))
         .expect("pending row");
     assert!(pending.to_string().ends_with('3'));
-    assert_eq!(pending.spans[1].style.fg, Some(ORANGE));
+    assert_eq!(pending.spans[1].style.fg, Some(Theme::dark().warning));
 }
 
 #[test]
@@ -912,11 +916,11 @@ fn confirmation_buttons_are_clickable() {
     let back = line[..line.find(" Back ").unwrap()].chars().count() as u16 + 1;
 
     assert_eq!(
-        sync_dialog_hit(&view, (80, 30).into(), join, row),
+        sync_dialog_hit(&Theme::dark(), &view, (80, 30).into(), join, row),
         SyncDialogHit::Action(1)
     );
     assert_eq!(
-        sync_dialog_hit(&view, (80, 30).into(), back, row),
+        sync_dialog_hit(&Theme::dark(), &view, (80, 30).into(), back, row),
         SyncDialogHit::Action(0)
     );
 }
@@ -1231,7 +1235,7 @@ fn commands_render_in_code_style_without_backticks() {
     let code = lines
         .iter()
         .flat_map(|line| &line.spans)
-        .filter(|span| span.style.bg == crate::tui::theme::CODE.bg)
+        .filter(|span| span.style.bg == Theme::dark().code().bg)
         .map(|span| span.content.as_ref())
         .collect::<Vec<_>>()
         .join(" ");

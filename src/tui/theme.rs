@@ -239,7 +239,6 @@ pub(crate) const PINK: Color = Theme::dark().conflict;
 pub(crate) const YELLOW: Color = Theme::dark().attention;
 pub(crate) const GREEN: Color = Theme::dark().success;
 pub(crate) const SELECTED: Style = Theme::dark().selected();
-pub(crate) const CODE: Style = Theme::dark().code();
 pub(crate) const RELATED: Style = Theme::dark().related();
 pub(crate) const SELECTED_INACTIVE: Style = Theme::dark().selected_inactive();
 pub(crate) const BG: Color = Theme::dark().bg;

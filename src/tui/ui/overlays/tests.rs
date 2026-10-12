@@ -14,7 +14,7 @@ use crate::tui::store::{
     DatabaseStatsPriorityCounts, DatabaseStatsStatusCounts, SyncStatusCheck, TuiDatabaseStats,
     TuiSyncStatus,
 };
-use crate::tui::theme::{self, ACCENT, BG_ALT, FG, FG_DIM, ORANGE, RED};
+use crate::tui::theme::{self, BG_ALT, FG, FG_DIM, RED, Theme};
 use crate::tui::widgets::priority_icon;
 use ratatui::Frame;
 use ratatui::Terminal;
@@ -59,16 +59,16 @@ fn render_non_help_overlay_content(frame: &mut Frame, overlay: &OverlayView<'_>)
             },
         ),
         OverlayView::Metadata(state) => super::metadata::render(frame, state),
-        OverlayView::AddTask(state) => render_add_task(frame, state),
-        OverlayView::TextInput(state) => render_text_input(frame, state),
-        OverlayView::MultilineInput(state) => render_multiline_input(frame, state),
+        OverlayView::AddTask(state) => render_add_task(frame, &Theme::dark(), state),
+        OverlayView::TextInput(state) => render_text_input(frame, &Theme::dark(), state),
+        OverlayView::MultilineInput(state) => render_multiline_input(frame, &Theme::dark(), state),
         OverlayView::Picker(state) => render_picker(frame, state),
-        OverlayView::TagCombobox(state) => render_tag_combobox(frame, state),
+        OverlayView::TagCombobox(state) => render_tag_combobox(frame, &Theme::dark(), state),
         OverlayView::Confirm(state) => render_confirm(frame, state),
         OverlayView::TextPanel(state) => render_text_panel(frame, state),
         OverlayView::Changelog { markdown, scroll } => render_changelog(frame, markdown, *scroll),
         OverlayView::Pairing(presentation) => render_pairing(frame, presentation),
-        OverlayView::Sync(view) => render_sync_dialog(frame, view),
+        OverlayView::Sync(view) => render_sync_dialog(frame, &Theme::dark(), view),
         OverlayView::DatabaseStats { stats, scroll } => {
             render_database_stats(frame, stats, *scroll)
         }

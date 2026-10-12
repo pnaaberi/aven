@@ -48,6 +48,7 @@ impl App {
             }
             MouseEventKind::Down(MouseButton::Left) => {
                 let hit = crate::tui::ui::sync_dialog_hit(
+                    &self.theme,
                     &self.sync_dialog_view(&state),
                     terminal_size,
                     mouse.column,
@@ -477,7 +478,11 @@ impl App {
     }
 
     fn sync_dialog_scroll_cap(&self, state: &SyncDialogState, terminal_size: Size) -> u16 {
-        crate::tui::ui::sync_dialog_scroll_cap(&self.sync_dialog_view(state), terminal_size)
+        crate::tui::ui::sync_dialog_scroll_cap(
+            &self.theme,
+            &self.sync_dialog_view(state),
+            terminal_size,
+        )
     }
 }
 

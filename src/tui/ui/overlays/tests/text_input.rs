@@ -1,4 +1,5 @@
 use super::*;
+use crate::tui::theme::Theme;
 
 #[test]
 fn overlay_render_includes_text_input_prompt_and_hints() {
@@ -151,11 +152,11 @@ fn placeholder_text_input_kinds_use_placeholder_style() {
 fn project_path_input_marks_truncated_side() {
     let input = "/Users/raine/code/aven/worktree";
 
-    let end = project_path_input_line(input, input.len(), 16);
+    let end = project_path_input_line(&Theme::dark(), input, input.len(), 16);
     assert_eq!(end.spans.first().unwrap().content.as_ref(), "…");
     assert!(end.to_string().ends_with("worktree "));
 
-    let start = project_path_input_line(input, 0, 16);
+    let start = project_path_input_line(&Theme::dark(), input, 0, 16);
     assert_eq!(start.spans.last().unwrap().content.as_ref(), "…");
     assert!(start.to_string().starts_with('/'));
 }
@@ -164,11 +165,11 @@ fn project_path_input_marks_truncated_side() {
 fn project_path_input_marks_wide_text_by_cell_position() {
     let input = "한글입력경로";
 
-    let end = project_path_input_line(input, input.len(), 8);
+    let end = project_path_input_line(&Theme::dark(), input, input.len(), 8);
     assert_eq!(end.spans.first().unwrap().content.as_ref(), "…");
     assert!(end.width() <= 8);
 
-    let start = project_path_input_line(input, 0, 8);
+    let start = project_path_input_line(&Theme::dark(), input, 0, 8);
     assert_eq!(start.spans.last().unwrap().content.as_ref(), "…");
     assert!(start.width() <= 8);
 }
@@ -192,11 +193,11 @@ fn project_path_input_uses_wide_labeled_dialog() {
 
 #[test]
 fn empty_placeholder_text_input_shows_placeholder() {
-    let line = placeholder_text_input_line("", 0, 20, ADD_PROJECT_NAME_PLACEHOLDER);
+    let line = placeholder_text_input_line(&Theme::dark(), "", 0, 20, ADD_PROJECT_NAME_PLACEHOLDER);
     assert_eq!(line.spans[0].content.as_ref(), "E");
-    assert_eq!(line.spans[0].style.fg, Some(BG_ALT));
-    assert_eq!(line.spans[0].style.bg, Some(FG));
+    assert_eq!(line.spans[0].style.fg, Some(Theme::dark().bg_raised));
+    assert_eq!(line.spans[0].style.bg, Some(Theme::dark().fg));
     assert_eq!(line.spans[1].content.as_ref(), "nter project name here...");
-    assert_eq!(line.spans[1].style.fg, Some(FG_DIM));
+    assert_eq!(line.spans[1].style.fg, Some(Theme::dark().fg_dim));
     assert_eq!(line.to_string(), ADD_PROJECT_NAME_PLACEHOLDER);
 }

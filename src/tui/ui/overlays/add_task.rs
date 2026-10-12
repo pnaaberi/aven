@@ -1,6 +1,6 @@
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Paragraph, Wrap};
 use unicode_width::UnicodeWidthStr;
@@ -23,7 +23,7 @@ use crate::tui::overlay::{
     ScheduleEditorMode, ScheduleEditorState, TagComboboxView,
 };
 use crate::tui::text::{cell_width_ranges, truncate_width};
-use crate::tui::theme::{self, BG_ALT, BG_PANEL, FG, FG_DIM, FG_MUTED, SELECTED};
+use crate::tui::theme::Theme;
 use crate::tui::widgets::{priority_short, status_span};
 
 #[derive(Clone, Copy)]
@@ -146,13 +146,11 @@ fn add_task_dialog_height(terminal: Rect, layout: AddTaskLayout<'_>) -> u16 {
         .iter()
         .enumerate()
         .map(|(row, line)| {
-            add_task_description_visual_lines(
+            add_task_description_visual_row_count(
                 line,
-                None,
                 layout.description.len() == 1 && line.is_empty() && row == 0,
                 content_width,
             )
-            .len()
         })
         .sum::<usize>()
         .max(ADD_TASK_DEFAULT_DESCRIPTION_ROWS);
@@ -163,7 +161,7 @@ fn add_task_dialog_height(terminal: Rect, layout: AddTaskLayout<'_>) -> u16 {
     desired_height.min(available_height as usize) as u16
 }
 
-pub(in crate::tui::ui) fn render_add_task(frame: &mut Frame, state: &AddTaskView) {
+pub(in crate::tui::ui) fn render_add_task(frame: &mut Frame, theme: &Theme, state: &AddTaskView) {
     let height = add_task_dialog_height(
         frame.area(),
         AddTaskLayout {
@@ -182,10 +180,14 @@ pub(in crate::tui::ui) fn render_add_task(frame: &mut Frame, state: &AddTaskView
     let dialog = Dialog::new(title, 100, height);
     let area = dialog.area(frame);
     let content = dialog.render_block_at(frame, area);
-    render_add_task_body(frame, state, content, area);
+    render_add_task_body(frame, theme, state, content, area);
 }
 
-pub(in crate::tui::ui) fn render_add_task_full_frame(frame: &mut Frame, state: &AddTaskView) {
+pub(in crate::tui::ui) fn render_add_task_full_frame(
+    frame: &mut Frame,
+    theme: &Theme,
+    state: &AddTaskView,
+) {
     let area = frame.area();
     let title = if state.editing_template {
         "Edit recurring template"
@@ -193,11 +195,17 @@ pub(in crate::tui::ui) fn render_add_task_full_frame(frame: &mut Frame, state: &
         "Add task"
     };
     let content = Dialog::new(title, area.width, area.height).render_block_at(frame, area);
-    render_add_task_body(frame, state, content, area);
+    render_add_task_body(frame, theme, state, content, area);
 }
 
-fn render_add_task_body(frame: &mut Frame, state: &AddTaskView, content: Rect, dialog_area: Rect) {
-    let mut lines = add_task_metadata_lines(state, content.width);
+fn render_add_task_body(
+    frame: &mut Frame,
+    theme: &Theme,
+    state: &AddTaskView,
+    content: Rect,
+    dialog_area: Rect,
+) {
+    let mut lines = add_task_metadata_lines(theme, state, content.width);
     if state.schedule_error.is_some() && state.schedule_validation_requested {
         let guidance = if crate::schedule_input::recurrence_intent(&state.schedule_input) {
             crate::recurrence_input::rule_guidance()
@@ -205,18 +213,26 @@ fn render_add_task_body(frame: &mut Frame, state: &AddTaskView, content: Rect, d
             crate::schedule_input::schedule_guidance()
         };
         lines.push(fit_line_to_width(
+            theme,
             Line::from(Span::styled(
                 format!("  Schedule: {guidance}"),
-                Style::new().fg(Color::Red).add_modifier(Modifier::BOLD),
+                Style::new()
+                    .fg(theme.field_error)
+                    .add_modifier(Modifier::BOLD),
             )),
             content.width as usize,
         ));
     }
     if content.height <= 10 {
         if !state.attachments.items.is_empty() && lines.len() + 4 < content.height as usize {
-            lines.push(add_task_attachment_line(state, content.width as usize));
+            lines.push(add_task_attachment_line(
+                theme,
+                state,
+                content.width as usize,
+            ));
         }
         lines.push(compact_text_field(
+            theme,
             "Title",
             if state.title.is_empty() {
                 ADD_TASK_TITLE_PLACEHOLDER
@@ -226,6 +242,7 @@ fn render_add_task_body(frame: &mut Frame, state: &AddTaskView, content: Rect, d
             state.focus == AddTaskStep::Title,
         ));
         lines.push(compact_text_field(
+            theme,
             "Description",
             state
                 .description
@@ -239,30 +256,36 @@ fn render_add_task_body(frame: &mut Frame, state: &AddTaskView, content: Rect, d
             lines.push(Line::from(""));
         }
         lines.push(add_task_hint_line(
+            theme,
             state.focus,
             state.status_prefix_active,
             state.priority_prefix_active,
             state.create_more_available,
         ));
         frame.render_widget(
-            Paragraph::new(Text::from(lines))
-                .style(Style::new().fg(FG).bg(crate::tui::theme::BG_ALT)),
+            Paragraph::new(Text::from(lines)).style(Style::new().fg(theme.fg).bg(theme.bg_raised)),
             content,
         );
-        render_add_task_child(frame, state, content, dialog_area);
+        render_add_task_child(frame, theme, state, content, dialog_area);
         return;
     }
     if state.attachments.items.is_empty() {
         lines.push(Line::from(""));
     } else {
-        lines.push(add_task_attachment_line(state, content.width as usize));
+        lines.push(add_task_attachment_line(
+            theme,
+            state,
+            content.width as usize,
+        ));
         lines.push(Line::from(""));
     }
     lines.push(add_task_field_label(
+        theme,
         "Title",
         state.focus == AddTaskStep::Title,
     ));
     lines.push(indent_add_task_input(add_task_title_input_line(
+        theme,
         &state.title,
         (state.focus == AddTaskStep::Title).then_some(state.title_cursor),
         (content.width as usize).saturating_sub(2),
@@ -270,18 +293,22 @@ fn render_add_task_body(frame: &mut Frame, state: &AddTaskView, content: Rect, d
     if state.title_error {
         lines.push(Line::from(Span::styled(
             "  Title is required",
-            Style::new().fg(Color::Red).add_modifier(Modifier::BOLD),
+            Style::new()
+                .fg(theme.field_error)
+                .add_modifier(Modifier::BOLD),
         )));
     } else {
         lines.push(Line::from(""));
     }
     lines.push(add_task_field_label(
+        theme,
         "Description",
         state.focus == AddTaskStep::Description,
     ));
     let reserved = lines.len().saturating_add(2);
     let description_rows = (content.height as usize).saturating_sub(reserved).max(1);
     lines.extend(add_task_description_lines(
+        theme,
         state,
         description_rows,
         content.width as usize,
@@ -291,16 +318,17 @@ fn render_add_task_body(frame: &mut Frame, state: &AddTaskView, content: Rect, d
     }
     lines.push(Line::from(""));
     lines.push(add_task_hint_line(
+        theme,
         state.focus,
         state.status_prefix_active,
         state.priority_prefix_active,
         state.create_more_available,
     ));
     frame.render_widget(
-        Paragraph::new(Text::from(lines)).style(Style::new().fg(FG).bg(crate::tui::theme::BG_ALT)),
+        Paragraph::new(Text::from(lines)).style(Style::new().fg(theme.fg).bg(theme.bg_raised)),
         content,
     );
-    render_add_task_child(frame, state, content, dialog_area);
+    render_add_task_child(frame, theme, state, content, dialog_area);
 }
 
 fn indent_add_task_input(line: Line<'static>) -> Line<'static> {
@@ -310,18 +338,18 @@ fn indent_add_task_input(line: Line<'static>) -> Line<'static> {
     Line::from(spans)
 }
 
-fn add_task_attachment_line(state: &AddTaskView, width: usize) -> Line<'static> {
+fn add_task_attachment_line(theme: &Theme, state: &AddTaskView, width: usize) -> Line<'static> {
     let active = state.focus == AddTaskStep::Images;
     let count = state.attachments.items.len();
     let selected = state.attachments.selected.min(count.saturating_sub(1));
     let mut spans = vec![
-        Span::styled(if active { "▶ " } else { "  " }, Style::new().fg(FG)),
+        Span::styled(if active { "▶ " } else { "  " }, Style::new().fg(theme.fg)),
         Span::styled(
             format!("Images ({count})"),
             if active {
-                Style::new().fg(FG).add_modifier(Modifier::BOLD)
+                Style::new().fg(theme.fg).add_modifier(Modifier::BOLD)
             } else {
-                Style::new().fg(FG_DIM)
+                Style::new().fg(theme.fg_dim)
             },
         ),
     ];
@@ -329,42 +357,42 @@ fn add_task_attachment_line(state: &AddTaskView, width: usize) -> Line<'static> 
         spans.push(Span::raw("  "));
         if count > 1 {
             if active {
-                spans.push(Span::styled("◀ ", Style::new().fg(FG_MUTED)));
+                spans.push(Span::styled("◀ ", Style::new().fg(theme.fg_muted)));
             }
             spans.push(Span::styled(
                 format!("{}/{} ", selected + 1, count),
-                Style::new().fg(FG_DIM),
+                Style::new().fg(theme.fg_dim),
             ));
         }
         spans.push(Span::raw(attachment.filename.clone()));
         if let Some((width, height)) = attachment.dimensions {
-            spans.push(Span::styled(" · ", Style::new().fg(FG_DIM)));
+            spans.push(Span::styled(" · ", Style::new().fg(theme.fg_dim)));
             spans.push(Span::styled(
                 format!("{width}×{height}"),
-                Style::new().fg(FG_MUTED),
+                Style::new().fg(theme.fg_muted),
             ));
         }
-        spans.push(Span::styled(" · ", Style::new().fg(FG_DIM)));
+        spans.push(Span::styled(" · ", Style::new().fg(theme.fg_dim)));
         spans.push(Span::styled(
             human_file_size(attachment.byte_size),
-            Style::new().fg(FG_MUTED),
+            Style::new().fg(theme.fg_muted),
         ));
         if active && count > 1 {
-            spans.push(Span::styled(" ▶", Style::new().fg(FG_MUTED)));
+            spans.push(Span::styled(" ▶", Style::new().fg(theme.fg_muted)));
         }
     }
-    fit_line_to_width(Line::from(spans), width)
+    fit_line_to_width(theme, Line::from(spans), width)
 }
 
-fn compact_text_field(label: &str, value: &str, active: bool) -> Line<'static> {
+fn compact_text_field(theme: &Theme, label: &str, value: &str, active: bool) -> Line<'static> {
     Line::from(vec![
-        Span::styled(if active { "▶ " } else { "  " }, Style::new().fg(FG)),
+        Span::styled(if active { "▶ " } else { "  " }, Style::new().fg(theme.fg)),
         Span::styled(
             format!("{label}: "),
             if active {
-                Style::new().fg(FG).add_modifier(Modifier::BOLD)
+                Style::new().fg(theme.fg).add_modifier(Modifier::BOLD)
             } else {
-                Style::new().fg(FG_DIM)
+                Style::new().fg(theme.fg_dim)
             },
         ),
         Span::raw(value.to_string()),
@@ -391,24 +419,33 @@ fn metadata_columns(width: u16) -> usize {
     }
 }
 
-fn add_task_metadata_lines(state: &AddTaskView, width: u16) -> Vec<Line<'static>> {
+fn add_task_metadata_lines(theme: &Theme, state: &AddTaskView, width: u16) -> Vec<Line<'static>> {
     let owned = [
-        metadata_field(AddTaskStep::Project, "Project", &state.project, state.focus),
-        status_metadata_field(&state.status, state.status_automatic, state.focus),
         metadata_field(
+            theme,
+            AddTaskStep::Project,
+            "Project",
+            &state.project,
+            state.focus,
+        ),
+        status_metadata_field(theme, &state.status, state.status_automatic, state.focus),
+        metadata_field(
+            theme,
             AddTaskStep::Priority,
             "Priority",
             &state.priority,
             state.focus,
         ),
         metadata_field(
+            theme,
             AddTaskStep::Labels,
             "Labels",
             &labels_display(state.labels),
             state.focus,
         ),
-        schedule_metadata_field(state),
+        schedule_metadata_field(theme, state),
         metadata_field(
+            theme,
             AddTaskStep::Epic,
             "Epic",
             if state.is_epic { "yes" } else { "no" },
@@ -417,28 +454,34 @@ fn add_task_metadata_lines(state: &AddTaskView, width: u16) -> Vec<Line<'static>
     ];
     if width >= 80 {
         vec![
-            metadata_row(owned[..3].to_vec(), width as usize),
-            metadata_row(owned[3..].to_vec(), width as usize),
+            metadata_row(theme, owned[..3].to_vec(), width as usize),
+            metadata_row(theme, owned[3..].to_vec(), width as usize),
         ]
     } else {
         owned
             .chunks(metadata_columns(width))
-            .map(|chunk| metadata_row(chunk.to_vec(), width as usize))
+            .map(|chunk| metadata_row(theme, chunk.to_vec(), width as usize))
             .collect()
     }
 }
 
-fn status_metadata_field(status: &str, automatic: bool, focus: AddTaskStep) -> Line<'static> {
-    let mut line = metadata_field(AddTaskStep::Status, "Status", status, focus);
+fn status_metadata_field(
+    theme: &Theme,
+    status: &str,
+    automatic: bool,
+    focus: AddTaskStep,
+) -> Line<'static> {
+    let mut line = metadata_field(theme, AddTaskStep::Status, "Status", status, focus);
     if automatic {
         line.spans
-            .push(Span::styled(" (auto)", Style::new().fg(FG_MUTED)));
+            .push(Span::styled(" (auto)", Style::new().fg(theme.fg_muted)));
     }
     line
 }
 
-fn schedule_metadata_field(state: &AddTaskView) -> Line<'static> {
+fn schedule_metadata_field(theme: &Theme, state: &AddTaskView) -> Line<'static> {
     let mut line = metadata_field(
+        theme,
         AddTaskStep::Schedule,
         "Schedule",
         if state.schedule_input.is_empty() {
@@ -452,6 +495,7 @@ fn schedule_metadata_field(state: &AddTaskView) -> Line<'static> {
         line.spans.pop();
         line.spans.extend(
             placeholder_input_line(
+                theme,
                 &state.schedule_input,
                 Some(state.schedule_input_cursor),
                 64,
@@ -464,6 +508,7 @@ fn schedule_metadata_field(state: &AddTaskView) -> Line<'static> {
 }
 
 pub(in crate::tui::ui) fn metadata_field(
+    theme: &Theme,
     field: AddTaskStep,
     label: &str,
     value: &str,
@@ -482,39 +527,45 @@ pub(in crate::tui::ui) fn metadata_field(
         _ => "   ",
     };
     let mut spans = vec![
-        Span::styled(marker, Style::new().fg(FG)),
-        Span::styled(shortcut, Style::new().fg(FG).add_modifier(Modifier::BOLD)),
+        Span::styled(marker, Style::new().fg(theme.fg)),
+        Span::styled(
+            shortcut,
+            Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
+        ),
         Span::styled(
             format!("{label}: "),
             if field == focus {
-                Style::new().fg(FG).add_modifier(Modifier::BOLD)
+                Style::new().fg(theme.fg).add_modifier(Modifier::BOLD)
             } else {
-                Style::new().fg(FG_DIM)
+                Style::new().fg(theme.fg_dim)
             },
         ),
     ];
-    spans.extend(metadata_value_spans(field, value));
+    spans.extend(metadata_value_spans(theme, field, value));
     Line::from(spans)
 }
 
-fn metadata_value_spans(field: AddTaskStep, value: &str) -> Vec<Span<'static>> {
+fn metadata_value_spans(theme: &Theme, field: AddTaskStep, value: &str) -> Vec<Span<'static>> {
     match field {
         AddTaskStep::Project => vec![
-            Span::styled("● ", Style::new().fg(theme::project_color(value))),
+            Span::styled("● ", Style::new().fg(theme.project(value))),
             Span::styled(
                 value.to_string(),
-                Style::new().fg(FG).add_modifier(Modifier::BOLD),
+                Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
             ),
         ],
         AddTaskStep::Status => vec![status_span(value)],
         AddTaskStep::Priority => vec![Span::styled(
             priority_short(value).to_string(),
-            theme::priority_style(value).add_modifier(Modifier::BOLD),
+            theme.priority(value).add_modifier(Modifier::BOLD),
         )],
         AddTaskStep::Labels if value == "none" => {
-            vec![Span::styled("none", Style::new().fg(FG_DIM))]
+            vec![Span::styled("none", Style::new().fg(theme.fg_dim))]
         }
-        AddTaskStep::Labels => vec![Span::styled(label_summary(value), Style::new().fg(FG_DIM))],
+        AddTaskStep::Labels => vec![Span::styled(
+            label_summary(value),
+            Style::new().fg(theme.fg_dim),
+        )],
         _ => vec![Span::raw(value.to_string())],
     }
 }
@@ -532,7 +583,7 @@ fn label_summary(value: &str) -> String {
 
 const METADATA_SEPARATOR: &str = "   ";
 
-fn metadata_row(lines: Vec<Line<'static>>, width: usize) -> Line<'static> {
+fn metadata_row(theme: &Theme, lines: Vec<Line<'static>>, width: usize) -> Line<'static> {
     let separator_width = METADATA_SEPARATOR.width();
     let fields_width = width.saturating_sub(separator_width * lines.len().saturating_sub(1));
     let base_width = fields_width / lines.len().max(1);
@@ -540,12 +591,14 @@ fn metadata_row(lines: Vec<Line<'static>>, width: usize) -> Line<'static> {
     let fitted = lines
         .into_iter()
         .enumerate()
-        .map(|(index, line)| fit_line_to_width(line, base_width + usize::from(index < remainder)))
+        .map(|(index, line)| {
+            fit_line_to_width(theme, line, base_width + usize::from(index < remainder))
+        })
         .collect();
     join_lines(fitted, METADATA_SEPARATOR)
 }
 
-fn fit_line_to_width(line: Line<'static>, width: usize) -> Line<'static> {
+fn fit_line_to_width(theme: &Theme, line: Line<'static>, width: usize) -> Line<'static> {
     let line_width = line.width();
     if line_width <= width {
         let padding = width.saturating_sub(line_width);
@@ -553,7 +606,7 @@ fn fit_line_to_width(line: Line<'static>, width: usize) -> Line<'static> {
         spans.push(Span::raw(" ".repeat(padding)));
         return Line::from(spans);
     }
-    truncate_line_width(line, width, Style::new().fg(FG_DIM))
+    truncate_line_width(line, width, Style::new().fg(theme.fg_dim))
 }
 
 fn join_lines(lines: Vec<Line<'static>>, separator: &'static str) -> Line<'static> {
@@ -630,19 +683,19 @@ pub(crate) fn composer_help_scroll_cap(
     COMPOSER_HELP_TOPICS.len().saturating_sub(visible_rows) as u16
 }
 
-fn schedule_editor_lines(editor: &ScheduleEditorState) -> Vec<Line<'static>> {
-    let active = Style::new().fg(FG).add_modifier(Modifier::BOLD);
-    let inactive = Style::new().fg(FG_DIM);
+fn schedule_editor_lines(theme: &Theme, editor: &ScheduleEditorState) -> Vec<Line<'static>> {
+    let active = Style::new().fg(theme.fg).add_modifier(Modifier::BOLD);
+    let inactive = Style::new().fg(theme.fg_dim);
     let mode = |label: &'static str, selected| {
         Span::styled(
             format!(" {label} "),
             if selected {
                 Style::new()
-                    .fg(theme::INVERSE_FG)
-                    .bg(theme::ACCENT)
+                    .fg(theme.inverse_fg)
+                    .bg(theme.accent)
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::new().fg(FG).bg(theme::BORDER)
+                Style::new().fg(theme.fg).bg(theme.badge_bg)
             },
         )
     };
@@ -667,6 +720,7 @@ fn schedule_editor_lines(editor: &ScheduleEditorState) -> Vec<Line<'static>> {
     match editor.mode {
         ScheduleEditorMode::Once => {
             lines.push(schedule_editor_input_line(
+                theme,
                 "Available",
                 &editor.available_at.text,
                 editor.available_at.cursor,
@@ -674,6 +728,7 @@ fn schedule_editor_lines(editor: &ScheduleEditorState) -> Vec<Line<'static>> {
                 "tomorrow or next monday at 9am",
             ));
             lines.push(schedule_editor_input_line(
+                theme,
                 "Due",
                 &editor.due_on.text,
                 editor.due_on.cursor,
@@ -683,6 +738,7 @@ fn schedule_editor_lines(editor: &ScheduleEditorState) -> Vec<Line<'static>> {
         }
         ScheduleEditorMode::Repeat => {
             lines.push(schedule_editor_input_line(
+                theme,
                 "Repeat",
                 &editor.repeat_rule.text,
                 editor.repeat_rule.cursor,
@@ -690,6 +746,7 @@ fn schedule_editor_lines(editor: &ScheduleEditorState) -> Vec<Line<'static>> {
                 "daily or every Friday",
             ));
             lines.push(schedule_editor_input_line(
+                theme,
                 "Available",
                 &editor.repeat_at.text,
                 editor.repeat_at.cursor,
@@ -716,6 +773,7 @@ fn schedule_editor_lines(editor: &ScheduleEditorState) -> Vec<Line<'static>> {
                 }),
             ]));
             lines.push(schedule_editor_input_line(
+                theme,
                 "Starts",
                 &editor.repeat_start_on.text,
                 editor.repeat_start_on.cursor,
@@ -725,7 +783,7 @@ fn schedule_editor_lines(editor: &ScheduleEditorState) -> Vec<Line<'static>> {
             if !editor.preview.is_empty() {
                 lines.push(Line::from(Span::styled(
                     format!("  Next      {}", editor.preview.join(", ")),
-                    Style::new().fg(FG_DIM),
+                    Style::new().fg(theme.fg_dim),
                 )));
             }
         }
@@ -747,7 +805,9 @@ fn schedule_editor_lines(editor: &ScheduleEditorState) -> Vec<Line<'static>> {
         };
         lines.push(Line::from(Span::styled(
             format!("  {message}"),
-            Style::new().fg(Color::Red).add_modifier(Modifier::BOLD),
+            Style::new()
+                .fg(theme.field_error)
+                .add_modifier(Modifier::BOLD),
         )));
     }
     lines.push(Line::from(""));
@@ -761,6 +821,7 @@ fn schedule_editor_lines(editor: &ScheduleEditorState) -> Vec<Line<'static>> {
 }
 
 fn schedule_editor_input_line(
+    theme: &Theme,
     label: &'static str,
     value: &str,
     cursor: usize,
@@ -774,16 +835,24 @@ fn schedule_editor_input_line(
             format!("  {label:<10}")
         },
         if focused {
-            Style::new().fg(FG).add_modifier(Modifier::BOLD)
+            Style::new().fg(theme.fg).add_modifier(Modifier::BOLD)
         } else {
-            Style::new().fg(FG_DIM)
+            Style::new().fg(theme.fg_dim)
         },
     )];
-    spans.extend(placeholder_input_line(value, focused.then_some(cursor), 48, placeholder).spans);
+    spans.extend(
+        placeholder_input_line(theme, value, focused.then_some(cursor), 48, placeholder).spans,
+    );
     Line::from(spans)
 }
 
-fn render_add_task_child(frame: &mut Frame, state: &AddTaskView, content: Rect, dialog_area: Rect) {
+fn render_add_task_child(
+    frame: &mut Frame,
+    theme: &Theme,
+    state: &AddTaskView,
+    content: Rect,
+    dialog_area: Rect,
+) {
     if matches!(state.mode, AddTaskMode::Compose) {
         return;
     }
@@ -800,7 +869,7 @@ fn render_add_task_child(frame: &mut Frame, state: &AddTaskView, content: Rect, 
         return;
     }
     if let AddTaskMode::Help { scroll } = state.mode {
-        render_composer_help(frame, content, *scroll);
+        render_composer_help(frame, theme, content, *scroll);
         return;
     }
 
@@ -808,17 +877,17 @@ fn render_add_task_child(frame: &mut Frame, state: &AddTaskView, content: Rect, 
         AddTaskMode::Compose => unreachable!("composer has no child dialog"),
         AddTaskMode::Schedule(editor) => (
             "Schedule".to_string(),
-            schedule_editor_lines(editor),
+            schedule_editor_lines(theme, editor),
             68,
-            BG_ALT,
+            theme.bg_raised,
         ),
         AddTaskMode::Picker { state, .. } => {
             let view = PickerView::from_state(state);
             (
                 view.title.to_string(),
-                add_task_picker_lines(&view, content.height.saturating_sub(2) as usize),
+                add_task_picker_lines(theme, &view, content.height.saturating_sub(2) as usize),
                 54,
-                BG_ALT,
+                theme.bg_raised,
             )
         }
         AddTaskMode::Labels(state) => {
@@ -826,9 +895,9 @@ fn render_add_task_child(frame: &mut Frame, state: &AddTaskView, content: Rect, 
             let viewport_rows = content.height.saturating_sub(2).saturating_sub(4).max(1) as usize;
             (
                 view.title.to_string(),
-                tag_combobox_lines_with_viewport(&view, viewport_rows),
+                tag_combobox_lines_with_viewport(theme, &view, viewport_rows),
                 64,
-                BG_PANEL,
+                theme.bg_panel,
             )
         }
         AddTaskMode::Help { .. } => unreachable!("composer help renders separately"),
@@ -847,12 +916,12 @@ fn render_add_task_child(frame: &mut Frame, state: &AddTaskView, content: Rect, 
     frame.render_widget(
         Paragraph::new(Text::from(lines))
             .wrap(Wrap { trim: false })
-            .style(Style::new().fg(FG).bg(background)),
+            .style(Style::new().fg(theme.fg).bg(background)),
         inner,
     );
 }
 
-fn render_composer_help(frame: &mut Frame, content: Rect, scroll: u16) {
+fn render_composer_help(frame: &mut Frame, theme: &Theme, content: Rect, scroll: u16) {
     let width = 82.min(content.width.saturating_sub(2)).max(1);
     let height = COMPOSER_HELP_HEIGHT.min(content.height).max(1);
     let area = Rect {
@@ -872,20 +941,14 @@ fn render_composer_help(frame: &mut Frame, content: Rect, scroll: u16) {
         .iter()
         .skip(start)
         .take(visible_rows)
-        .map(|(keys, description)| composer_help_line(keys, description))
+        .map(|(keys, description)| composer_help_line(theme, keys, description))
         .collect::<Vec<_>>();
     frame.render_widget(
-        Paragraph::new(Text::from(lines)).style(Style::new().fg(FG).bg(BG_ALT)),
+        Paragraph::new(Text::from(lines)).style(Style::new().fg(theme.fg).bg(theme.bg_raised)),
         help_area,
     );
     if help_area.height > 0 {
-        render_vertical_scrollbar(
-            frame,
-            &crate::tui::theme::Theme::dark(),
-            help_area,
-            COMPOSER_HELP_TOPICS.len(),
-            scroll,
-        );
+        render_vertical_scrollbar(frame, theme, help_area, COMPOSER_HELP_TOPICS.len(), scroll);
     }
     if inner.height > 0 {
         let hint_area = Rect {
@@ -895,25 +958,29 @@ fn render_composer_help(frame: &mut Frame, content: Rect, scroll: u16) {
         };
         frame.render_widget(
             Paragraph::new(dialog_hint_line(&[("j/k", "scroll"), ("Esc", "close")]))
-                .style(Style::new().fg(FG).bg(BG_ALT)),
+                .style(Style::new().fg(theme.fg).bg(theme.bg_raised)),
             hint_area,
         );
     }
 }
 
 pub(in crate::tui::ui) fn composer_help_line(
+    theme: &Theme,
     keys: &'static str,
     description: &'static str,
 ) -> Line<'static> {
     let (key_style, description_style) = if keys == "Docs" {
         (
-            Style::new().fg(theme::ACCENT).add_modifier(Modifier::BOLD),
+            Style::new().fg(theme.accent).add_modifier(Modifier::BOLD),
             Style::new()
-                .fg(theme::ACCENT)
+                .fg(theme.accent)
                 .add_modifier(Modifier::UNDERLINED),
         )
     } else {
-        (Style::new().fg(FG_MUTED), Style::new().fg(FG_DIM))
+        (
+            Style::new().fg(theme.fg_muted),
+            Style::new().fg(theme.fg_dim),
+        )
     };
     Line::from(vec![
         Span::styled(format!("{keys:<22}"), key_style),
@@ -921,7 +988,11 @@ pub(in crate::tui::ui) fn composer_help_line(
     ])
 }
 
-fn add_task_picker_lines(state: &PickerView, available_rows: usize) -> Vec<Line<'static>> {
+fn add_task_picker_lines(
+    theme: &Theme,
+    state: &PickerView,
+    available_rows: usize,
+) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
     let filter_rows = if matches!(state.mode, crate::tui::overlay::PickerMode::Filter) {
         lines.push(picker_filter_line(
@@ -963,9 +1034,9 @@ fn add_task_picker_lines(state: &PickerView, available_rows: usize) -> Vec<Line<
             _ => {
                 let marker = if selected { "▸ " } else { "  " };
                 let style = if selected {
-                    SELECTED
+                    theme.selected()
                 } else {
-                    Style::new().bg(BG_ALT)
+                    Style::new().bg(theme.bg_raised)
                 };
                 Line::from(Span::styled(format!("{marker}{}", item.label), style))
             }
@@ -975,7 +1046,7 @@ fn add_task_picker_lines(state: &PickerView, available_rows: usize) -> Vec<Line<
     if state.visible_indices.is_empty() {
         lines.push(Line::from(Span::styled(
             "  no matching options",
-            Style::new().fg(FG_DIM),
+            Style::new().fg(theme.fg_dim),
         )));
     }
     lines.push(Line::from(""));
@@ -991,14 +1062,16 @@ pub(in crate::tui::ui) fn add_task_title_metadata(title: &str) -> Option<(&str, 
 pub(in crate::tui::ui) const ADD_TASK_TITLE_PLACEHOLDER: &str = "Enter title here...";
 
 pub(in crate::tui::ui) fn add_task_title_input_line(
+    theme: &Theme,
     input: &str,
     cursor: Option<usize>,
     width: usize,
 ) -> Line<'static> {
-    placeholder_input_line(input, cursor, width, ADD_TASK_TITLE_PLACEHOLDER)
+    placeholder_input_line(theme, input, cursor, width, ADD_TASK_TITLE_PLACEHOLDER)
 }
 
 fn placeholder_input_line(
+    theme: &Theme,
     input: &str,
     cursor: Option<usize>,
     width: usize,
@@ -1008,10 +1081,10 @@ fn placeholder_input_line(
         if cursor.is_some() {
             return Line::from(vec![
                 cursor_cell(&placeholder[..1]),
-                Span::styled(&placeholder[1..], Style::new().fg(FG_DIM)),
+                Span::styled(&placeholder[1..], Style::new().fg(theme.fg_dim)),
             ]);
         }
-        return Line::from(Span::styled(placeholder, Style::new().fg(FG_DIM)));
+        return Line::from(Span::styled(placeholder, Style::new().fg(theme.fg_dim)));
     }
     match cursor {
         Some(cursor) => clipped_input_line(input, cursor, width),
@@ -1019,13 +1092,17 @@ fn placeholder_input_line(
     }
 }
 
-pub(in crate::tui::ui) fn add_task_field_label(label: &'static str, active: bool) -> Line<'static> {
+pub(in crate::tui::ui) fn add_task_field_label(
+    theme: &Theme,
+    label: &'static str,
+    active: bool,
+) -> Line<'static> {
     let style = if active {
         Style::new()
-            .fg(Color::Rgb(194, 174, 255))
+            .fg(theme.field_label_active)
             .add_modifier(Modifier::BOLD)
     } else {
-        Style::new().fg(FG_MUTED).add_modifier(Modifier::BOLD)
+        Style::new().fg(theme.fg_muted).add_modifier(Modifier::BOLD)
     };
     Line::from(vec![
         Span::styled(if active { "▶ " } else { "  " }, style),
@@ -1034,6 +1111,7 @@ pub(in crate::tui::ui) fn add_task_field_label(label: &'static str, active: bool
 }
 
 pub(in crate::tui::ui) fn add_task_description_lines(
+    theme: &Theme,
     state: &AddTaskView,
     visible_rows: usize,
     width: usize,
@@ -1042,6 +1120,7 @@ pub(in crate::tui::ui) fn add_task_description_lines(
     let mut visual_rows = Vec::new();
     for (row_index, line) in state.description.iter().enumerate() {
         visual_rows.extend(add_task_description_visual_lines(
+            theme,
             line,
             if state.focus == AddTaskStep::Description && row_index == state.description_row {
                 Some(state.description_column)
@@ -1084,14 +1163,18 @@ pub(in crate::tui::ui) fn add_task_description_lines(
                 (false, true) => "↓ ",
                 (false, false) => "  ",
             };
-            add_task_description_viewport_line(marker, row.line)
+            add_task_description_viewport_line(theme, marker, row.line)
         })
         .collect()
 }
 
-fn add_task_description_viewport_line(marker: &'static str, line: Line<'static>) -> Line<'static> {
+fn add_task_description_viewport_line(
+    theme: &Theme,
+    marker: &'static str,
+    line: Line<'static>,
+) -> Line<'static> {
     let mut spans = Vec::with_capacity(line.spans.len() + 1);
-    spans.push(Span::styled(marker, Style::new().fg(FG_DIM)));
+    spans.push(Span::styled(marker, Style::new().fg(theme.fg_dim)));
     spans.extend(line.spans);
     Line::from(spans)
 }
@@ -1101,7 +1184,20 @@ pub(in crate::tui::ui) struct AddTaskDescriptionVisualLine {
     has_cursor: bool,
 }
 
+/// Row count of `add_task_description_visual_lines` for the same line.
+fn add_task_description_visual_row_count(
+    line: &str,
+    show_placeholder: bool,
+    width: usize,
+) -> usize {
+    if show_placeholder {
+        return 1;
+    }
+    cell_width_ranges(line, width.saturating_sub(2).max(1)).len()
+}
+
 pub(in crate::tui::ui) fn add_task_description_visual_lines(
+    theme: &Theme,
     line: &str,
     cursor: Option<usize>,
     show_placeholder: bool,
@@ -1109,7 +1205,7 @@ pub(in crate::tui::ui) fn add_task_description_visual_lines(
 ) -> Vec<AddTaskDescriptionVisualLine> {
     if show_placeholder {
         return vec![AddTaskDescriptionVisualLine {
-            line: add_task_description_input_line(line, cursor, true),
+            line: add_task_description_input_line(theme, line, cursor, true),
             has_cursor: cursor.is_some(),
         }];
     }
@@ -1121,6 +1217,7 @@ pub(in crate::tui::ui) fn add_task_description_visual_lines(
             let cursor = cursor.filter(|cursor| *cursor >= start && *cursor <= end);
             AddTaskDescriptionVisualLine {
                 line: add_task_description_input_line(
+                    theme,
                     &line[start..end],
                     cursor.map(|cursor| cursor - start),
                     false,
@@ -1131,8 +1228,9 @@ pub(in crate::tui::ui) fn add_task_description_visual_lines(
         .collect()
 }
 
-pub(in crate::tui::ui) fn add_task_status_hint_line() -> Line<'static> {
+pub(in crate::tui::ui) fn add_task_status_hint_line(theme: &Theme) -> Line<'static> {
     colored_add_task_hint_line(
+        theme,
         &[
             ("i", "inbox"),
             ("b", "backlog"),
@@ -1141,12 +1239,13 @@ pub(in crate::tui::ui) fn add_task_status_hint_line() -> Line<'static> {
             ("d", "done"),
             ("x", "canceled"),
         ],
-        theme::status_style,
+        Theme::status,
     )
 }
 
-pub(in crate::tui::ui) fn add_task_priority_hint_line() -> Line<'static> {
+pub(in crate::tui::ui) fn add_task_priority_hint_line(theme: &Theme) -> Line<'static> {
     colored_add_task_hint_line(
+        theme,
         &[
             ("n", "none"),
             ("l", "low"),
@@ -1154,45 +1253,47 @@ pub(in crate::tui::ui) fn add_task_priority_hint_line() -> Line<'static> {
             ("h", "high"),
             ("u", "urgent"),
         ],
-        theme::priority_style,
+        Theme::priority,
     )
 }
 
 fn colored_add_task_hint_line(
+    theme: &Theme,
     items: &[(&str, &str)],
-    label_style: fn(&str) -> Style,
+    label_style: fn(&Theme, &str) -> Style,
 ) -> Line<'static> {
     let mut spans = Vec::new();
     for (index, (key, label)) in items.iter().enumerate() {
         if index > 0 {
-            spans.push(Span::styled("  ", Style::new().fg(FG_MUTED)));
+            spans.push(Span::styled("  ", Style::new().fg(theme.fg_muted)));
         }
         spans.push(Span::styled(
             key.to_string(),
-            Style::new().fg(FG).add_modifier(Modifier::BOLD),
+            Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
         ));
-        spans.push(Span::styled(format!(" {label}"), label_style(label)));
+        spans.push(Span::styled(format!(" {label}"), label_style(theme, label)));
     }
-    spans.push(Span::styled("  ", Style::new().fg(FG_MUTED)));
+    spans.push(Span::styled("  ", Style::new().fg(theme.fg_muted)));
     spans.push(Span::styled(
         "Esc".to_string(),
-        Style::new().fg(FG).add_modifier(Modifier::BOLD),
+        Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
     ));
-    spans.push(Span::styled(" cancel", Style::new().fg(FG_MUTED)));
+    spans.push(Span::styled(" cancel", Style::new().fg(theme.fg_muted)));
     Line::from(spans)
 }
 
 pub(in crate::tui::ui) fn add_task_hint_line(
+    theme: &Theme,
     focus: AddTaskStep,
     status_prefix_active: bool,
     priority_prefix_active: bool,
     show_repeat_shortcut: bool,
 ) -> Line<'static> {
     if status_prefix_active {
-        return add_task_status_hint_line();
+        return add_task_status_hint_line(theme);
     }
     if priority_prefix_active {
-        return add_task_priority_hint_line();
+        return add_task_priority_hint_line(theme);
     }
 
     match focus {
@@ -1295,40 +1396,41 @@ pub(in crate::tui::ui) fn add_task_hint_line(
 }
 
 pub(in crate::tui::ui) fn add_task_metadata_title(
+    theme: &Theme,
     project: &str,
     status: &str,
     priority: &str,
     labels: &[String],
     width: u16,
 ) -> Line<'static> {
-    let status_style = theme::status_style(status);
-    let priority_style = theme::priority_style(priority);
+    let status_style = theme.status(status);
+    let priority_style = theme.priority(priority);
     let labels = labels_display(labels);
-    let label_style = Style::new().fg(Color::Rgb(133, 222, 255));
+    let label_style = Style::new().fg(theme.task_label);
     if width < 60 {
         return Line::from(vec![
-            Span::styled(" status: ", Style::new().fg(FG_MUTED)),
+            Span::styled(" status: ", Style::new().fg(theme.fg_muted)),
             Span::styled(truncate_width(status, 8), status_style),
-            Span::styled(" · ", Style::new().fg(FG_DIM)),
-            Span::styled("prio: ", Style::new().fg(FG_MUTED)),
+            Span::styled(" · ", Style::new().fg(theme.fg_dim)),
+            Span::styled("prio: ", Style::new().fg(theme.fg_muted)),
             Span::styled(truncate_width(priority, 6), priority_style),
         ]);
     }
     let value_width = (width as usize).saturating_sub(44).max(6) / 4;
     Line::from(vec![
-        Span::styled(" project: ", Style::new().fg(FG_MUTED)),
+        Span::styled(" project: ", Style::new().fg(theme.fg_muted)),
         Span::styled(
             truncate_width(project, value_width),
-            Style::new().fg(theme::project_color(project)),
+            Style::new().fg(theme.project(project)),
         ),
-        Span::styled(" · ", Style::new().fg(FG_DIM)),
-        Span::styled("status: ", Style::new().fg(FG_MUTED)),
+        Span::styled(" · ", Style::new().fg(theme.fg_dim)),
+        Span::styled("status: ", Style::new().fg(theme.fg_muted)),
         Span::styled(truncate_width(status, value_width), status_style),
-        Span::styled(" · ", Style::new().fg(FG_DIM)),
-        Span::styled("prio: ", Style::new().fg(FG_MUTED)),
+        Span::styled(" · ", Style::new().fg(theme.fg_dim)),
+        Span::styled("prio: ", Style::new().fg(theme.fg_muted)),
         Span::styled(truncate_width(priority, value_width), priority_style),
-        Span::styled(" · ", Style::new().fg(FG_DIM)),
-        Span::styled("labels: ", Style::new().fg(FG_MUTED)),
+        Span::styled(" · ", Style::new().fg(theme.fg_dim)),
+        Span::styled("labels: ", Style::new().fg(theme.fg_muted)),
         Span::styled(truncate_width(&labels, value_width), label_style),
     ])
 }

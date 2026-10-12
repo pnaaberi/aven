@@ -1,4 +1,5 @@
 use super::*;
+use crate::tui::theme::Theme;
 
 fn dialog_height(state: AddTaskView) -> u16 {
     let buffer = overlay_buffer(add_task_overlay(state));
@@ -352,18 +353,31 @@ fn malformed_recurrence_shows_recurrence_guidance() {
 
 #[test]
 fn add_task_metadata_values_use_shared_styles() {
-    let project = metadata_field(AddTaskStep::Project, "Project", "aven", AddTaskStep::Title);
+    let project = metadata_field(
+        &Theme::dark(),
+        AddTaskStep::Project,
+        "Project",
+        "aven",
+        AddTaskStep::Title,
+    );
     assert_eq!(project.to_string(), "  ^P Project: ● aven");
     assert_eq!(
         project.spans[3].style.fg,
-        Some(theme::project_color("aven"))
+        Some(Theme::dark().project("aven"))
     );
 
-    let status = metadata_field(AddTaskStep::Status, "Status", "active", AddTaskStep::Title);
+    let status = metadata_field(
+        &Theme::dark(),
+        AddTaskStep::Status,
+        "Status",
+        "active",
+        AddTaskStep::Title,
+    );
     assert_eq!(status.to_string(), "  ^T Status: ● active");
-    assert_eq!(status.spans[3].style.fg, theme::status_style("active").fg);
+    assert_eq!(status.spans[3].style.fg, Theme::dark().status("active").fg);
 
     let priority = metadata_field(
+        &Theme::dark(),
         AddTaskStep::Priority,
         "Priority",
         "medium",
@@ -372,11 +386,12 @@ fn add_task_metadata_values_use_shared_styles() {
     assert_eq!(priority.to_string(), "  ^R Priority: ◐ med");
     assert_eq!(
         priority.spans[3].style.fg,
-        theme::priority_style("medium").fg
+        Theme::dark().priority("medium").fg
     );
     assert!(!priority.to_string().contains('['));
 
     let availability = metadata_field(
+        &Theme::dark(),
         AddTaskStep::AvailableAt,
         "Available",
         "Now",
@@ -499,17 +514,17 @@ fn add_task_validation_and_help_are_visible() {
 
 #[test]
 fn inactive_composer_headers_stay_distinct_from_placeholders() {
-    let header = add_task_field_label("Title", false);
-    let placeholder = add_task_title_input_line("", None, 40);
+    let header = add_task_field_label(&Theme::dark(), "Title", false);
+    let placeholder = add_task_title_input_line(&Theme::dark(), "", None, 40);
 
-    assert_eq!(header.spans[1].style.fg, Some(crate::tui::theme::FG_MUTED));
+    assert_eq!(header.spans[1].style.fg, Some(Theme::dark().fg_muted));
     assert!(
         header.spans[1]
             .style
             .add_modifier
             .contains(ratatui::style::Modifier::BOLD)
     );
-    assert_eq!(placeholder.spans[0].style.fg, Some(FG_DIM));
+    assert_eq!(placeholder.spans[0].style.fg, Some(Theme::dark().fg_dim));
     assert!(
         !placeholder.spans[0]
             .style
@@ -566,15 +581,23 @@ fn composer_help_scroll_cap_matches_add_task_layout() {
 
 #[test]
 fn composer_help_uses_muted_keys_and_dim_descriptions() {
-    let line = composer_help_line("Ctrl-a", "jump to availability");
-    let long = composer_help_line("Ctrl-Enter / Ctrl-s", "create from any field");
-    let docs = composer_help_line("Docs", "https://aven.raine.dev/tui/#capture-tasks");
+    let line = composer_help_line(&Theme::dark(), "Ctrl-a", "jump to availability");
+    let long = composer_help_line(
+        &Theme::dark(),
+        "Ctrl-Enter / Ctrl-s",
+        "create from any field",
+    );
+    let docs = composer_help_line(
+        &Theme::dark(),
+        "Docs",
+        "https://aven.raine.dev/tui/#capture-tasks",
+    );
 
-    assert_eq!(line.spans[0].style.fg, Some(crate::tui::theme::FG_MUTED));
-    assert_eq!(line.spans[1].style.fg, Some(FG_DIM));
+    assert_eq!(line.spans[0].style.fg, Some(Theme::dark().fg_muted));
+    assert_eq!(line.spans[1].style.fg, Some(Theme::dark().fg_dim));
     assert!(long.to_string().contains("Ctrl-s   create"));
-    assert_eq!(docs.spans[0].style.fg, Some(ACCENT));
-    assert_eq!(docs.spans[1].style.fg, Some(ACCENT));
+    assert_eq!(docs.spans[0].style.fg, Some(Theme::dark().accent));
+    assert_eq!(docs.spans[1].style.fg, Some(Theme::dark().accent));
     assert!(
         docs.spans[1]
             .style
@@ -770,13 +793,17 @@ fn add_task_overlay_omits_title_placeholder_cursor_when_description_focused() {
     let row = buffer_row(&buffer, title_row);
     assert!(row.contains(ADD_TASK_TITLE_PLACEHOLDER));
     for column in 0..buffer.area.width {
-        assert_ne!(buffer[(column, title_row)].style().bg, Some(FG));
+        assert_ne!(
+            buffer[(column, title_row)].style().bg,
+            Some(Theme::dark().fg)
+        );
     }
 }
 
 #[test]
 fn add_task_description_wraps_and_marks_hidden_rows() {
     let lines = add_task_description_lines(
+        &Theme::dark(),
         &AddTaskView {
             description: borrow_slice(vec!["abcdefghijklmnopqrstuvwxyz".to_string()]),
             description_column: 25,
@@ -797,6 +824,7 @@ fn add_task_description_wraps_and_marks_hidden_rows() {
 #[test]
 fn add_task_description_unfocused_preview_starts_at_top() {
     let lines = add_task_description_lines(
+        &Theme::dark(),
         &AddTaskView {
             description: borrow_slice(vec!["abcdefghijklmnopqrstuvwxyz".to_string()]),
             description_column: 25,
@@ -812,8 +840,13 @@ fn add_task_description_unfocused_preview_starts_at_top() {
 
 #[test]
 fn hint_lines_style_keys() {
-    let add_task_keys =
-        styled_key_contents(add_task_hint_line(AddTaskStep::Title, false, false, false));
+    let add_task_keys = styled_key_contents(add_task_hint_line(
+        &Theme::dark(),
+        AddTaskStep::Title,
+        false,
+        false,
+        false,
+    ));
     assert_eq!(
         add_task_keys,
         vec!["Enter", "↑/↓", "Tab", "^N", "F1", "Esc"]
@@ -823,6 +856,7 @@ fn hint_lines_style_keys() {
     assert_eq!(multiline_keys, vec!["Ctrl-Enter / ^S", "Esc"]);
 
     let add_task_description_keys = styled_key_contents(add_task_hint_line(
+        &Theme::dark(),
         AddTaskStep::Description,
         false,
         false,
@@ -845,10 +879,10 @@ fn hint_lines_style_keys() {
         vec!["Ctrl-Enter / ^S", "Enter", "Esc"]
     );
 
-    let status_keys = styled_key_contents(add_task_status_hint_line());
+    let status_keys = styled_key_contents(add_task_status_hint_line(&Theme::dark()));
     assert_eq!(status_keys, vec!["i", "b", "t", "a", "d", "x", "Esc"]);
 
-    let priority_keys = styled_key_contents(add_task_priority_hint_line());
+    let priority_keys = styled_key_contents(add_task_priority_hint_line(&Theme::dark()));
     assert_eq!(priority_keys, vec!["n", "l", "m", "h", "u", "Esc"]);
 
     let confirm_keys = styled_key_contents(confirm_hint_line());
@@ -857,27 +891,28 @@ fn hint_lines_style_keys() {
 
 #[test]
 fn add_task_empty_title_input_shows_placeholder() {
-    let line = add_task_title_input_line("", Some(0), 20);
+    let line = add_task_title_input_line(&Theme::dark(), "", Some(0), 20);
     assert_eq!(line.spans[0].content.as_ref(), "E");
-    assert_eq!(line.spans[0].style.fg, Some(BG_ALT));
-    assert_eq!(line.spans[0].style.bg, Some(FG));
+    assert_eq!(line.spans[0].style.fg, Some(Theme::dark().bg_raised));
+    assert_eq!(line.spans[0].style.bg, Some(Theme::dark().fg));
     assert_eq!(line.spans[1].content.as_ref(), "nter title here...");
-    assert_eq!(line.spans[1].style.fg, Some(FG_DIM));
+    assert_eq!(line.spans[1].style.fg, Some(Theme::dark().fg_dim));
     assert_eq!(line.to_string(), ADD_TASK_TITLE_PLACEHOLDER);
 }
 
 #[test]
 fn add_task_empty_title_input_without_focus_omits_cursor() {
-    let line = add_task_title_input_line("", None, 20);
+    let line = add_task_title_input_line(&Theme::dark(), "", None, 20);
     assert_eq!(line.to_string(), ADD_TASK_TITLE_PLACEHOLDER);
     assert_eq!(line.spans.len(), 1);
-    assert_eq!(line.spans[0].style.fg, Some(FG_DIM));
+    assert_eq!(line.spans[0].style.fg, Some(Theme::dark().fg_dim));
     assert_eq!(line.spans[0].style.bg, None);
 }
 
 #[test]
 fn add_task_metadata_title_labels_values() {
     let line = add_task_metadata_title(
+        &Theme::dark(),
         "aven",
         "todo",
         "none",
@@ -897,42 +932,42 @@ fn add_task_metadata_title_labels_values() {
         .iter()
         .find(|span| span.content == "aven")
         .unwrap();
-    assert_eq!(project.style.fg, Some(theme::project_color("aven")));
+    assert_eq!(project.style.fg, Some(Theme::dark().project("aven")));
     let status = line
         .spans
         .iter()
         .find(|span| span.content == "todo")
         .unwrap();
-    assert_eq!(status.style.fg, theme::status_style("todo").fg);
+    assert_eq!(status.style.fg, Theme::dark().status("todo").fg);
     let priority = line
         .spans
         .iter()
         .find(|span| span.content == "none")
         .unwrap();
-    assert_eq!(priority.style.fg, theme::priority_style("none").fg);
+    assert_eq!(priority.style.fg, Theme::dark().priority("none").fg);
 }
 
 #[test]
 fn add_task_description_empty_input_shows_placeholder() {
-    let line = add_task_description_input_line("", Some(0), true);
+    let line = add_task_description_input_line(&Theme::dark(), "", Some(0), true);
     assert_eq!(line.spans[0].content.as_ref(), "O");
-    assert_eq!(line.spans[0].style.fg, Some(BG_ALT));
-    assert_eq!(line.spans[0].style.bg, Some(FG));
+    assert_eq!(line.spans[0].style.fg, Some(Theme::dark().bg_raised));
+    assert_eq!(line.spans[0].style.bg, Some(Theme::dark().fg));
     assert_eq!(
         line.spans[1].content.as_ref(),
         "ptional details, links, or handoff context..."
     );
-    assert_eq!(line.spans[1].style.fg, Some(FG_DIM));
+    assert_eq!(line.spans[1].style.fg, Some(Theme::dark().fg_dim));
 }
 
 #[test]
 fn add_task_description_empty_unfocused_shows_placeholder() {
-    let line = add_task_description_input_line("", None, true);
+    let line = add_task_description_input_line(&Theme::dark(), "", None, true);
     assert_eq!(
         line.to_string(),
         "Optional details, links, or handoff context..."
     );
-    assert_eq!(line.spans[0].style.fg, Some(FG_DIM));
+    assert_eq!(line.spans[0].style.fg, Some(Theme::dark().fg_dim));
 }
 
 #[test]
@@ -1030,7 +1065,7 @@ fn once_schedule_dialog_aligns_type_and_field_values() {
         buffer[(type_column as u16, type_row_index as u16)]
             .style()
             .bg,
-        Some(ACCENT)
+        Some(Theme::dark().accent)
     );
 }
 
@@ -1122,7 +1157,7 @@ fn add_task_template_shows_natural_schedule_summary() {
 
 #[test]
 fn add_task_description_blank_later_line_omits_placeholder() {
-    let line = add_task_description_input_line("", Some(0), false);
+    let line = add_task_description_input_line(&Theme::dark(), "", Some(0), false);
     assert_eq!(line.to_string(), " ");
     assert!(!line.to_string().contains("Optional details"));
 }

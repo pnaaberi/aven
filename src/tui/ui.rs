@@ -512,14 +512,16 @@ fn render_add_task_surface_overlay(
     overlay: &OverlayView,
 ) {
     match overlay {
-        OverlayView::AddTask(state) => self::overlays::render_add_task_full_frame(frame, state),
+        OverlayView::AddTask(state) => {
+            self::overlays::render_add_task_full_frame(frame, theme, state)
+        }
         OverlayView::MultilineInput(state)
             if matches!(
                 state.kind,
                 MultilineInputKind::AddTaskDescription | MultilineInputKind::AddTaskNatural
             ) =>
         {
-            render_add_task_multiline_full_frame(frame, state)
+            render_add_task_multiline_full_frame(frame, theme, state)
         }
         _ => {
             if overlay_dims_underlay(overlay, false) {
@@ -540,6 +542,7 @@ fn render_add_task_surface_overlay(
 
 fn render_add_task_multiline_full_frame(
     frame: &mut Frame,
+    theme: &Theme,
     state: &crate::tui::overlay::MultilineInputView,
 ) {
     let placeholder = match state.kind {
@@ -565,6 +568,7 @@ fn render_add_task_multiline_full_frame(
         .take(visible_rows)
     {
         lines.push(self::overlays::add_task_free_text_input_line(
+            theme,
             line,
             if row_index == state.row {
                 Some(state.column)
@@ -910,13 +914,13 @@ fn render_overlay_content(
             },
         ),
         OverlayView::Metadata(state) => self::overlays::metadata::render(frame, state),
-        OverlayView::AddTask(state) => self::overlays::render_add_task(frame, state),
+        OverlayView::AddTask(state) => self::overlays::render_add_task(frame, theme, state),
         OverlayView::TextInput(state)
             if state.kind == TextInputKind::EditTitle && inline_title_editor => {}
-        OverlayView::TextInput(state) => render_text_input(frame, state),
-        OverlayView::MultilineInput(state) => render_multiline_input(frame, state),
+        OverlayView::TextInput(state) => render_text_input(frame, theme, state),
+        OverlayView::MultilineInput(state) => render_multiline_input(frame, theme, state),
         OverlayView::Picker(state) => render_picker(frame, state),
-        OverlayView::TagCombobox(state) => render_tag_combobox(frame, state),
+        OverlayView::TagCombobox(state) => render_tag_combobox(frame, theme, state),
         OverlayView::HeaderMenu(state) => render_header_menu(frame, state),
         OverlayView::OrderMenu(state) => render_order_menu(frame, state),
         OverlayView::Confirm(state) => render_confirm(frame, state),
@@ -926,7 +930,7 @@ fn render_overlay_content(
         }
         OverlayView::Pairing(presentation) => render_pairing(frame, presentation),
         OverlayView::RecurrenceHistory(state) => render_recurrence_history(frame, state),
-        OverlayView::Sync(view) => render_sync_dialog(frame, view),
+        OverlayView::Sync(view) => render_sync_dialog(frame, theme, view),
         OverlayView::DatabaseStats { stats, scroll } => {
             render_database_stats(frame, stats, *scroll)
         }

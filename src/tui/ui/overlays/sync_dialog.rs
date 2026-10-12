@@ -27,9 +27,7 @@ use crate::tui::sync_operations::{
     short_device_ids,
 };
 use crate::tui::text::truncate_width;
-use crate::tui::theme::{
-    ACCENT, BG, BG_ALT, BG_PANEL, FG, FG_DIM, FG_MUTED, GREEN, INVERSE_FG, ORANGE, RED, SELECTED,
-};
+use crate::tui::theme::Theme;
 
 pub(crate) const SYNC_TITLE: &str = "Sync";
 const LABEL_WIDTH: usize = 16;
@@ -66,9 +64,9 @@ struct Layout {
 }
 
 impl Layout {
-    fn new(view: &SyncDialogView<'_>, terminal: Size) -> Self {
+    fn new(theme: &Theme, view: &SyncDialogView<'_>, terminal: Size) -> Self {
         let width = dialog_width(terminal.width);
-        let body = body(view, width.saturating_sub(5).max(1) as usize);
+        let body = body(theme, view, width.saturating_sub(5).max(1) as usize);
         let height = (body.lines.len() as u16)
             .saturating_add(4)
             .min(terminal.height.saturating_sub(2))
@@ -117,14 +115,18 @@ impl Layout {
     }
 }
 
-pub(in crate::tui::ui) fn render_sync_dialog(frame: &mut Frame, view: &SyncDialogView<'_>) {
-    let layout = Layout::new(view, frame.area().as_size());
+pub(in crate::tui::ui) fn render_sync_dialog(
+    frame: &mut Frame,
+    theme: &Theme,
+    view: &SyncDialogView<'_>,
+) {
+    let layout = Layout::new(theme, view, frame.area().as_size());
     let band = Rect {
         x: frame.area().x,
         width: frame.area().width,
         ..layout.area
     };
-    frame.render_widget(Block::new().style(Style::new().bg(BG)), band);
+    frame.render_widget(Block::new().style(Style::new().bg(theme.bg)), band);
     let visible = layout
         .body
         .lines
@@ -141,22 +143,23 @@ pub(in crate::tui::ui) fn render_sync_dialog(frame: &mut Frame, view: &SyncDialo
     if layout.scrolling() {
         dialog = dialog.right_title(Line::from(Span::styled(
             scroll_title(layout.start, layout.body.lines.len(), layout.visible_rows),
-            Style::new().fg(FG_MUTED),
+            Style::new().fg(theme.fg_muted),
         )));
     }
     dialog.render_block_at(frame, layout.area);
     frame.render_widget(
-        Paragraph::new(Text::from(visible)).style(Style::new().fg(FG).bg(BG_ALT)),
+        Paragraph::new(Text::from(visible)).style(Style::new().fg(theme.fg).bg(theme.bg_raised)),
         layout.body_area,
     );
     frame.render_widget(
-        Paragraph::new(hint_line(view, layout.scrolling())).style(Style::new().fg(FG).bg(BG_ALT)),
+        Paragraph::new(hint_line(view, layout.scrolling()))
+            .style(Style::new().fg(theme.fg).bg(theme.bg_raised)),
         layout.footer,
     );
     if layout.scrolling() {
         render_vertical_scrollbar(
             frame,
-            &crate::tui::theme::Theme::dark(),
+            theme,
             layout.body_area,
             layout.body.lines.len(),
             layout.start as u16,
@@ -165,12 +168,13 @@ pub(in crate::tui::ui) fn render_sync_dialog(frame: &mut Frame, view: &SyncDialo
 }
 
 pub(crate) fn sync_dialog_hit(
+    theme: &Theme,
     view: &SyncDialogView<'_>,
     terminal: Size,
     column: u16,
     row: u16,
 ) -> SyncDialogHit {
-    let layout = Layout::new(view, terminal);
+    let layout = Layout::new(theme, view, terminal);
     if !layout.area.contains((column, row).into()) {
         return SyncDialogHit::Outside;
     }
@@ -187,8 +191,12 @@ pub(crate) fn sync_dialog_hit(
         .map_or(SyncDialogHit::Inside, SyncDialogHit::Action)
 }
 
-pub(crate) fn sync_dialog_scroll_cap(view: &SyncDialogView<'_>, terminal: Size) -> u16 {
-    let layout = Layout::new(view, terminal);
+pub(crate) fn sync_dialog_scroll_cap(
+    theme: &Theme,
+    view: &SyncDialogView<'_>,
+    terminal: Size,
+) -> u16 {
+    let layout = Layout::new(theme, view, terminal);
     layout
         .body
         .lines
@@ -223,37 +231,41 @@ fn page_title(view: &SyncDialogView<'_>) -> Option<&'static str> {
     })
 }
 
-fn body(view: &SyncDialogView<'_>, width: usize) -> Body {
+fn body(theme: &Theme, view: &SyncDialogView<'_>, width: usize) -> Body {
     let mut body = Body {
         lines: Vec::new(),
         actions: Vec::new(),
     };
     match &view.state.page {
-        SyncPage::Home => home_lines(&mut body, view, width),
+        SyncPage::Home => home_lines(theme, &mut body, view, width),
         SyncPage::Invitation { kind, input, error } => {
-            invitation_lines(&mut body, view.status, *kind, input, *error, width)
+            invitation_lines(theme, &mut body, view.status, *kind, input, *error, width)
         }
         SyncPage::ConfirmSetup {
             server, preview, ..
-        } => confirm_setup_lines(&mut body, server, preview, width),
+        } => confirm_setup_lines(theme, &mut body, server, preview, width),
         SyncPage::ConfirmJoin {
             server, replace, ..
-        } => confirm_join_lines(&mut body, server, *replace, width),
+        } => confirm_join_lines(theme, &mut body, server, *replace, width),
         SyncPage::ConfirmRemove { device } => {
-            confirm_remove_lines(&mut body, view.activity, device, width)
+            confirm_remove_lines(theme, &mut body, view.activity, device, width)
         }
-        SyncPage::ConfirmAutomaticSync { service } => {
-            confirm_automatic_sync_lines(&mut body, service, view.status.interval_seconds, width)
-        }
+        SyncPage::ConfirmAutomaticSync { service } => confirm_automatic_sync_lines(
+            theme,
+            &mut body,
+            service,
+            view.status.interval_seconds,
+            width,
+        ),
         SyncPage::Devices => {
-            devices_lines(&mut body, view, width);
+            devices_lines(theme, &mut body, view, width);
             return body;
         }
     }
     let actions = sync_actions(view.state, view.status, view.activity);
     if view.state.page.has_buttons() {
         body.lines.push(Line::from(""));
-        push_buttons(&mut body, &actions, view.state.selected, width);
+        push_buttons(theme, &mut body, &actions, view.state.selected, width);
     } else if !actions.is_empty() {
         body.lines.push(Line::from(""));
         for (index, action) in actions.iter().enumerate() {
@@ -262,19 +274,23 @@ fn body(view: &SyncDialogView<'_>, width: usize) -> Body {
                 start: 0,
                 end: width as u16,
             });
-            body.lines
-                .push(action_line(action.label(), index == view.state.selected));
+            body.lines.push(action_line(
+                theme,
+                action.label(),
+                index == view.state.selected,
+            ));
         }
     }
     if view.state.page == SyncPage::Home && view.state.details {
         body.lines.push(Line::from(""));
         body.lines.push(super::shared::section_line("details"));
-        body.lines.extend(detail_lines(view.status, width));
+        body.lines.extend(detail_lines(theme, view.status, width));
         if let Some(OperationResult::Failed(failure)) = &view.activity.last {
             body.lines.extend(wrapped_row(
+                theme,
                 "Last error",
                 &failure.message,
-                Style::new().fg(FG_MUTED),
+                Style::new().fg(theme.fg_muted),
                 width,
             ));
         }
@@ -282,37 +298,34 @@ fn body(view: &SyncDialogView<'_>, width: usize) -> Body {
     body
 }
 
-fn home_lines(body: &mut Body, view: &SyncDialogView<'_>, width: usize) {
+fn home_lines(theme: &Theme, body: &mut Body, view: &SyncDialogView<'_>, width: usize) {
     let status = view.status;
     let lines = &mut body.lines;
     if status.phase == LocalPhase::NotSetUp && view.activity.running.is_none() {
         lines.extend(paragraph(
+            theme,
             "Keep your tasks in sync across devices. Set up sync from this computer's \
              tasks, or join sync that another device already uses.",
-            Style::new().fg(FG_MUTED),
+            Style::new().fg(theme.fg_muted),
             width,
         ));
-        push_last_result(lines, view.activity, width);
+        push_last_result(theme, lines, view.activity, width);
         return;
     }
     if let Some(running) = &view.activity.running
         && matches!(running.kind, OperationKind::Setup | OperationKind::Join)
     {
-        progress_lines(lines, running, width);
+        progress_lines(theme, lines, running, width);
         if running.kind == OperationKind::Join {
-            push_expired_join_guidance(lines, view.activity, width);
+            push_expired_join_guidance(theme, lines, view.activity, width);
         }
         return;
     }
     let summary = sync_status_summary(status);
     // A manual sync replaces the status in place, so nothing below moves.
     let (mark, headline, color) = match view.syncing {
-        Some(started_at) => (spinner(started_at), "Syncing…", ACCENT),
-        None => (
-            "●",
-            summary.headline(),
-            summary.color(&crate::tui::theme::Theme::dark()),
-        ),
+        Some(started_at) => (spinner(started_at), "Syncing…", theme.accent),
+        None => ("●", summary.headline(), summary.color(theme)),
     };
     lines.push(Line::from(vec![
         Span::styled(format!("{mark} "), Style::new().fg(color)),
@@ -322,76 +335,92 @@ fn home_lines(body: &mut Body, view: &SyncDialogView<'_>, width: usize) {
         ),
     ]));
     if let Some(state) = state_line(status, summary.health) {
-        lines.push(Line::from(Span::styled(state, Style::new().fg(FG_MUTED))));
+        lines.push(Line::from(Span::styled(
+            state,
+            Style::new().fg(theme.fg_muted),
+        )));
     }
     if summary.health == SyncHealth::AccessRefused {
         lines.extend(paragraph(
+            theme,
             "The server refused this device. It may have been removed from sync; check from \
              another device. Local tasks and images stay here.",
-            Style::new().fg(FG),
+            Style::new().fg(theme.fg),
             width,
         ));
     }
 
     if let Some(running) = &view.activity.running {
         lines.push(Line::from(""));
-        progress_lines(lines, running, width);
+        progress_lines(theme, lines, running, width);
         return;
     }
-    push_last_result(lines, view.activity, width);
+    push_last_result(theme, lines, view.activity, width);
     if status.phase == LocalPhase::JoinIncomplete {
-        push_expired_join_guidance(lines, view.activity, width);
+        push_expired_join_guidance(theme, lines, view.activity, width);
     }
 
     lines.push(Line::from(""));
     if let Some(server) = &status.server {
-        lines.extend(wrapped_row("Server", server, Style::new().fg(FG), width));
+        lines.extend(wrapped_row(
+            theme,
+            "Server",
+            server,
+            Style::new().fg(theme.fg),
+            width,
+        ));
     }
     lines.extend(wrapped_row(
+        theme,
         "Automatic",
         if status.enabled { "on" } else { "off" },
-        Style::new().fg(FG_MUTED),
+        Style::new().fg(theme.fg_muted),
         width,
     ));
     if status.devices == Some(1) {
         lines.extend(wrapped_row(
+            theme,
             "Devices",
             "1",
-            Style::new().fg(FG_MUTED),
+            Style::new().fg(theme.fg_muted),
             width,
         ));
         lines.extend(wrapped_row(
+            theme,
             "Recovery",
             crate::sync::encrypted::SINGLE_DEVICE_HINT,
-            Style::new().fg(FG_MUTED),
+            Style::new().fg(theme.fg_muted),
             width,
         ));
     }
     // Counts appear only when they need attention; the status covers zero.
     if status.pending_changes > 0 {
         lines.extend(wrapped_row(
+            theme,
             "Pending",
             &status.pending_changes.to_string(),
-            Style::new().fg(ORANGE),
+            Style::new().fg(theme.warning),
             width,
         ));
     }
     if status.conflicts > 0 {
         lines.extend(wrapped_row(
+            theme,
             "Conflicts",
             &status.conflicts.to_string(),
-            Style::new().fg(ORANGE),
+            Style::new().fg(theme.warning),
             width,
         ));
     }
     if let Some(invitation) = status.invitation {
         lines.extend(wrapped_row(
+            theme,
             "Invitation",
             &format!(
                 "open, expires {}",
                 crate::sync::encrypted::format_expiry(invitation.expires_at)
             ),
-            Style::new().fg(ORANGE),
+            Style::new().fg(theme.warning),
             width,
         ));
     }
@@ -399,9 +428,10 @@ fn home_lines(body: &mut Body, view: &SyncDialogView<'_>, width: usize) {
         lines.push(Line::from(""));
         for issue in &summary.issues {
             lines.extend(wrapped_row(
+                theme,
                 issue.label,
                 &issue.value,
-                Style::new().fg(ORANGE),
+                Style::new().fg(theme.warning),
                 width,
             ));
         }
@@ -466,9 +496,14 @@ fn progress_title(running: &RunningOperation) -> Option<&'static str> {
     }
 }
 
-fn progress_lines(lines: &mut Vec<Line<'static>>, running: &RunningOperation, width: usize) {
+fn progress_lines(
+    theme: &Theme,
+    lines: &mut Vec<Line<'static>>,
+    running: &RunningOperation,
+    width: usize,
+) {
     if progress_title(running).is_none() {
-        lines.push(spinner_line(running));
+        lines.push(spinner_line(theme, running));
         return;
     }
     let steps = steps(running.kind);
@@ -479,21 +514,21 @@ fn progress_lines(lines: &mut Vec<Line<'static>>, running: &RunningOperation, wi
     for (index, (_, active, done)) in steps.iter().enumerate() {
         let line = if index < current {
             Line::from(vec![
-                Span::styled("✓ ", Style::new().fg(GREEN)),
-                Span::styled(*done, Style::new().fg(FG_MUTED)),
+                Span::styled("✓ ", Style::new().fg(theme.success)),
+                Span::styled(*done, Style::new().fg(theme.fg_muted)),
             ])
         } else if index == current {
             Line::from(vec![
                 Span::styled(
                     format!("{} ", spinner(running.started_at)),
-                    Style::new().fg(ACCENT),
+                    Style::new().fg(theme.accent),
                 ),
-                Span::styled(*active, Style::new().fg(FG)),
+                Span::styled(*active, Style::new().fg(theme.fg)),
             ])
         } else {
             Line::from(vec![
-                Span::styled("· ", Style::new().fg(FG_DIM)),
-                Span::styled(*active, Style::new().fg(FG_DIM)),
+                Span::styled("· ", Style::new().fg(theme.fg_dim)),
+                Span::styled(*active, Style::new().fg(theme.fg_dim)),
             ])
         };
         lines.push(line);
@@ -502,7 +537,7 @@ fn progress_lines(lines: &mut Vec<Line<'static>>, running: &RunningOperation, wi
         {
             lines.push(Line::from(Span::styled(
                 format!("  {}", amount_text(amount)),
-                Style::new().fg(FG_MUTED),
+                Style::new().fg(theme.fg_muted),
             )));
         }
     }
@@ -518,12 +553,18 @@ fn progress_lines(lines: &mut Vec<Line<'static>>, running: &RunningOperation, wi
         }
         _ => "You can close this dialog and keep working.",
     };
-    lines.extend(paragraph(note, Style::new().fg(FG_MUTED), width));
+    lines.extend(paragraph(
+        theme,
+        note,
+        Style::new().fg(theme.fg_muted),
+        width,
+    ));
 }
 
 /// After a join timed out in this session, explains what to do if the
 /// invitation expired. A timeout alone does not show that it did.
 fn push_expired_join_guidance(
+    theme: &Theme,
     lines: &mut Vec<Line<'static>>,
     activity: &SyncActivity,
     width: usize,
@@ -531,15 +572,16 @@ fn push_expired_join_guidance(
     if activity.join_timed_out {
         lines.push(Line::from(""));
         lines.extend(paragraph(
+            theme,
             JOIN_TIMEOUT_EXPIRED,
-            Style::new().fg(FG_MUTED),
+            Style::new().fg(theme.fg_muted),
             width,
         ));
     }
 }
 
 /// Device operations report no engine stages; one truthful line covers them.
-fn spinner_line(running: &RunningOperation) -> Line<'static> {
+fn spinner_line(theme: &Theme, running: &RunningOperation) -> Line<'static> {
     let text = match running.kind {
         OperationKind::RemoveDevice(_) => "Removing access and securing future changes",
         OperationKind::FinishRemoval => "Securing future changes",
@@ -548,9 +590,9 @@ fn spinner_line(running: &RunningOperation) -> Line<'static> {
     Line::from(vec![
         Span::styled(
             format!("{} ", spinner(running.started_at)),
-            Style::new().fg(ACCENT),
+            Style::new().fg(theme.accent),
         ),
-        Span::styled(text, Style::new().fg(FG)),
+        Span::styled(text, Style::new().fg(theme.fg)),
     ])
 }
 
@@ -559,7 +601,12 @@ pub(super) fn spinner(started_at: Instant) -> &'static str {
     frames[(started_at.elapsed().as_millis() as usize / 120) % frames.len()]
 }
 
-fn push_last_result(lines: &mut Vec<Line<'static>>, activity: &SyncActivity, width: usize) {
+fn push_last_result(
+    theme: &Theme,
+    lines: &mut Vec<Line<'static>>,
+    activity: &SyncActivity,
+    width: usize,
+) {
     let Some(result) = activity
         .last
         .as_ref()
@@ -578,18 +625,34 @@ fn push_last_result(lines: &mut Vec<Line<'static>>, activity: &SyncActivity, wid
                 _ => "Joined sync",
             };
             lines.push(Line::from(""));
-            lines.extend(paragraph_with_mark("✓", GREEN, headline, width));
-            lines.extend(paragraph(text, Style::new().fg(FG_MUTED), width));
+            lines.extend(paragraph_with_mark(
+                theme,
+                "✓",
+                theme.success,
+                headline,
+                width,
+            ));
+            lines.extend(paragraph(
+                theme,
+                text,
+                Style::new().fg(theme.fg_muted),
+                width,
+            ));
         }
         OperationResult::Removed(_) | OperationResult::RemovalFinished { .. } => {}
         OperationResult::Failed(failure) => {
             lines.push(Line::from(""));
-            failure_lines(lines, failure, width);
+            failure_lines(theme, lines, failure, width);
         }
     }
 }
 
-fn failure_lines(lines: &mut Vec<Line<'static>>, failure: &OperationFailure, width: usize) {
+fn failure_lines(
+    theme: &Theme,
+    lines: &mut Vec<Line<'static>>,
+    failure: &OperationFailure,
+    width: usize,
+) {
     let headline = match failure.kind {
         OperationKind::Sync => "Sync didn't finish",
         OperationKind::Setup => "Setup didn't finish",
@@ -598,11 +661,23 @@ fn failure_lines(lines: &mut Vec<Line<'static>>, failure: &OperationFailure, wid
         OperationKind::RemoveDevice(_) => "Removal didn't finish",
         OperationKind::FinishRemoval => "Securing future changes didn't finish",
     };
-    lines.extend(paragraph_with_mark("!", ORANGE, headline, width));
-    lines.extend(paragraph(&failure.message, Style::new().fg(FG), width));
+    lines.extend(paragraph_with_mark(
+        theme,
+        "!",
+        theme.warning,
+        headline,
+        width,
+    ));
     lines.extend(paragraph(
+        theme,
+        &failure.message,
+        Style::new().fg(theme.fg),
+        width,
+    ));
+    lines.extend(paragraph(
+        theme,
         "Press d for details.",
-        Style::new().fg(FG_DIM),
+        Style::new().fg(theme.fg_dim),
         width,
     ));
 }
@@ -625,7 +700,7 @@ fn display_device_id(devices: &[crate::sync::encrypted::Device], device: &[u8; 3
         .unwrap_or_else(|| format!("{}…", &hex::encode(device)[..8]))
 }
 
-fn devices_lines(body: &mut Body, view: &SyncDialogView<'_>, width: usize) {
+fn devices_lines(theme: &Theme, body: &mut Body, view: &SyncDialogView<'_>, width: usize) {
     let activity = view.activity;
     let lines = &mut body.lines;
     let listing_failed = matches!(
@@ -649,40 +724,48 @@ fn devices_lines(body: &mut Body, view: &SyncDialogView<'_>, width: usize) {
         (None, _) => None,
     };
     if let Some(freshness) = freshness {
-        lines.extend(paragraph(&freshness, Style::new().fg(FG_MUTED), width));
+        lines.extend(paragraph(
+            theme,
+            &freshness,
+            Style::new().fg(theme.fg_muted),
+            width,
+        ));
     }
     if let Some(running) = &activity.running {
-        lines.push(spinner_line(running));
+        lines.push(spinner_line(theme, running));
     }
     match activity.device_result() {
         Some(OperationResult::Removed(removal)) => {
-            removal_lines(lines, removal, listed_devices(activity), width)
+            removal_lines(theme, lines, removal, listed_devices(activity), width)
         }
         Some(OperationResult::RemovalFinished {
             key_rotation_pending,
         }) => {
             if *key_rotation_pending {
                 lines.extend(paragraph_with_mark(
+                    theme,
                     "!",
-                    ORANGE,
+                    theme.warning,
                     "Securing future changes is still unfinished",
                     width,
                 ));
                 lines.extend(paragraph(
+                    theme,
                     "Try again later. Any remaining device also finishes it when it syncs.",
-                    Style::new().fg(FG_MUTED),
+                    Style::new().fg(theme.fg_muted),
                     width,
                 ));
             } else {
                 lines.extend(paragraph_with_mark(
+                    theme,
                     "✓",
-                    GREEN,
+                    theme.success,
                     "Future changes are secured",
                     width,
                 ));
             }
         }
-        Some(OperationResult::Failed(failure)) => failure_lines(lines, failure, width),
+        Some(OperationResult::Failed(failure)) => failure_lines(theme, lines, failure, width),
         _ => {
             if activity
                 .devices
@@ -690,8 +773,9 @@ fn devices_lines(body: &mut Body, view: &SyncDialogView<'_>, width: usize) {
                 .is_some_and(|snapshot| snapshot.listing.key_rotation_pending)
             {
                 lines.extend(paragraph_with_mark(
+                    theme,
                     "!",
-                    ORANGE,
+                    theme.warning,
                     "Securing future changes after a removal is unfinished",
                     width,
                 ));
@@ -710,7 +794,7 @@ fn devices_lines(body: &mut Body, view: &SyncDialogView<'_>, width: usize) {
     if devices.is_empty() && activity.running.is_none() && !listing_failed {
         lines.push(Line::from(Span::styled(
             "No devices listed yet. Press r to check with the server.",
-            Style::new().fg(FG_DIM),
+            Style::new().fg(theme.fg_dim),
         )));
     }
     let columns = DeviceColumns::new(devices, &short_ids, width);
@@ -723,9 +807,9 @@ fn devices_lines(body: &mut Body, view: &SyncDialogView<'_>, width: usize) {
                 if focused {
                     selected_device = Some(device);
                 }
-                columns.row(device, &short_ids[*device_index], focused)
+                columns.row(theme, device, &short_ids[*device_index], focused)
             }
-            action => action_line(action.label(), focused),
+            action => action_line(theme, action.label(), focused),
         };
         body.actions.push(ActionArea {
             line: lines.len(),
@@ -737,13 +821,13 @@ fn devices_lines(body: &mut Body, view: &SyncDialogView<'_>, width: usize) {
 
     let reserved_detail_rows = devices
         .iter()
-        .map(|device| device_detail_lines(device, width).len())
+        .map(|device| device_detail_lines(theme, device, width).len())
         .max()
         .unwrap_or(0);
     if reserved_detail_rows > 0 {
         lines.push(Line::from(""));
         let details = selected_device
-            .map(|device| device_detail_lines(device, width))
+            .map(|device| device_detail_lines(theme, device, width))
             .unwrap_or_default();
         let padding = reserved_detail_rows.saturating_sub(details.len());
         lines.extend(details);
@@ -755,31 +839,41 @@ fn devices_lines(body: &mut Body, view: &SyncDialogView<'_>, width: usize) {
         lines.push(Line::from(""));
         lines.push(super::shared::section_line("details"));
         lines.extend(paragraph(
+            theme,
             &failure.message,
-            Style::new().fg(FG_MUTED),
+            Style::new().fg(theme.fg_muted),
             width,
         ));
     }
 }
 
 fn device_detail_lines(
+    theme: &Theme,
     device: &crate::sync::encrypted::Device,
     width: usize,
 ) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
     if let Some(label) = &device.label {
-        lines.extend(wrapped_row("Name", label, Style::new().fg(FG), width));
+        lines.extend(wrapped_row(
+            theme,
+            "Name",
+            label,
+            Style::new().fg(theme.fg),
+            width,
+        ));
     }
     lines.extend(wrapped_row(
+        theme,
         "Device ID",
         &elide_middle(&hex::encode(device.id), width.saturating_sub(LABEL_WIDTH)),
-        Style::new().fg(FG),
+        Style::new().fg(theme.fg),
         width,
     ));
     if device.current {
         lines.extend(paragraph(
+            theme,
             "Remove it from another device.",
-            Style::new().fg(FG_DIM),
+            Style::new().fg(theme.fg_dim),
             width,
         ));
     }
@@ -821,16 +915,17 @@ impl DeviceColumns {
 
     fn row(
         &self,
+        theme: &Theme,
         device: &crate::sync::encrypted::Device,
         short_id: &str,
         focused: bool,
     ) -> Line<'static> {
         let base = if focused {
-            SELECTED
+            theme.selected()
         } else {
-            Style::new().fg(FG)
+            Style::new().fg(theme.fg)
         };
-        let dim = base.fg(FG_DIM);
+        let dim = base.fg(theme.fg_dim);
         let (name, name_style) = match &device.label {
             Some(label) => (label.as_str(), base),
             None => (UNNAMED_DEVICE, dim),
@@ -872,6 +967,7 @@ fn elide_middle(value: &str, max_width: usize) -> String {
 }
 
 fn removal_lines(
+    theme: &Theme,
     lines: &mut Vec<Line<'static>>,
     removal: &Removal,
     devices: &[crate::sync::encrypted::Device],
@@ -881,28 +977,32 @@ fn removal_lines(
     match (removal.access_revoked, removal.key_rotation_pending) {
         (true, false) => {
             lines.extend(paragraph_with_mark(
+                theme,
                 "✓",
-                GREEN,
+                theme.success,
                 &format!("Removed {id} from sync"),
                 width,
             ));
             lines.extend(paragraph(
+                theme,
                 "Future changes use new keys. The removed device keeps what it already \
                  downloaded.",
-                Style::new().fg(FG_MUTED),
+                Style::new().fg(theme.fg_muted),
                 width,
             ));
         }
         (true, true) => {
             lines.extend(paragraph_with_mark(
+                theme,
                 "✓",
-                GREEN,
+                theme.success,
                 &format!("Access removed for {id}"),
                 width,
             ));
             lines.extend(paragraph_with_mark(
+                theme,
                 "!",
-                ORANGE,
+                theme.warning,
                 "Securing future changes is unfinished. Finish removal continues it, and \
                  any remaining device finishes it when it syncs.",
                 width,
@@ -910,21 +1010,29 @@ fn removal_lines(
         }
         (false, _) => {
             lines.extend(paragraph_with_mark(
+                theme,
                 "!",
-                ORANGE,
+                theme.warning,
                 &format!("Removal of {id} isn't confirmed yet"),
                 width,
             ));
             lines.extend(paragraph(
+                theme,
                 "Resume removal to continue it.",
-                Style::new().fg(FG_MUTED),
+                Style::new().fg(theme.fg_muted),
                 width,
             ));
         }
     }
 }
 
-fn confirm_remove_lines(body: &mut Body, activity: &SyncActivity, device: &[u8; 32], width: usize) {
+fn confirm_remove_lines(
+    theme: &Theme,
+    body: &mut Body,
+    activity: &SyncActivity,
+    device: &[u8; 32],
+    width: usize,
+) {
     let devices = listed_devices(activity);
     let id = display_device_id(devices, device);
     let label = match devices
@@ -937,22 +1045,29 @@ fn confirm_remove_lines(body: &mut Body, activity: &SyncActivity, device: &[u8; 
     };
     let lines = &mut body.lines;
     lines.extend(paragraph(
+        theme,
         &format!("Remove {label} from sync?"),
-        Style::new().fg(FG),
+        Style::new().fg(theme.fg),
         width,
     ));
     lines.extend(paragraph(
+        theme,
         "This device will lose access to future synced changes. Tasks and images it \
          already downloaded will remain on it.",
-        Style::new().fg(FG_MUTED),
+        Style::new().fg(theme.fg_muted),
         width,
     ));
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "Device ID",
-        Style::new().fg(FG_DIM),
+        Style::new().fg(theme.fg_dim),
     )));
-    lines.extend(paragraph(&hex::encode(device), Style::new().fg(FG), width));
+    lines.extend(paragraph(
+        theme,
+        &hex::encode(device),
+        Style::new().fg(theme.fg),
+        width,
+    ));
 }
 
 /// Coarse age of a verified observation; never a wall-clock claim.
@@ -987,6 +1102,7 @@ fn drain_text(drain: &DrainSummary) -> Option<&'static str> {
 }
 
 fn invitation_lines(
+    theme: &Theme,
     body: &mut Body,
     status: &TuiSyncStatus,
     kind: InvitationKind,
@@ -1013,7 +1129,12 @@ fn invitation_lines(
              then paste the invitation here."
         }
     };
-    lines.extend(paragraph(guidance, Style::new().fg(FG_MUTED), width));
+    lines.extend(paragraph(
+        theme,
+        guidance,
+        Style::new().fg(theme.fg_muted),
+        width,
+    ));
     lines.push(Line::from(""));
     let (text, color) = match (kind, input.check()) {
         (_, InvitationCheck::Empty) => {
@@ -1021,65 +1142,94 @@ fn invitation_lines(
             lines.push(Line::from(vec![
                 Span::styled(
                     format!("{:<LABEL_WIDTH$}", "Invitation"),
-                    Style::new().fg(FG_DIM),
+                    Style::new().fg(theme.fg_dim),
                 ),
                 cursor_cell("P"),
-                Span::styled("aste the invitation here", Style::new().fg(FG_DIM)),
+                Span::styled("aste the invitation here", Style::new().fg(theme.fg_dim)),
             ]));
             if let Some(error) = error {
-                lines.extend(paragraph(error, Style::new().fg(RED), width));
+                lines.extend(paragraph(
+                    theme,
+                    error,
+                    Style::new().fg(theme.danger),
+                    width,
+                ));
             }
             return;
         }
         (InvitationKind::Setup, InvitationCheck::Setup(server))
-        | (InvitationKind::Join, InvitationCheck::Device(server)) => (format!("✓ {server}"), GREEN),
+        | (InvitationKind::Join, InvitationCheck::Device(server)) => {
+            (format!("✓ {server}"), theme.success)
+        }
         (InvitationKind::Setup, InvitationCheck::Device(_)) => (
             "Device invitation; use Join existing sync instead".to_string(),
-            RED,
+            theme.danger,
         ),
-        (InvitationKind::Join, InvitationCheck::Setup(_)) => {
-            ("Setup invitation; use Set up sync instead".to_string(), RED)
-        }
+        (InvitationKind::Join, InvitationCheck::Setup(_)) => (
+            "Setup invitation; use Set up sync instead".to_string(),
+            theme.danger,
+        ),
         (_, InvitationCheck::Incomplete) => (
             "Incomplete invitation; part may be missing".to_string(),
-            RED,
+            theme.danger,
         ),
-        (_, InvitationCheck::Unknown) => ("Not an Aven invitation".to_string(), RED),
+        (_, InvitationCheck::Unknown) => ("Not an Aven invitation".to_string(), theme.danger),
     };
     lines.extend(wrapped_row(
+        theme,
         "Invitation",
         &text,
         Style::new().fg(color),
         width,
     ));
     if let Some(error) = error {
-        lines.extend(paragraph(error, Style::new().fg(RED), width));
+        lines.extend(paragraph(
+            theme,
+            error,
+            Style::new().fg(theme.danger),
+            width,
+        ));
     }
 }
 
-fn confirm_setup_lines(body: &mut Body, server: &str, preview: &SetupPreview, width: usize) {
+fn confirm_setup_lines(
+    theme: &Theme,
+    body: &mut Body,
+    server: &str,
+    preview: &SetupPreview,
+    width: usize,
+) {
     let lines = &mut body.lines;
-    lines.extend(wrapped_row("Server", server, Style::new().fg(FG), width));
+    lines.extend(wrapped_row(
+        theme,
+        "Server",
+        server,
+        Style::new().fg(theme.fg),
+        width,
+    ));
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "Use this computer's data:",
-        Style::new().fg(FG),
+        Style::new().fg(theme.fg),
     )));
     lines.extend(indented(
+        theme,
         &plural(preview.workspaces as u64, "workspace"),
-        Style::new().fg(FG_MUTED),
+        Style::new().fg(theme.fg_muted),
         width,
     ));
     lines.extend(indented(
+        theme,
         &format!(
             "{} tasks (including scheduled and recurring)",
             preview.tasks.max(0)
         ),
-        Style::new().fg(FG_MUTED),
+        Style::new().fg(theme.fg_muted),
         width,
     ));
     if preview.missing_images > 0 {
         lines.extend(indented(
+            theme,
             &format!(
                 "{} missing on this computer; other devices will see {} as unavailable.",
                 plural(preview.missing_images, "image"),
@@ -1089,55 +1239,66 @@ fn confirm_setup_lines(body: &mut Body, server: &str, preview: &SetupPreview, wi
                     "them"
                 }
             ),
-            Style::new().fg(ORANGE),
+            Style::new().fg(theme.warning),
             width,
         ));
     }
     lines.push(Line::from(""));
     lines.extend(paragraph(
+        theme,
         "Other devices will receive this data when they join.",
-        Style::new().fg(FG_MUTED),
+        Style::new().fg(theme.fg_muted),
         width,
     ));
     if preview.leaves_unencrypted_server {
         lines.extend(paragraph(
+            theme,
             "This database stops using its previous unencrypted sync server.",
-            Style::new().fg(FG_MUTED),
+            Style::new().fg(theme.fg_muted),
             width,
         ));
     }
 }
 
-fn confirm_join_lines(body: &mut Body, server: &str, replace: bool, width: usize) {
+fn confirm_join_lines(theme: &Theme, body: &mut Body, server: &str, replace: bool, width: usize) {
     let lines = &mut body.lines;
-    lines.extend(wrapped_row("Server", server, Style::new().fg(FG), width));
+    lines.extend(wrapped_row(
+        theme,
+        "Server",
+        server,
+        Style::new().fg(theme.fg),
+        width,
+    ));
     lines.push(Line::from(""));
     if replace {
         lines.extend(paragraph(
+            theme,
             "This device keeps its identity. The earlier invitation is kept too, so if \
              the other device already added this device with it, joining finishes with \
              that.",
-            Style::new().fg(FG_MUTED),
+            Style::new().fg(theme.fg_muted),
             width,
         ));
         lines.push(Line::from(""));
     }
     lines.extend(paragraph(
+        theme,
         "This computer will download the synced tasks, then their images. Keep Add \
          device or `aven sync invite` open on the other device until joining finishes.",
-        Style::new().fg(FG_MUTED),
+        Style::new().fg(theme.fg_muted),
         width,
     ));
 }
 
 fn confirm_automatic_sync_lines(
+    theme: &Theme,
     body: &mut Body,
     service: &AutomaticSyncService,
     interval_seconds: u64,
     width: usize,
 ) {
     let lines = &mut body.lines;
-    let muted = Style::new().fg(FG_MUTED);
+    let muted = Style::new().fg(theme.fg_muted);
     match service {
         AutomaticSyncService::Install => {
             let service_kind = if cfg!(target_os = "linux") {
@@ -1146,16 +1307,18 @@ fn confirm_automatic_sync_lines(
                 "a LaunchAgent in ~/Library/LaunchAgents"
             };
             lines.extend(paragraph(
+                theme,
                 &format!(
                     "This turns on sync.enabled in your config and installs {service_kind}. \
                      It starts when you log in and syncs this database after each change \
                      and every {interval_seconds} seconds."
                 ),
-                Style::new().fg(FG),
+                Style::new().fg(theme.fg),
                 width,
             ));
             lines.push(Line::from(""));
             lines.extend(paragraph(
+                theme,
                 "To undo it, run `aven daemon uninstall` and \
                  `aven config set sync.enabled false`.",
                 muted,
@@ -1164,14 +1327,16 @@ fn confirm_automatic_sync_lines(
         }
         AutomaticSyncService::OtherDatabase(path) => {
             lines.extend(paragraph(
+                theme,
                 "This turns on sync.enabled in your config. It installs nothing, because \
                  the background service syncs your default database and this is another \
                  one.",
-                Style::new().fg(FG),
+                Style::new().fg(theme.fg),
                 width,
             ));
             lines.push(Line::from(""));
             lines.extend(paragraph(
+                theme,
                 &format!(
                     "To sync this database in the background instead, run `{}`.",
                     crate::tui::overlay::daemon_install_command(path)
@@ -1182,13 +1347,15 @@ fn confirm_automatic_sync_lines(
         }
         AutomaticSyncService::Unsupported => {
             lines.extend(paragraph(
+                theme,
                 "This turns on sync.enabled in your config. It installs nothing, because \
                  background services aren't supported on this platform.",
-                Style::new().fg(FG),
+                Style::new().fg(theme.fg),
                 width,
             ));
             lines.push(Line::from(""));
             lines.extend(paragraph(
+                theme,
                 "Keep `aven daemon` running to sync in the background.",
                 muted,
                 width,
@@ -1205,7 +1372,13 @@ fn plural(count: u64, noun: &str) -> String {
     }
 }
 
-fn push_buttons(body: &mut Body, actions: &[SyncAction], selected: usize, width: usize) {
+fn push_buttons(
+    theme: &Theme,
+    body: &mut Body,
+    actions: &[SyncAction],
+    selected: usize,
+    width: usize,
+) {
     let labels = actions
         .iter()
         .map(|action| format!(" {} ", action.label()))
@@ -1227,6 +1400,7 @@ fn push_buttons(body: &mut Body, actions: &[SyncAction], selected: usize, width:
             end,
         });
         spans.push(button_span(
+            theme,
             label,
             index == selected,
             index + 1 == actions.len(),
@@ -1236,14 +1410,18 @@ fn push_buttons(body: &mut Body, actions: &[SyncAction], selected: usize, width:
     body.lines.push(Line::from(spans));
 }
 
-fn button_span(label: String, focused: bool, primary: bool) -> Span<'static> {
-    let fill = if focused { ACCENT } else { BG_PANEL };
-    let foreground = if focused {
-        INVERSE_FG
-    } else if primary {
-        ACCENT
+fn button_span(theme: &Theme, label: String, focused: bool, primary: bool) -> Span<'static> {
+    let fill = if focused {
+        theme.accent
     } else {
-        FG_MUTED
+        theme.bg_panel
+    };
+    let foreground = if focused {
+        theme.inverse_fg
+    } else if primary {
+        theme.accent
+    } else {
+        theme.fg_muted
     };
     let mut style = Style::new().fg(foreground).bg(fill);
     if focused {
@@ -1252,23 +1430,30 @@ fn button_span(label: String, focused: bool, primary: bool) -> Span<'static> {
     Span::styled(label, style)
 }
 
-fn paragraph(text: &str, style: Style, width: usize) -> Vec<Line<'static>> {
-    wrap_with_code(&crate::tui::theme::Theme::dark(), text, style, width)
+fn paragraph(theme: &Theme, text: &str, style: Style, width: usize) -> Vec<Line<'static>> {
+    wrap_with_code(theme, text, style, width)
 }
 
 /// A list item: every wrapped line keeps the same two-cell indent.
-fn indented(text: &str, style: Style, width: usize) -> Vec<Line<'static>> {
-    let mut lines = paragraph(text, style, width.saturating_sub(2));
+fn indented(theme: &Theme, text: &str, style: Style, width: usize) -> Vec<Line<'static>> {
+    let mut lines = paragraph(theme, text, style, width.saturating_sub(2));
     for line in &mut lines {
         line.spans.insert(0, Span::raw("  "));
     }
     lines
 }
 
-fn paragraph_with_mark(mark: &str, color: Color, text: &str, width: usize) -> Vec<Line<'static>> {
+fn paragraph_with_mark(
+    theme: &Theme,
+    mark: &str,
+    color: Color,
+    text: &str,
+    width: usize,
+) -> Vec<Line<'static>> {
     let mut lines = paragraph(
+        theme,
         text,
-        Style::new().fg(FG).add_modifier(Modifier::BOLD),
+        Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
         width.saturating_sub(2),
     );
     for (index, line) in lines.iter_mut().enumerate() {
@@ -1282,11 +1467,14 @@ fn paragraph_with_mark(mark: &str, color: Color, text: &str, width: usize) -> Ve
     lines
 }
 
-fn action_line(label: &'static str, focused: bool) -> Line<'static> {
+fn action_line(theme: &Theme, label: &'static str, focused: bool) -> Line<'static> {
     if focused {
-        Line::from(Span::styled(format!("› {label}"), SELECTED))
+        Line::from(Span::styled(format!("› {label}"), theme.selected()))
     } else {
-        Line::from(Span::styled(format!("  {label}"), Style::new().fg(FG)))
+        Line::from(Span::styled(
+            format!("  {label}"),
+            Style::new().fg(theme.fg),
+        ))
     }
 }
 
@@ -1302,17 +1490,23 @@ fn state_line(status: &TuiSyncStatus, health: SyncHealth) -> Option<&'static str
     })
 }
 
-fn detail_lines(status: &TuiSyncStatus, width: usize) -> Vec<Line<'static>> {
+fn detail_lines(theme: &Theme, status: &TuiSyncStatus, width: usize) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
     if status.set_up && status.enabled {
         lines.extend(wrapped_row(
+            theme,
             "Interval",
             &format!("{} seconds", status.interval_seconds),
-            Style::new().fg(FG_MUTED),
+            Style::new().fg(theme.fg_muted),
             width,
         ));
-        let wake_style = Style::new().fg(if status.daemon_wake.ok { FG_MUTED } else { RED });
+        let wake_style = Style::new().fg(if status.daemon_wake.ok {
+            theme.fg_muted
+        } else {
+            theme.danger
+        });
         lines.extend(wrapped_row(
+            theme,
             "Wake address",
             &status.daemon_wake.value,
             wake_style,
@@ -1320,36 +1514,48 @@ fn detail_lines(status: &TuiSyncStatus, width: usize) -> Vec<Line<'static>> {
         ));
     }
     lines.extend(wrapped_row(
+        theme,
         "Sync cursor",
         status.sync_cursor.as_deref().unwrap_or("missing"),
-        Style::new().fg(FG_MUTED),
+        Style::new().fg(theme.fg_muted),
         width,
     ));
     lines.extend(wrapped_row(
+        theme,
         "Local sequence",
         status.local_sequence.as_deref().unwrap_or("missing"),
-        Style::new().fg(FG_MUTED),
+        Style::new().fg(theme.fg_muted),
         width,
     ));
     if let Some(at) = &status.access_refused_at {
         lines.extend(wrapped_row(
+            theme,
             "Access refused",
             at,
-            Style::new().fg(RED),
+            Style::new().fg(theme.danger),
             width,
         ));
     }
     lines
 }
 
-fn wrapped_row(label: &str, value: &str, style: Style, width: usize) -> Vec<Line<'static>> {
+fn wrapped_row(
+    theme: &Theme,
+    label: &str,
+    value: &str,
+    style: Style,
+    width: usize,
+) -> Vec<Line<'static>> {
     let value_width = width.saturating_sub(LABEL_WIDTH).max(1);
-    let mut lines = wrap_with_code(&crate::tui::theme::Theme::dark(), value, style, value_width);
+    let mut lines = wrap_with_code(theme, value, style, value_width);
     for (index, line) in lines.iter_mut().enumerate() {
         let label = if index == 0 { label } else { "" };
         line.spans.insert(
             0,
-            Span::styled(format!("{label:<LABEL_WIDTH$}"), Style::new().fg(FG_DIM)),
+            Span::styled(
+                format!("{label:<LABEL_WIDTH$}"),
+                Style::new().fg(theme.fg_dim),
+            ),
         );
     }
     lines
@@ -1439,7 +1645,7 @@ fn dialog_width(frame_width: u16) -> u16 {
 pub(in crate::tui::ui) fn sync_dialog_lines_for_test(
     view: &SyncDialogView<'_>,
 ) -> Vec<Line<'static>> {
-    body(view, 60).lines
+    body(&Theme::dark(), view, 60).lines
 }
 
 #[cfg(test)]
@@ -1447,5 +1653,5 @@ pub(in crate::tui::ui) fn sync_dialog_lines_for_test_width(
     view: &SyncDialogView<'_>,
     width: usize,
 ) -> Vec<Line<'static>> {
-    body(view, width).lines
+    body(&Theme::dark(), view, width).lines
 }

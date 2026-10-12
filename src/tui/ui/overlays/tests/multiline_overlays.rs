@@ -1,4 +1,5 @@
 use super::*;
+use crate::tui::theme::Theme;
 use crate::tui::ui::overlays::multiline::description_visual_row_count;
 
 #[test]
@@ -19,15 +20,15 @@ fn overlay_render_includes_multiline_submit_hints() {
 
 #[test]
 fn edit_description_empty_input_shows_placeholder() {
-    let line = description_input_line("", 0, true);
+    let line = description_input_line(&Theme::dark(), "", 0, true);
     assert_eq!(line.spans[0].content.as_ref(), "E");
-    assert_eq!(line.spans[0].style.fg, Some(BG_ALT));
-    assert_eq!(line.spans[0].style.bg, Some(FG));
+    assert_eq!(line.spans[0].style.fg, Some(Theme::dark().bg_raised));
+    assert_eq!(line.spans[0].style.bg, Some(Theme::dark().fg));
     assert_eq!(
         line.spans[1].content.as_ref(),
         "nter task description here..."
     );
-    assert_eq!(line.spans[1].style.fg, Some(FG_DIM));
+    assert_eq!(line.spans[1].style.fg, Some(Theme::dark().fg_dim));
 }
 
 #[test]
@@ -41,10 +42,10 @@ fn edit_description_blank_line_does_not_show_placeholder() {
         column: 0,
         mode: MultilineInputMode::Compose,
     };
-    let (lines, _) = description_editor_lines(&state, 80);
+    let (lines, _) = description_editor_lines(&Theme::dark(), &state, 80);
     assert!(!lines[1].to_string().contains("Enter task description here"));
     assert_eq!(lines[1].spans[1].content.as_ref(), " ");
-    assert_eq!(lines[1].spans[1].style.bg, Some(FG));
+    assert_eq!(lines[1].spans[1].style.bg, Some(Theme::dark().fg));
 }
 
 #[test]
@@ -108,7 +109,7 @@ fn edit_description_cursor_row_tracks_wrapped_segment() {
         column: 8,
         mode: MultilineInputMode::Compose,
     };
-    let (lines, cursor_row) = description_editor_lines(&state, 4);
+    let (lines, cursor_row) = description_editor_lines(&Theme::dark(), &state, 4);
     assert_eq!(lines.len(), 3);
     assert_eq!(cursor_row, 2);
 }
@@ -126,7 +127,7 @@ fn edit_description_wraps_end_caret_after_exact_width_line() {
             mode: MultilineInputMode::Compose,
         };
 
-        let (lines, cursor_row) = description_editor_lines(&state, 4);
+        let (lines, cursor_row) = description_editor_lines(&Theme::dark(), &state, 4);
 
         assert_eq!(lines.len(), 2, "{body}");
         assert_eq!(cursor_row, 1, "{body}");
@@ -154,12 +155,12 @@ fn overlay_render_omits_empty_multiline_prompt() {
 
 #[test]
 fn add_note_empty_input_shows_placeholder() {
-    let line = add_note_input_line("", Some(0), true);
+    let line = add_note_input_line(&Theme::dark(), "", Some(0), true);
     assert_eq!(line.spans[0].content.as_ref(), "E");
-    assert_eq!(line.spans[0].style.fg, Some(BG_ALT));
-    assert_eq!(line.spans[0].style.bg, Some(FG));
+    assert_eq!(line.spans[0].style.fg, Some(Theme::dark().bg_raised));
+    assert_eq!(line.spans[0].style.bg, Some(Theme::dark().fg));
     assert_eq!(line.spans[1].content.as_ref(), "nter note body here...");
-    assert_eq!(line.spans[1].style.fg, Some(FG_DIM));
+    assert_eq!(line.spans[1].style.fg, Some(Theme::dark().fg_dim));
 }
 
 #[test]
@@ -358,6 +359,7 @@ fn description_overlay_metrics(
         .draw(|frame| {
             render_multiline_input(
                 frame,
+                &Theme::dark(),
                 &MultilineInputView {
                     kind: MultilineInputKind::EditDescription,
                     title: "Edit description".to_string(),

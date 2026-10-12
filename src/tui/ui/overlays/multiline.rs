@@ -14,21 +14,27 @@ use crate::tui::overlay::{
 use crate::tui::text::{
     cell_width_ranges, char_boundary_at_or_before, segment_index_at, str_cells,
 };
-use crate::tui::theme::{FG, FG_DIM, FG_MUTED};
+use crate::tui::theme::Theme;
 
-pub(in crate::tui::ui) fn render_multiline_input(frame: &mut Frame, state: &MultilineInputView) {
+pub(in crate::tui::ui) fn render_multiline_input(
+    frame: &mut Frame,
+    theme: &Theme,
+    state: &MultilineInputView,
+) {
     if state.mode == MultilineInputMode::ConfirmDiscard {
         render_multiline_discard_confirmation(frame, state.kind);
         return;
     }
     match state.kind {
         MultilineInputKind::AddNote | MultilineInputKind::EditNote => {
-            render_add_note_input(frame, state)
+            render_add_note_input(frame, theme, state)
         }
-        MultilineInputKind::EditDescription => render_description_input(frame, state),
-        MultilineInputKind::AddTaskDescription => render_add_task_description_input(frame, state),
-        MultilineInputKind::AddTaskNatural => render_add_task_natural_input(frame, state),
-        MultilineInputKind::ConflictManual => render_conflict_manual_input(frame, state),
+        MultilineInputKind::EditDescription => render_description_input(frame, theme, state),
+        MultilineInputKind::AddTaskDescription => {
+            render_add_task_description_input(frame, theme, state)
+        }
+        MultilineInputKind::AddTaskNatural => render_add_task_natural_input(frame, theme, state),
+        MultilineInputKind::ConflictManual => render_conflict_manual_input(frame, theme, state),
     }
 }
 
@@ -65,7 +71,7 @@ fn render_multiline_discard_confirmation(frame: &mut Frame, kind: MultilineInput
     );
 }
 
-fn render_description_input(frame: &mut Frame, state: &MultilineInputView) {
+fn render_description_input(frame: &mut Frame, theme: &Theme, state: &MultilineInputView) {
     let frame_area = frame.area();
     let max_height = frame_area.height.saturating_mul(4).saturating_div(5);
     let width = description_editor_width(frame_area.width);
@@ -77,42 +83,45 @@ fn render_description_input(frame: &mut Frame, state: &MultilineInputView) {
     let content = dialog.render_block(frame);
     let editor_rows = content.height.saturating_sub(2).max(1) as usize;
     let line_width = content.width.max(1) as usize;
-    let (mut lines, cursor_row) = description_editor_lines(state, line_width);
+    let (mut lines, cursor_row) = description_editor_lines(theme, state, line_width);
     let start = viewport_start_for_cursor(cursor_row, editor_rows, lines.len(), true);
     lines = lines.into_iter().skip(start).take(editor_rows).collect();
     while lines.len() < editor_rows {
         lines.push(Line::from(""));
     }
     lines.push(Line::from(""));
-    lines.push(description_hint_line(state));
+    lines.push(description_hint_line(theme, state));
 
     frame.render_widget(
-        Paragraph::new(Text::from(lines)).style(Style::new().fg(FG).bg(crate::tui::theme::BG_ALT)),
+        Paragraph::new(Text::from(lines)).style(Style::new().fg(theme.fg).bg(theme.bg_raised)),
         content,
     );
 }
 
-fn render_add_task_description_input(frame: &mut Frame, state: &MultilineInputView) {
+fn render_add_task_description_input(frame: &mut Frame, theme: &Theme, state: &MultilineInputView) {
     render_add_task_free_text_input(
         frame,
+        theme,
         state,
         "Optional details, links, or handoff context...",
         add_task_description_hint_line(),
     );
 }
 
-fn render_add_task_natural_input(frame: &mut Frame, state: &MultilineInputView) {
+fn render_add_task_natural_input(frame: &mut Frame, theme: &Theme, state: &MultilineInputView) {
     render_add_task_free_text_input(
         frame,
+        theme,
         state,
         "Describe the task in natural language...",
         add_task_natural_hint_line(),
     );
 }
 
-fn render_conflict_manual_input(frame: &mut Frame, state: &MultilineInputView) {
+fn render_conflict_manual_input(frame: &mut Frame, theme: &Theme, state: &MultilineInputView) {
     render_add_task_free_text_input(
         frame,
+        theme,
         state,
         CONFLICT_MANUAL_BODY_PLACEHOLDER,
         multiline_hint_line(),
@@ -121,12 +130,14 @@ fn render_conflict_manual_input(frame: &mut Frame, state: &MultilineInputView) {
 
 fn render_add_task_free_text_input(
     frame: &mut Frame,
+    theme: &Theme,
     state: &MultilineInputView,
     placeholder: &'static str,
     hint_line: Line<'static>,
 ) {
-    render_tail_viewport_multiline(frame, state, 70, hint_line, |line, cursor| {
+    render_tail_viewport_multiline(frame, theme, state, 70, hint_line, |line, cursor| {
         add_task_free_text_input_line(
+            theme,
             line,
             cursor,
             line.is_empty() && state.lines.len() == 1,
@@ -177,6 +188,7 @@ fn editor_cell_width_ranges(
 }
 
 pub(in crate::tui::ui) fn description_editor_lines(
+    theme: &Theme,
     state: &MultilineInputView,
     line_width: usize,
 ) -> (Vec<Line<'static>>, usize) {
@@ -192,6 +204,7 @@ pub(in crate::tui::ui) fn description_editor_lines(
             for (range_index, (start, end)) in ranges.into_iter().enumerate() {
                 if range_index == cursor_segment {
                     lines.push(description_input_line(
+                        theme,
                         &line[start..end],
                         cursor - start,
                         show_placeholder,
@@ -210,6 +223,7 @@ pub(in crate::tui::ui) fn description_editor_lines(
 }
 
 pub(in crate::tui::ui) fn description_input_line(
+    theme: &Theme,
     line: &str,
     cursor: usize,
     show_placeholder: bool,
@@ -217,18 +231,23 @@ pub(in crate::tui::ui) fn description_input_line(
     if show_placeholder && line.is_empty() && cursor == 0 {
         return Line::from(vec![
             super::super::input::cursor_cell("E"),
-            Span::styled("nter task description here...", Style::new().fg(FG_DIM)),
+            Span::styled(
+                "nter task description here...",
+                Style::new().fg(theme.fg_dim),
+            ),
         ]);
     }
     input_line("", line, cursor)
 }
 
 pub(in crate::tui::ui) fn add_task_description_input_line(
+    theme: &Theme,
     line: &str,
     cursor: Option<usize>,
     show_placeholder: bool,
 ) -> Line<'static> {
     add_task_free_text_input_line(
+        theme,
         line,
         cursor,
         show_placeholder,
@@ -237,6 +256,7 @@ pub(in crate::tui::ui) fn add_task_description_input_line(
 }
 
 pub(in crate::tui::ui) fn add_task_free_text_input_line(
+    theme: &Theme,
     line: &str,
     cursor: Option<usize>,
     show_placeholder: bool,
@@ -246,10 +266,10 @@ pub(in crate::tui::ui) fn add_task_free_text_input_line(
         if cursor.is_some() {
             return Line::from(vec![
                 super::super::input::cursor_cell(&placeholder[..1]),
-                Span::styled(&placeholder[1..], Style::new().fg(FG_DIM)),
+                Span::styled(&placeholder[1..], Style::new().fg(theme.fg_dim)),
             ]);
         }
-        return Line::from(Span::styled(placeholder, Style::new().fg(FG_DIM)));
+        return Line::from(Span::styled(placeholder, Style::new().fg(theme.fg_dim)));
     }
     match cursor {
         Some(cursor) => Line::from(input_cursor_spans(line, cursor, InputWidth::Full)),
@@ -277,7 +297,11 @@ pub(in crate::tui::ui) fn add_task_natural_hint_line() -> Line<'static> {
     ])
 }
 
-pub(in crate::tui::ui) fn render_add_note_input(frame: &mut Frame, state: &MultilineInputView) {
+pub(in crate::tui::ui) fn render_add_note_input(
+    frame: &mut Frame,
+    theme: &Theme,
+    state: &MultilineInputView,
+) {
     let show_placeholder = state.lines.len() == 1 && state.lines[0].is_empty();
     let hint_line = if state.kind == MultilineInputKind::EditNote {
         dialog_hint_line(&[
@@ -293,13 +317,14 @@ pub(in crate::tui::ui) fn render_add_note_input(frame: &mut Frame, state: &Multi
     } else {
         60
     };
-    render_tail_viewport_multiline(frame, state, width, hint_line, |line, cursor| {
-        add_note_input_line(line, cursor, show_placeholder)
+    render_tail_viewport_multiline(frame, theme, state, width, hint_line, |line, cursor| {
+        add_note_input_line(theme, line, cursor, show_placeholder)
     });
 }
 
 fn render_tail_viewport_multiline(
     frame: &mut Frame,
+    theme: &Theme,
     state: &MultilineInputView,
     width: u16,
     hint_line: Line<'static>,
@@ -348,7 +373,7 @@ fn render_tail_viewport_multiline(
         viewport_start_for_cursor(cursor_row, editor.height.max(1) as usize, visual_rows, true);
     frame.render_widget(
         Paragraph::new(Text::from(lines))
-            .style(Style::new().fg(FG).bg(crate::tui::theme::BG_ALT))
+            .style(Style::new().fg(theme.fg).bg(theme.bg_raised))
             .scroll((scroll as u16, 0)),
         editor,
     );
@@ -356,6 +381,7 @@ fn render_tail_viewport_multiline(
 }
 
 pub(in crate::tui::ui) fn add_note_input_line(
+    theme: &Theme,
     line: &str,
     cursor: Option<usize>,
     show_placeholder: bool,
@@ -363,7 +389,7 @@ pub(in crate::tui::ui) fn add_note_input_line(
     if show_placeholder && line.is_empty() && cursor.is_some() {
         return Line::from(vec![
             super::super::input::cursor_cell("E"),
-            Span::styled("nter note body here...", Style::new().fg(FG_DIM)),
+            Span::styled("nter note body here...", Style::new().fg(theme.fg_dim)),
         ]);
     }
     match cursor {
@@ -376,7 +402,10 @@ pub(in crate::tui::ui) fn multiline_hint_line() -> Line<'static> {
     dialog_hint_line(&[("Ctrl-Enter / ^S", "submit"), ("Esc", "cancel")])
 }
 
-pub(in crate::tui::ui) fn description_hint_line(state: &MultilineInputView) -> Line<'static> {
+pub(in crate::tui::ui) fn description_hint_line(
+    theme: &Theme,
+    state: &MultilineInputView,
+) -> Line<'static> {
     let position = format!(
         "  line {}/{}",
         state.row.saturating_add(1),
@@ -388,6 +417,6 @@ pub(in crate::tui::ui) fn description_hint_line(state: &MultilineInputView) -> L
         ("Esc", "cancel"),
     ]);
     line.spans
-        .push(Span::styled(position, Style::new().fg(FG_MUTED)));
+        .push(Span::styled(position, Style::new().fg(theme.fg_muted)));
     line
 }
