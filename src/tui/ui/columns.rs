@@ -12,10 +12,7 @@ use crate::tui::overlay::TextInputView;
 use crate::tui::store::TuiStore;
 use crate::tui::text::str_cells;
 use crate::tui::text::truncate_width;
-use crate::tui::theme::{
-    self, ACCENT, BG, BG_ALT, BG_LANE, BG_LANE_ACTIVE, BG_PANEL, BORDER, FG, FG_DIM, FG_MUTED,
-    LANE_DIVIDER, ORANGE, RED, SELECTED_BG, YELLOW,
-};
+use crate::tui::theme::Theme;
 use crate::tui::widgets::priority_short;
 use unicode_width::UnicodeWidthStr;
 
@@ -199,6 +196,7 @@ pub(super) struct ColumnInteraction<'a> {
 
 pub(super) fn render_columns(
     frame: &mut Frame,
+    theme: &Theme,
     store: &TuiStore,
     table_state: &mut TableState,
     focus: Focus,
@@ -206,7 +204,7 @@ pub(super) fn render_columns(
     inline_title_editor: Option<&TextInputView>,
     interaction: ColumnInteraction<'_>,
 ) {
-    frame.render_widget(Block::new().style(Style::new().bg(BG)), area);
+    frame.render_widget(Block::new().style(Style::new().bg(theme.bg)), area);
     let board = store.column_board();
     let board_has_tasks = board
         .columns
@@ -233,21 +231,25 @@ pub(super) fn render_columns(
         } else {
             active
         };
-        let lane_bg = if emphasized { BG_LANE_ACTIVE } else { BG_LANE };
+        let lane_bg = if emphasized {
+            theme.bg_lane_active
+        } else {
+            theme.bg_lane
+        };
         frame.render_widget(Block::new().style(Style::new().bg(lane_bg)), lane.area);
         if index + 1 < board.columns.len() {
             frame.render_widget(
                 Block::new()
                     .borders(Borders::RIGHT)
-                    .border_style(Style::new().fg(BORDER)),
+                    .border_style(Style::new().fg(theme.border)),
                 lane.area,
             );
         }
         let header = Rect::new(lane.area.x, lane.area.y, lane.area.width, HEADER_HEIGHT);
-        render_lane_header(frame, column, lane, emphasized, header);
+        render_lane_header(frame, theme, column, lane, emphasized, header);
         if board_has_tasks && column.task_indices.is_empty() {
             frame.render_widget(
-                Paragraph::new("(empty)").style(Style::new().fg(FG_DIM).bg(lane_bg)),
+                Paragraph::new("(empty)").style(Style::new().fg(theme.fg_dim).bg(lane_bg)),
                 lane.cards,
             );
         }
@@ -264,12 +266,12 @@ pub(super) fn render_columns(
             let selected = table_state.selected() == Some(*task_index);
             let card_bg = if selected {
                 if focus == Focus::Tasks {
-                    SELECTED_BG
+                    theme.bg_selected
                 } else {
-                    BG_PANEL
+                    theme.bg_panel
                 }
             } else {
-                BG_ALT
+                theme.bg_raised
             };
             let mut style = task_card_style(item, selected, card_bg);
             if interaction
@@ -293,7 +295,7 @@ pub(super) fn render_columns(
                         Line::from(""),
                     ]
                 })
-                .unwrap_or_else(|| card_title_lines(&item.task.title, width));
+                .unwrap_or_else(|| card_title_lines(theme, &item.task.title, width));
             let label = item.labels.first().map(String::as_str).unwrap_or("");
             let more = item.labels.len().saturating_sub(1);
             let labels = if more > 0 {
@@ -301,21 +303,22 @@ pub(super) fn render_columns(
             } else {
                 label.to_string()
             };
-            let mut marker_spans = terminal_status_spans(item, compact_status);
+            let mut marker_spans = terminal_status_spans(theme, item, compact_status);
             marker_spans.extend(card_marker_spans(
+                theme,
                 item,
                 interaction.marked_task_ids.contains(&item.task.id),
             ));
-            let mut text = vec![card_heading_line(item, &[], width)];
+            let mut text = vec![card_heading_line(theme, item, &[], width)];
             text.extend(title_lines);
-            text.push(card_metadata_line(&labels, &marker_spans, width));
+            text.push(card_metadata_line(theme, &labels, &marker_spans, width));
             frame.render_widget(Block::new().style(style), card);
             if selected {
                 let rail = Rect::new(card.x, card.y, 1, card.height);
                 let rail_color = if focus == Focus::Tasks {
-                    ACCENT
+                    theme.accent
                 } else {
-                    BORDER
+                    theme.border
                 };
                 frame.render_widget(
                     Paragraph::new(vec![Line::from("▌"); card.height as usize])
@@ -332,6 +335,7 @@ pub(super) fn render_columns(
             frame.render_widget(Paragraph::new(text).style(style), content);
             render_card_separator(
                 frame,
+                theme,
                 card,
                 lane_bg,
                 lane.start + visible_row + 1 == column.task_indices.len(),
@@ -346,15 +350,10 @@ pub(super) fn render_columns(
             layout.board.height.saturating_sub(HEADER_HEIGHT),
         );
         let state = super::empty_state::column_board_empty_state(store);
-        super::empty_state::render_empty_state(
-            frame,
-            &crate::tui::theme::Theme::dark(),
-            body,
-            state,
-        );
+        super::empty_state::render_empty_state(frame, theme, body, state);
     }
     if layout.preview.height > 0 {
-        render_task_preview(frame, store, table_state.selected(), layout.preview);
+        render_task_preview(frame, theme, store, table_state.selected(), layout.preview);
     }
     if let Some(drag) = interaction.drag.filter(|drag| drag.is_active())
         && let Some(item) = store.tasks.iter().find(|item| item.task.id == drag.task_id)
@@ -363,7 +362,14 @@ pub(super) fn render_columns(
             .lanes
             .get(drag.origin_lane)
             .map_or(24, |lane| lane.area.width.saturating_sub(1));
-        render_drag_card(frame, item, layout.board, drag.pointer, preferred_width);
+        render_drag_card(
+            frame,
+            theme,
+            item,
+            layout.board,
+            drag.pointer,
+            preferred_width,
+        );
     }
 }
 
@@ -382,6 +388,7 @@ fn drag_card_area(board: Rect, pointer: (u16, u16), preferred_width: u16) -> Opt
 
 fn render_drag_card(
     frame: &mut Frame,
+    theme: &Theme,
     item: &crate::query::TaskListItem,
     board: Rect,
     pointer: (u16, u16),
@@ -398,16 +405,16 @@ fn render_drag_card(
     } else {
         label.to_string()
     };
-    let markers = card_marker_spans(item, false);
-    let mut text = vec![card_heading_line(item, &[], width)];
-    text.extend(card_title_lines(&item.task.title, width));
-    text.push(card_metadata_line(&labels, &markers, width));
-    let style = Style::new().fg(FG).bg(SELECTED_BG);
+    let markers = card_marker_spans(theme, item, false);
+    let mut text = vec![card_heading_line(theme, item, &[], width)];
+    text.extend(card_title_lines(theme, &item.task.title, width));
+    text.push(card_metadata_line(theme, &labels, &markers, width));
+    let style = Style::new().fg(theme.fg).bg(theme.bg_selected);
     frame.render_widget(Clear, area);
     frame.render_widget(Block::new().style(style), area);
     frame.render_widget(
         Paragraph::new(vec![Line::from("▌"); area.height as usize])
-            .style(Style::new().fg(ACCENT).bg(SELECTED_BG)),
+            .style(Style::new().fg(theme.accent).bg(theme.bg_selected)),
         Rect::new(area.x, area.y, 1, area.height),
     );
     frame.render_widget(
@@ -423,6 +430,7 @@ fn render_drag_card(
 
 fn render_card_separator(
     frame: &mut Frame,
+    theme: &Theme,
     card: Rect,
     lane_bg: ratatui::style::Color,
     lane_end: bool,
@@ -442,13 +450,15 @@ fn render_card_separator(
     };
     let area = Rect::new(x, card.y.saturating_add(card.height), width, 1);
     frame.render_widget(
-        Paragraph::new("─".repeat(width as usize)).style(Style::new().fg(LANE_DIVIDER).bg(lane_bg)),
+        Paragraph::new("─".repeat(width as usize))
+            .style(Style::new().fg(theme.lane_divider).bg(lane_bg)),
         area,
     );
 }
 
 fn render_lane_header(
     frame: &mut Frame,
+    theme: &Theme,
     column: &crate::tui::columns::TaskColumn,
     lane: &LaneLayout,
     active: bool,
@@ -475,27 +485,27 @@ fn render_lane_header(
     let gap = " "
         .repeat(inner_width.saturating_sub(UnicodeWidthStr::width(name.as_str()) + status_width));
     let name_style = Style::new()
-        .fg(if active { ACCENT } else { FG_MUTED })
-        .bg(BG_ALT)
+        .fg(if active { theme.accent } else { theme.fg_muted })
+        .bg(theme.bg_raised)
         .add_modifier(Modifier::BOLD);
     frame.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(name, name_style),
-            Span::styled(gap, Style::new().bg(BG_ALT)),
-            Span::styled(status, Style::new().fg(FG_DIM).bg(BG_ALT)),
+            Span::styled(gap, Style::new().bg(theme.bg_raised)),
+            Span::styled(status, Style::new().fg(theme.fg_dim).bg(theme.bg_raised)),
         ]))
         .block(
             Block::new()
                 .borders(Borders::BOTTOM)
-                .border_style(Style::new().fg(if active { ACCENT } else { BORDER }))
+                .border_style(Style::new().fg(if active { theme.accent } else { theme.border }))
                 .padding(Padding::horizontal(2)),
         )
-        .style(Style::new().bg(BG_ALT)),
+        .style(Style::new().bg(theme.bg_raised)),
         area,
     );
 }
 
-fn card_title_lines(title: &str, max_width: usize) -> Vec<Line<'static>> {
+fn card_title_lines(theme: &Theme, title: &str, max_width: usize) -> Vec<Line<'static>> {
     let mut words = title.split_whitespace().peekable();
     let mut lines = [String::new(), String::new()];
     for line in &mut lines {
@@ -521,11 +531,12 @@ fn card_title_lines(title: &str, max_width: usize) -> Vec<Line<'static>> {
     }
     lines
         .into_iter()
-        .map(|line| Line::from(Span::styled(line, Style::new().fg(FG))))
+        .map(|line| Line::from(Span::styled(line, Style::new().fg(theme.fg))))
         .collect()
 }
 
 fn card_heading_line(
+    theme: &Theme,
     item: &crate::query::TaskListItem,
     markers: &[Span<'static>],
     max_width: usize,
@@ -547,19 +558,21 @@ fn card_heading_line(
         vec![
             Span::styled(
                 project.to_string(),
-                Style::new().fg(theme::project_color(&item.task.project_key)),
+                Style::new().fg(theme.project(&item.task.project_key)),
             ),
-            Span::styled("-", Style::new().fg(FG_DIM)),
-            Span::styled(suffix.to_string(), Style::new().fg(FG_MUTED)),
+            Span::styled("-", Style::new().fg(theme.fg_dim)),
+            Span::styled(suffix.to_string(), Style::new().fg(theme.fg_muted)),
         ]
     } else {
-        vec![Span::styled(display_ref, Style::new().fg(FG_MUTED))]
+        vec![Span::styled(display_ref, Style::new().fg(theme.fg_muted))]
     };
     spans.push(Span::raw(" ".repeat(max_width.saturating_sub(used_width))));
     if !priority.is_empty() {
         spans.push(Span::styled(
             priority,
-            theme::priority_style(item.task.priority.as_str()).add_modifier(Modifier::BOLD),
+            theme
+                .priority(item.task.priority.as_str())
+                .add_modifier(Modifier::BOLD),
         ));
     }
     spans.extend(markers.iter().cloned());
@@ -567,6 +580,7 @@ fn card_heading_line(
 }
 
 fn terminal_status_spans(
+    theme: &Theme,
     item: &crate::query::TaskListItem,
     compact_status: bool,
 ) -> Vec<Span<'static>> {
@@ -580,25 +594,26 @@ fn terminal_status_spans(
     };
     vec![
         Span::raw(" "),
-        Span::styled(
-            label,
-            theme::status_style(status).add_modifier(Modifier::BOLD),
-        ),
+        Span::styled(label, theme.status(status).add_modifier(Modifier::BOLD)),
     ]
 }
 
-fn card_marker_spans(item: &crate::query::TaskListItem, marked: bool) -> Vec<Span<'static>> {
+fn card_marker_spans(
+    theme: &Theme,
+    item: &crate::query::TaskListItem,
+    marked: bool,
+) -> Vec<Span<'static>> {
     let mut spans = Vec::new();
     if marked {
-        spans.push(Span::styled(" ●", Style::new().fg(ACCENT)));
+        spans.push(Span::styled(" ●", Style::new().fg(theme.accent)));
     }
     if item.has_conflict {
-        spans.push(Span::styled(" ⚡", Style::new().fg(RED)));
+        spans.push(Span::styled(" ⚡", Style::new().fg(theme.danger)));
     }
     if item.unresolved_blocker_count > 0 {
         spans.push(Span::styled(
             format!(" ←{}", item.unresolved_blocker_count),
-            Style::new().fg(ORANGE),
+            Style::new().fg(theme.warning),
         ));
     }
     if item.task.status.is_open()
@@ -610,26 +625,31 @@ fn card_marker_spans(item: &crate::query::TaskListItem, marked: bool) -> Vec<Spa
     {
         spans.push(Span::styled(
             " !",
-            Style::new().fg(RED).add_modifier(Modifier::BOLD),
+            Style::new().fg(theme.danger).add_modifier(Modifier::BOLD),
         ));
     }
     if item.task.is_epic {
         spans.push(Span::styled(
             format!(" {EPIC_MARKER}"),
-            Style::new().fg(YELLOW),
+            Style::new().fg(theme.attention),
         ));
     }
     spans
 }
 
-fn card_metadata_line(labels: &str, markers: &[Span<'static>], max_width: usize) -> Line<'static> {
+fn card_metadata_line(
+    theme: &Theme,
+    labels: &str,
+    markers: &[Span<'static>],
+    max_width: usize,
+) -> Line<'static> {
     let marker_width = markers
         .iter()
         .map(|span| UnicodeWidthStr::width(span.content.as_ref()))
         .sum::<usize>();
     let labels = truncate_width(labels, max_width.saturating_sub(marker_width));
     let labels_width = UnicodeWidthStr::width(labels.as_str());
-    let mut spans = vec![Span::styled(labels, Style::new().fg(FG_MUTED))];
+    let mut spans = vec![Span::styled(labels, Style::new().fg(theme.fg_muted))];
     spans.push(Span::raw(
         " ".repeat(max_width.saturating_sub(labels_width + marker_width)),
     ));
@@ -699,6 +719,8 @@ mod tests {
     use crate::choices::{TaskPriority, TaskStatus};
     use crate::query::TaskListItem;
 
+    const THEME: &Theme = &Theme::dark();
+
     fn item(index: usize) -> TaskListItem {
         TaskListItem {
             metadata: Vec::new(),
@@ -748,7 +770,7 @@ mod tests {
 
     #[test]
     fn marked_card_keeps_non_color_marker_for_focused_composition() {
-        let markers = card_marker_spans(&item(1), true);
+        let markers = card_marker_spans(THEME, &item(1), true);
 
         assert!(markers.iter().any(|span| span.content.contains('●')));
     }
@@ -786,11 +808,16 @@ mod tests {
 
     #[test]
     fn card_title_wraps_to_two_lines_and_truncates_overflow() {
-        let lines = card_title_lines("Support multiple watched directories in settings", 24);
+        let lines = card_title_lines(
+            THEME,
+            "Support multiple watched directories in settings",
+            24,
+        );
         assert_eq!(lines[0].to_string(), "Support multiple watched");
         assert_eq!(lines[1].to_string(), "directories in settings");
 
         let lines = card_title_lines(
+            THEME,
             "Support multiple watched directories in settings across every workspace",
             24,
         );
@@ -802,32 +829,32 @@ mod tests {
     fn card_heading_uses_table_ref_and_priority_colors() {
         let mut task = item(0);
         task.task.priority = TaskPriority::Urgent;
-        let line = card_heading_line(&task, &[], 30);
+        let line = card_heading_line(THEME, &task, &[], 30);
 
         assert_eq!(
             line.spans[0].style.fg,
-            Some(theme::project_color(&task.task.project_key))
+            Some(THEME.project(&task.task.project_key))
         );
-        assert_eq!(line.spans[1].style.fg, Some(FG_DIM));
-        assert_eq!(line.spans[2].style.fg, Some(FG_MUTED));
-        assert_eq!(line.spans[4].style.fg, theme::priority_style("urgent").fg);
+        assert_eq!(line.spans[1].style.fg, Some(THEME.fg_dim));
+        assert_eq!(line.spans[2].style.fg, Some(THEME.fg_muted));
+        assert_eq!(line.spans[4].style.fg, THEME.priority("urgent").fg);
     }
 
     #[test]
     fn terminal_cards_show_status_markers() {
         let mut task = item(0);
         task.task.status = TaskStatus::Done;
-        let done = terminal_status_spans(&task, false);
+        let done = terminal_status_spans(THEME, &task, false);
         assert_eq!(
             done.iter()
                 .map(|span| span.content.as_ref())
                 .collect::<String>(),
             " ✓ done"
         );
-        assert_eq!(done[1].style.fg, theme::status_style("done").fg);
+        assert_eq!(done[1].style.fg, THEME.status("done").fg);
 
         task.task.status = TaskStatus::Canceled;
-        let canceled = terminal_status_spans(&task, false);
+        let canceled = terminal_status_spans(THEME, &task, false);
         assert_eq!(
             canceled
                 .iter()
@@ -835,20 +862,20 @@ mod tests {
                 .collect::<String>(),
             " × canceled"
         );
-        assert_eq!(canceled[1].style.fg, theme::status_style("canceled").fg);
+        assert_eq!(canceled[1].style.fg, THEME.status("canceled").fg);
     }
 
     #[test]
     fn compact_terminal_cards_show_icon_only_status_markers() {
         let mut task = item(0);
         task.task.status = TaskStatus::Done;
-        assert_eq!(terminal_status_spans(&task, true)[1].content, "✓");
+        assert_eq!(terminal_status_spans(THEME, &task, true)[1].content, "✓");
 
         task.task.status = TaskStatus::Canceled;
-        assert_eq!(terminal_status_spans(&task, true)[1].content, "×");
+        assert_eq!(terminal_status_spans(THEME, &task, true)[1].content, "×");
 
         task.task.status = TaskStatus::Active;
-        assert!(terminal_status_spans(&task, true).is_empty());
+        assert!(terminal_status_spans(THEME, &task, true).is_empty());
     }
 
     #[test]
@@ -856,10 +883,10 @@ mod tests {
         let mut task = item(0);
         task.unresolved_blocker_count = 1;
 
-        let blocked = task_card_style(&task, false, BG_ALT);
+        let blocked = task_card_style(&task, false, THEME.bg_raised);
         assert!(blocked.add_modifier.contains(Modifier::DIM));
         assert!(
-            !task_card_style(&task, true, SELECTED_BG)
+            !task_card_style(&task, true, THEME.bg_selected)
                 .add_modifier
                 .contains(Modifier::DIM)
         );
@@ -869,13 +896,17 @@ mod tests {
     fn overdue_cards_show_deadline_marker() {
         let mut task = item(0);
         task.task.due_on = Some("2000-01-01".to_string());
-        let markers = card_marker_spans(&task, false);
+        let markers = card_marker_spans(THEME, &task, false);
 
         assert!(markers.iter().any(|span| span.content == " !"));
-        assert!(markers.iter().any(|span| span.style.fg == Some(RED)));
+        assert!(
+            markers
+                .iter()
+                .any(|span| span.style.fg == Some(THEME.danger))
+        );
 
         task.task.status = TaskStatus::Done;
-        assert!(card_marker_spans(&task, false).is_empty());
+        assert!(card_marker_spans(THEME, &task, false).is_empty());
     }
 
     #[test]

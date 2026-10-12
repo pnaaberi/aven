@@ -17,6 +17,7 @@ use crate::tui::app::Focus;
 use crate::tui::list_surface::ListSurface;
 use crate::tui::overlay::TextInputView;
 use crate::tui::store::TuiStore;
+use crate::tui::theme::Theme;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 pub(super) const EPIC_MARKER: &str = "\u{f04ce}";
@@ -45,6 +46,7 @@ pub(super) fn task_list_page_rows(area: Rect, has_tasks: bool) -> usize {
 
 pub(super) fn render_tasks(
     frame: &mut Frame,
+    theme: &Theme,
     store: &TuiStore,
     list: &mut ListSurface,
     focus: Focus,
@@ -65,6 +67,7 @@ pub(super) fn render_tasks(
     let marked_task_ids = list.marked_task_ids().clone();
     render_task_list(
         frame,
+        theme,
         &TaskListSource::from_store(store),
         list.table_state_mut(),
         focus,
@@ -73,7 +76,7 @@ pub(super) fn render_tasks(
         &marked_task_ids,
     );
     if !store.tasks.is_empty() && preview_area.height > 0 {
-        render_task_preview(frame, store, list.selected_task(), preview_area);
+        render_task_preview(frame, theme, store, list.selected_task(), preview_area);
     }
 }
 

@@ -6,7 +6,7 @@ use crate::queue::{now_seconds, unix_seconds};
 use crate::tui::overlay::TextInputView;
 use crate::tui::store::TaskListRenderMode;
 use crate::tui::text::truncate_width;
-use crate::tui::theme::{self, ACCENT, FG, FG_DIM, FG_MUTED, RED, SELECTED_INACTIVE, YELLOW};
+use crate::tui::theme::Theme;
 use crate::tui::widgets::{
     age_style, label_cell, priority_icon, status_chip, status_icon_cell, title_cell,
 };
@@ -38,6 +38,7 @@ pub(super) struct TaskListCellLayout<'a> {
     pub(super) widths: &'a [usize; 9],
     pub(super) state_column: Option<TableColumn>,
     pub(super) compact_status: bool,
+    pub(super) theme: &'a Theme,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -80,6 +81,7 @@ pub(super) fn build_task_row_cells(
             widths: column_widths,
             state_column: Some(TableColumn::Ref),
             compact_status: false,
+            theme: &Theme::dark(),
         },
         state,
         epic_selection,
@@ -104,7 +106,9 @@ pub(super) fn build_task_row_cells_for_columns(
 ) -> Vec<Line<'static>> {
     let column_widths = cell_layout.widths;
     let state_column = cell_layout.state_column;
+    let theme = cell_layout.theme;
     let time = task_time_cell(
+        theme,
         item,
         time_context.now_seconds,
         time_context.render_mode,
@@ -113,6 +117,7 @@ pub(super) fn build_task_row_cells_for_columns(
     );
     let state_prefix_width = if state_column == Some(TableColumn::Title) {
         spans_width(&task_state_prefix(
+            theme,
             state.selected,
             state.focused,
             state.marked,
@@ -130,56 +135,59 @@ pub(super) fn build_task_row_cells_for_columns(
         .map(|column| {
             let cell = match column {
                 TableColumn::Ref if state_column == Some(TableColumn::Ref) => {
-                    task_ref_cell(item, column_widths[TableColumn::Ref as usize], state)
+                    task_ref_cell(theme, item, column_widths[TableColumn::Ref as usize], state)
                 }
                 TableColumn::Ref => {
-                    task_ref_content_cell(item, column_widths[TableColumn::Ref as usize])
+                    task_ref_content_cell(theme, item, column_widths[TableColumn::Ref as usize])
                 }
                 TableColumn::Title => title.clone(),
                 TableColumn::Labels => labels.clone(),
                 TableColumn::Metadata => metadata_cell(
+                    theme,
                     item,
                     epic_selection,
                     time_context.render_mode == TaskListRenderMode::Flat
                         && is_deferred(item, time_context.now_seconds),
                 ),
                 TableColumn::Project => {
-                    project_cell(item, column_widths[TableColumn::Project as usize])
+                    project_cell(theme, item, column_widths[TableColumn::Project as usize])
                 }
                 TableColumn::Status => {
                     status_cell(item.task.status.as_str(), cell_layout.compact_status)
                 }
                 TableColumn::Priority => Line::from(Span::styled(
                     priority_icon(item.task.priority.as_str()),
-                    theme::priority_style(item.task.priority.as_str()).add_modifier(Modifier::BOLD),
+                    theme
+                        .priority(item.task.priority.as_str())
+                        .add_modifier(Modifier::BOLD),
                 )),
                 TableColumn::Time => time.clone(),
-                TableColumn::Due => due_cell(item, time_context.now_seconds),
+                TableColumn::Due => due_cell(theme, item, time_context.now_seconds),
             };
-            state_prefixed_cell(column, state_column, cell, state)
+            state_prefixed_cell(theme, column, state_column, cell, state)
         })
         .collect()
 }
 
 /// The task's own deadline, independent of view, ordering, and the contextual time column.
-fn due_cell(item: &TaskListItem, now_seconds: i64) -> Line<'static> {
+fn due_cell(theme: &Theme, item: &TaskListItem, now_seconds: i64) -> Line<'static> {
     let due_on = item.task.due_on.as_deref().unwrap_or("");
     let Some(label) = crate::tui::time::compact_due_label(due_on, now_seconds) else {
         return Line::default();
     };
     let due_state = crate::tui::time::due_state_at(due_on, now_seconds);
-    Line::from(Span::styled(label, due_label_style(item, due_state)))
+    Line::from(Span::styled(label, due_label_style(theme, item, due_state)))
 }
 
-fn due_label_style(item: &TaskListItem, due_state: crate::due::DueState) -> Style {
+fn due_label_style(theme: &Theme, item: &TaskListItem, due_state: crate::due::DueState) -> Style {
     let color = if !item.task.status.is_open() {
-        FG_DIM
+        theme.fg_dim
     } else {
         match due_state {
-            crate::due::DueState::Overdue(_) => RED,
-            crate::due::DueState::Today => YELLOW,
-            crate::due::DueState::Future(_) => ACCENT,
-            crate::due::DueState::None => FG_DIM,
+            crate::due::DueState::Overdue(_) => theme.danger,
+            crate::due::DueState::Today => theme.attention,
+            crate::due::DueState::Future(_) => theme.accent,
+            crate::due::DueState::None => theme.fg_dim,
         }
     };
     Style::new().fg(color).add_modifier(Modifier::BOLD)
@@ -194,6 +202,7 @@ pub(super) fn is_deferred(item: &TaskListItem, now_seconds: i64) -> bool {
 }
 
 pub(super) fn task_time_cell(
+    theme: &Theme,
     item: &TaskListItem,
     now_seconds: i64,
     render_mode: TaskListRenderMode,
@@ -210,7 +219,7 @@ pub(super) fn task_time_cell(
             now_seconds,
         )
     {
-        return Line::from(Span::styled(label, due_label_style(item, due_state)));
+        return Line::from(Span::styled(label, due_label_style(theme, item, due_state)));
     }
     match render_mode {
         TaskListRenderMode::Upcoming => Line::from(Span::styled(
@@ -219,7 +228,7 @@ pub(super) fn task_time_cell(
                 now_seconds,
             )
             .unwrap_or_default(),
-            Style::new().fg(ACCENT),
+            Style::new().fg(theme.accent),
         )),
         TaskListRenderMode::Queue => {
             let style_input = if item.queue.band == crate::queue::QueueBand::Available {
@@ -241,7 +250,7 @@ pub(super) fn task_time_cell(
                 now_seconds,
             )
             .unwrap_or_default(),
-            Style::new().fg(ACCENT).add_modifier(Modifier::BOLD),
+            Style::new().fg(theme.accent).add_modifier(Modifier::BOLD),
         )),
         _ => Line::from(Span::styled(
             task_seconds_since(&item.task.created_at, now_seconds)
@@ -253,6 +262,7 @@ pub(super) fn task_time_cell(
 }
 
 pub(super) fn epic_summary_candidate(
+    theme: &Theme,
     rollup: &crate::query::EpicRollup,
     compact: bool,
     show_done_label: bool,
@@ -262,13 +272,13 @@ pub(super) fn epic_summary_candidate(
     if rollup.open == 0 {
         spans.push(Span::styled(
             if compact { "res" } else { "resolved" },
-            Style::new().fg(ACCENT),
+            Style::new().fg(theme.accent),
         ));
     } else if rollup.overdue > 0 || rollup.blocked > 0 {
         if rollup.overdue > 0 {
             spans.push(Span::styled(
                 format!("!{}", rollup.overdue),
-                Style::new().fg(RED),
+                Style::new().fg(theme.danger),
             ));
         }
         if rollup.blocked > 0 {
@@ -277,7 +287,7 @@ pub(super) fn epic_summary_candidate(
             }
             spans.push(Span::styled(
                 format!("←{}", rollup.blocked),
-                Style::new().fg(YELLOW),
+                Style::new().fg(theme.attention),
             ));
         }
     } else {
@@ -287,11 +297,15 @@ pub(super) fn epic_summary_candidate(
             } else {
                 format!("{} ready", rollup.ready)
             },
-            Style::new().fg(if rollup.ready == 0 { YELLOW } else { ACCENT }),
+            Style::new().fg(if rollup.ready == 0 {
+                theme.attention
+            } else {
+                theme.accent
+            }),
         ));
     }
 
-    spans.push(Span::styled(" · ", Style::new().fg(FG_DIM)));
+    spans.push(Span::styled(" · ", Style::new().fg(theme.fg_dim)));
     spans.push(Span::styled(
         if compact {
             format!("✓{}/{}", rollup.done, rollup.total)
@@ -300,45 +314,54 @@ pub(super) fn epic_summary_candidate(
         } else {
             format!("{}/{}", rollup.done, rollup.total)
         },
-        Style::new().fg(FG),
+        Style::new().fg(theme.fg),
     ));
     if show_canceled && rollup.canceled > 0 {
         spans.push(Span::styled(
             format!(" ×{}", rollup.canceled),
-            Style::new().fg(RED),
+            Style::new().fg(theme.danger),
         ));
     }
     Line::from(spans)
 }
 
 pub(super) fn epic_summary_cell(
+    theme: &Theme,
     rollup: &crate::query::EpicRollup,
     max_width: usize,
 ) -> Line<'static> {
     if rollup.total == 0 {
-        return Line::from(Span::styled("-", Style::new().fg(FG_MUTED)));
+        return Line::from(Span::styled("-", Style::new().fg(theme.fg_muted)));
     }
 
     let candidates = [
-        epic_summary_candidate(rollup, false, true, true),
-        epic_summary_candidate(rollup, true, false, true),
-        epic_summary_candidate(rollup, false, true, false),
-        epic_summary_candidate(rollup, true, false, false),
+        epic_summary_candidate(theme, rollup, false, true, true),
+        epic_summary_candidate(theme, rollup, true, false, true),
+        epic_summary_candidate(theme, rollup, false, true, false),
+        epic_summary_candidate(theme, rollup, true, false, false),
     ];
     candidates
         .into_iter()
         .find(|line| line.width() <= max_width)
-        .unwrap_or_else(|| epic_summary_candidate(rollup, true, false, false))
+        .unwrap_or_else(|| epic_summary_candidate(theme, rollup, true, false, false))
 }
 
 pub(super) fn epic_activity_cell(
+    theme: &Theme,
     item: &TaskListItem,
     now_seconds: i64,
     due_order: bool,
     show_due: bool,
 ) -> Line<'static> {
     if due_order && show_due {
-        return task_time_cell(item, now_seconds, TaskListRenderMode::Epics, true, true);
+        return task_time_cell(
+            theme,
+            item,
+            now_seconds,
+            TaskListRenderMode::Epics,
+            true,
+            true,
+        );
     }
     let activity_at = item
         .epic_rollup
@@ -364,8 +387,10 @@ pub(super) fn build_epic_parent_row_cells_for_columns(
 ) -> Vec<Line<'static>> {
     let column_widths = cell_layout.widths;
     let state_column = cell_layout.state_column;
+    let theme = cell_layout.theme;
     let state_prefix_width = if state_column == Some(TableColumn::Title) {
         spans_width(&task_state_prefix(
+            theme,
             state.selected,
             state.focused,
             state.marked,
@@ -379,12 +404,15 @@ pub(super) fn build_epic_parent_row_cells_for_columns(
         .unwrap_or_else(|| title_cell(item, title_width));
     let expanded = expanded_epic_ids.contains(&item.task.id);
     let mut ref_spans = if state_column == Some(TableColumn::Ref) {
-        task_state_prefix(state.selected, state.focused, state.marked)
+        task_state_prefix(theme, state.selected, state.focused, state.marked)
     } else {
         Vec::new()
     };
     ref_spans.extend([
-        Span::styled(if expanded { "▾" } else { "▸" }, Style::new().fg(ACCENT)),
+        Span::styled(
+            if expanded { "▾" } else { "▸" },
+            Style::new().fg(theme.accent),
+        ),
         Span::raw(" "),
     ]);
     let prefix_width = spans_width(&ref_spans);
@@ -392,11 +420,11 @@ pub(super) fn build_epic_parent_row_cells_for_columns(
         &item.display_ref,
         column_widths[TableColumn::Ref as usize].saturating_sub(prefix_width),
     );
-    ref_spans.extend(task_ref_spans(item, display_ref));
+    ref_spans.extend(task_ref_spans(theme, item, display_ref));
     let summary = item
         .epic_rollup
         .as_ref()
-        .map(|rollup| epic_summary_cell(rollup, column_widths[TableColumn::Labels as usize]))
+        .map(|rollup| epic_summary_cell(theme, rollup, column_widths[TableColumn::Labels as usize]))
         .unwrap_or_default();
     TableColumn::ALL
         .into_iter()
@@ -405,23 +433,25 @@ pub(super) fn build_epic_parent_row_cells_for_columns(
                 TableColumn::Ref => Line::from(ref_spans.clone()),
                 TableColumn::Title => title.clone(),
                 TableColumn::Labels => summary.clone(),
-                TableColumn::Metadata => metadata_cell(item, epic_selection, false),
+                TableColumn::Metadata => metadata_cell(theme, item, epic_selection, false),
                 TableColumn::Project => {
-                    project_cell(item, column_widths[TableColumn::Project as usize])
+                    project_cell(theme, item, column_widths[TableColumn::Project as usize])
                 }
                 TableColumn::Status => {
                     status_cell(item.task.status.as_str(), cell_layout.compact_status)
                 }
                 TableColumn::Priority => Line::from(Span::styled(
                     priority_icon(item.task.priority.as_str()),
-                    theme::priority_style(item.task.priority.as_str()).add_modifier(Modifier::BOLD),
+                    theme
+                        .priority(item.task.priority.as_str())
+                        .add_modifier(Modifier::BOLD),
                 )),
                 TableColumn::Time => {
-                    epic_activity_cell(item, time.now_seconds, time.due_order, time.show_due)
+                    epic_activity_cell(theme, item, time.now_seconds, time.due_order, time.show_due)
                 }
-                TableColumn::Due => due_cell(item, time.now_seconds),
+                TableColumn::Due => due_cell(theme, item, time.now_seconds),
             };
-            state_prefixed_cell(column, state_column, cell, state)
+            state_prefixed_cell(theme, column, state_column, cell, state)
         })
         .collect()
 }
@@ -445,6 +475,7 @@ pub(super) fn build_epic_child_row_cells(
             widths: column_widths,
             state_column: Some(TableColumn::Ref),
             compact_status: false,
+            theme: &Theme::dark(),
         },
         state,
         epic_selection,
@@ -462,8 +493,10 @@ pub(super) fn build_epic_child_row_cells_for_columns(
 ) -> Vec<Line<'static>> {
     let column_widths = cell_layout.widths;
     let state_column = cell_layout.state_column;
+    let theme = cell_layout.theme;
     let state_prefix_width = if state_column == Some(TableColumn::Title) {
         spans_width(&task_state_prefix(
+            theme,
             state.selected,
             state.focused,
             state.marked,
@@ -474,12 +507,12 @@ pub(super) fn build_epic_child_row_cells_for_columns(
     let title_width = column_widths[TableColumn::Title as usize].saturating_sub(state_prefix_width);
     let branch = if last { "└─" } else { "├─" };
     let mut ref_spans = if state_column == Some(TableColumn::Ref) {
-        task_state_prefix(state.selected, state.focused, state.marked)
+        task_state_prefix(theme, state.selected, state.focused, state.marked)
     } else {
         Vec::new()
     };
     ref_spans.extend([
-        Span::styled(branch, Style::new().fg(FG_DIM)),
+        Span::styled(branch, Style::new().fg(theme.fg_dim)),
         Span::raw(" "),
     ]);
     let prefix_width = spans_width(&ref_spans);
@@ -488,7 +521,7 @@ pub(super) fn build_epic_child_row_cells_for_columns(
         column_widths[TableColumn::Ref as usize].saturating_sub(prefix_width + 1),
     );
     ref_spans.extend([
-        Span::styled(display_ref, Style::new().fg(FG_MUTED)),
+        Span::styled(display_ref, Style::new().fg(theme.fg_muted)),
         Span::raw(" "),
     ]);
     let ref_line = Line::from(ref_spans);
@@ -501,20 +534,22 @@ pub(super) fn build_epic_child_row_cells_for_columns(
                     .map(|editor| inline_title_edit_cell(editor, title_width))
                     .unwrap_or_else(|| title_cell(item, title_width)),
                 TableColumn::Labels => Line::default(),
-                TableColumn::Metadata => metadata_cell(item, epic_selection, false),
+                TableColumn::Metadata => metadata_cell(theme, item, epic_selection, false),
                 TableColumn::Project => {
-                    project_cell(item, column_widths[TableColumn::Project as usize])
+                    project_cell(theme, item, column_widths[TableColumn::Project as usize])
                 }
                 TableColumn::Status => {
                     status_cell(item.task.status.as_str(), cell_layout.compact_status)
                 }
                 TableColumn::Priority => Line::from(Span::styled(
                     priority_icon(item.task.priority.as_str()),
-                    theme::priority_style(item.task.priority.as_str()).add_modifier(Modifier::BOLD),
+                    theme
+                        .priority(item.task.priority.as_str())
+                        .add_modifier(Modifier::BOLD),
                 )),
                 TableColumn::Time => {
                     if time.due_order && time.show_due {
-                        task_time_cell(item, time.now_seconds, time.render_mode, true, true)
+                        task_time_cell(theme, item, time.now_seconds, time.render_mode, true, true)
                     } else {
                         Line::from(Span::styled(
                             task_seconds_since(&item.task.updated_at, time.now_seconds)
@@ -524,9 +559,9 @@ pub(super) fn build_epic_child_row_cells_for_columns(
                         ))
                     }
                 }
-                TableColumn::Due => due_cell(item, time.now_seconds),
+                TableColumn::Due => due_cell(theme, item, time.now_seconds),
             };
-            state_prefixed_cell(column, state_column, cell, state)
+            state_prefixed_cell(theme, column, state_column, cell, state)
         })
         .collect()
 }
@@ -535,106 +570,145 @@ pub(super) fn blank_task_row_cells() -> Vec<Line<'static>> {
     TableColumn::ALL.map(|_| Line::from("")).to_vec()
 }
 
-pub(super) fn metadata_cell(
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MetadataMarker {
+    Deferred,
+    NeedsAction,
+    Epic { highlighted: bool },
+    EpicChild,
+    Deleted,
+    Blockers(i64),
+    Dependents(i64),
+    Notes,
+}
+
+impl MetadataMarker {
+    fn text(self) -> String {
+        match self {
+            Self::Deferred => DEFERRED_MARKER.to_string(),
+            Self::NeedsAction => "!".to_string(),
+            Self::Epic { .. } => EPIC_MARKER.to_string(),
+            Self::EpicChild => EPIC_CHILD_MARKER.to_string(),
+            Self::Deleted => "×".to_string(),
+            Self::Blockers(count) => format!("←{count}"),
+            Self::Dependents(count) => format!("→{count}"),
+            Self::Notes => "✎".to_string(),
+        }
+    }
+
+    fn style(self, theme: &Theme) -> Style {
+        match self {
+            Self::Deferred | Self::EpicChild | Self::Epic { highlighted: true } => Style::new()
+                .fg(theme.accent)
+                .remove_modifier(Modifier::BOLD),
+            Self::Epic { highlighted: false } => Style::new()
+                .fg(theme.attention)
+                .remove_modifier(Modifier::BOLD),
+            Self::NeedsAction | Self::Deleted => {
+                Style::new().fg(theme.danger).add_modifier(Modifier::BOLD)
+            }
+            Self::Blockers(_) | Self::Dependents(_) | Self::Notes => Style::new()
+                .fg(theme.fg_muted)
+                .remove_modifier(Modifier::BOLD),
+        }
+    }
+}
+
+fn metadata_markers(
     item: &TaskListItem,
     epic_selection: EpicSelectionContext<'_>,
     show_deferred: bool,
-) -> Line<'static> {
-    let mut spans = Vec::new();
+) -> Vec<MetadataMarker> {
+    let mut markers = Vec::new();
     if show_deferred {
-        spans.push(Span::styled(
-            DEFERRED_MARKER,
-            Style::new().fg(ACCENT).remove_modifier(Modifier::BOLD),
-        ));
+        markers.push(MetadataMarker::Deferred);
     }
     if item.task.status.is_open()
         && crate::tui::time::due_state_at(item.task.due_on.as_deref().unwrap_or(""), now_seconds())
             .needs_action()
     {
-        if !spans.is_empty() {
-            spans.push(Span::raw(" "));
-        }
-        spans.push(Span::styled(
-            "!",
-            Style::new().fg(RED).add_modifier(Modifier::BOLD),
-        ));
+        markers.push(MetadataMarker::NeedsAction);
     }
     let is_selected_epic_child = item
         .epic_parent
         .as_ref()
         .is_some_and(|parent| Some(parent.task_id.as_str()) == epic_selection.selected_epic_id);
     if item.task.is_epic {
-        if !spans.is_empty() {
-            spans.push(Span::raw(" "));
-        }
-        let highlighted = epic_selection.highlights_parent(item);
-        let style = Style::new()
-            .fg(if highlighted { ACCENT } else { YELLOW })
-            .remove_modifier(Modifier::BOLD);
-        spans.push(Span::styled(EPIC_MARKER, style));
+        markers.push(MetadataMarker::Epic {
+            highlighted: epic_selection.highlights_parent(item),
+        });
     } else if is_selected_epic_child {
-        if !spans.is_empty() {
-            spans.push(Span::raw(" "));
-        }
-        spans.push(Span::styled(
-            EPIC_CHILD_MARKER,
-            Style::new().fg(ACCENT).remove_modifier(Modifier::BOLD),
-        ));
+        markers.push(MetadataMarker::EpicChild);
     }
     if item.task.deleted {
-        if !spans.is_empty() {
-            spans.push(Span::raw(" "));
-        }
-        spans.push(Span::styled(
-            "×",
-            Style::new().fg(RED).add_modifier(Modifier::BOLD),
-        ));
+        markers.push(MetadataMarker::Deleted);
     }
     if item.unresolved_blocker_count > 0 {
-        if !spans.is_empty() {
-            spans.push(Span::raw(" "));
-        }
-        spans.push(Span::styled(
-            format!("←{}", item.unresolved_blocker_count),
-            Style::new().fg(FG_MUTED).remove_modifier(Modifier::BOLD),
-        ));
+        markers.push(MetadataMarker::Blockers(item.unresolved_blocker_count));
     }
     if item.dependent_count > 0 {
-        if !spans.is_empty() {
-            spans.push(Span::raw(" "));
-        }
-        spans.push(Span::styled(
-            format!("→{}", item.dependent_count),
-            Style::new().fg(FG_MUTED).remove_modifier(Modifier::BOLD),
-        ));
+        markers.push(MetadataMarker::Dependents(item.dependent_count));
     }
     if item.has_notes {
+        markers.push(MetadataMarker::Notes);
+    }
+    markers
+}
+
+pub(super) fn metadata_cell(
+    theme: &Theme,
+    item: &TaskListItem,
+    epic_selection: EpicSelectionContext<'_>,
+    show_deferred: bool,
+) -> Line<'static> {
+    let mut spans = Vec::new();
+    for marker in metadata_markers(item, epic_selection, show_deferred) {
         if !spans.is_empty() {
             spans.push(Span::raw(" "));
         }
-        spans.push(Span::styled(
-            "✎",
-            Style::new().fg(FG_MUTED).remove_modifier(Modifier::BOLD),
-        ));
+        spans.push(Span::styled(marker.text(), marker.style(theme)));
     }
     Line::from(spans)
+}
+
+/// Character count of `metadata_cell`, which does not depend on the theme.
+pub(super) fn metadata_char_count(
+    item: &TaskListItem,
+    epic_selection: EpicSelectionContext<'_>,
+    show_deferred: bool,
+) -> usize {
+    let markers = metadata_markers(item, epic_selection, show_deferred);
+    let separators = markers.len().saturating_sub(1);
+    markers
+        .into_iter()
+        .map(|marker| marker.text().chars().count())
+        .sum::<usize>()
+        + separators
 }
 
 pub(super) fn inline_title_edit_cell(editor: &TextInputView, max_width: usize) -> Line<'static> {
     clipped_input_line(&editor.input, editor.cursor, max_width.saturating_sub(1))
 }
 
-pub(super) fn task_state_prefix(selected: bool, focused: bool, marked: bool) -> Vec<Span<'static>> {
+pub(super) fn task_state_prefix(
+    theme: &Theme,
+    selected: bool,
+    focused: bool,
+    marked: bool,
+) -> Vec<Span<'static>> {
     let cursor_style = if !selected {
         Style::new()
     } else if focused {
-        Style::new().fg(ACCENT).add_modifier(Modifier::BOLD)
+        Style::new().fg(theme.accent).add_modifier(Modifier::BOLD)
     } else {
-        SELECTED_INACTIVE
+        theme.selected_inactive()
     };
     vec![
         Span::styled(if selected { TASK_CURSOR_GLYPH } else { " " }, cursor_style),
-        Span::styled(if marked { "●" } else { " " }, Style::new().fg(YELLOW)),
+        Span::styled(
+            if marked { "●" } else { " " },
+            Style::new().fg(theme.attention),
+        ),
         Span::raw(" "),
     ]
 }
@@ -646,41 +720,51 @@ pub(super) fn spans_width(spans: &[Span<'_>]) -> usize {
         .sum()
 }
 
-pub(super) fn task_ref_spans(item: &TaskListItem, display_ref: String) -> Vec<Span<'static>> {
+pub(super) fn task_ref_spans(
+    theme: &Theme,
+    item: &TaskListItem,
+    display_ref: String,
+) -> Vec<Span<'static>> {
     if let Some((project, suffix)) = display_ref.split_once('-') {
         vec![
             Span::styled(
                 project.to_string(),
-                Style::new().fg(theme::project_color(&item.task.project_key)),
+                Style::new().fg(theme.project(&item.task.project_key)),
             ),
-            Span::styled("-", Style::new().fg(FG_DIM)),
-            Span::styled(suffix.to_string(), Style::new().fg(FG_MUTED)),
+            Span::styled("-", Style::new().fg(theme.fg_dim)),
+            Span::styled(suffix.to_string(), Style::new().fg(theme.fg_muted)),
         ]
     } else {
-        vec![Span::styled(display_ref, Style::new().fg(FG_MUTED))]
+        vec![Span::styled(display_ref, Style::new().fg(theme.fg_muted))]
     }
 }
 
-pub(super) fn task_ref_content_cell(item: &TaskListItem, max_width: usize) -> Line<'static> {
+pub(super) fn task_ref_content_cell(
+    theme: &Theme,
+    item: &TaskListItem,
+    max_width: usize,
+) -> Line<'static> {
     let display_ref = truncate_width(&item.display_ref, max_width);
-    Line::from(task_ref_spans(item, display_ref))
+    Line::from(task_ref_spans(theme, item, display_ref))
 }
 
 pub(super) fn task_ref_cell(
+    theme: &Theme,
     item: &TaskListItem,
     max_width: usize,
     state: TaskRowState,
 ) -> Line<'static> {
-    let mut spans = task_state_prefix(state.selected, state.focused, state.marked);
+    let mut spans = task_state_prefix(theme, state.selected, state.focused, state.marked);
     let display_ref = truncate_width(
         &item.display_ref,
         max_width.saturating_sub(spans_width(&spans)),
     );
-    spans.extend(task_ref_spans(item, display_ref));
+    spans.extend(task_ref_spans(theme, item, display_ref));
     Line::from(spans)
 }
 
 pub(super) fn state_prefixed_cell(
+    theme: &Theme,
     column: TableColumn,
     state_column: Option<TableColumn>,
     cell: Line<'static>,
@@ -689,7 +773,7 @@ pub(super) fn state_prefixed_cell(
     if state_column != Some(column) || column == TableColumn::Ref {
         return cell;
     }
-    let mut spans = task_state_prefix(state.selected, state.focused, state.marked);
+    let mut spans = task_state_prefix(theme, state.selected, state.focused, state.marked);
     spans.extend(cell.spans);
     Line::from(spans)
 }
@@ -718,12 +802,12 @@ pub(super) fn compact_age(age_seconds: i64) -> String {
     format!("{}mo", days / 30)
 }
 
-pub(super) fn project_cell(item: &TaskListItem, max_width: usize) -> Line<'static> {
+pub(super) fn project_cell(theme: &Theme, item: &TaskListItem, max_width: usize) -> Line<'static> {
     let project = truncate_width(&item.task.project_key, max_width.saturating_sub(1));
     Line::from(vec![
         Span::styled(
             project,
-            Style::new().fg(theme::project_color(&item.task.project_key)),
+            Style::new().fg(theme.project(&item.task.project_key)),
         ),
         Span::raw(" "),
     ])
@@ -735,7 +819,6 @@ mod tests {
     use super::super::table::row_style;
     use super::super::tests::*;
     use super::*;
-    use crate::tui::theme::{RELATED, SELECTED, SELECTED_INACTIVE};
     use chrono::TimeZone;
     use ratatui::text::Line;
     use unicode_width::UnicodeWidthStr;
@@ -793,7 +876,7 @@ mod tests {
 
         assert_eq!(cells[3].to_string(), DEFERRED_MARKER);
         assert_eq!(cells[7].to_string(), "in1m");
-        assert_eq!(cells[7].spans[0].style.fg, Some(ACCENT));
+        assert_eq!(cells[7].spans[0].style.fg, Some(THEME.accent));
     }
 
     #[test]
@@ -801,7 +884,7 @@ mod tests {
         let mut item = task_list_item("Title");
         item.task.project_key = "very-long-project-name".to_string();
 
-        let rendered = project_cell(&item, 10).to_string();
+        let rendered = project_cell(THEME, &item, 10).to_string();
 
         assert_eq!(rendered, "very-lon… ");
     }
@@ -825,6 +908,7 @@ mod tests {
                 widths: &widths,
                 state_column: Some(TableColumn::Ref),
                 compact_status: true,
+                theme: THEME,
             },
             TaskRowState {
                 selected: false,
@@ -846,54 +930,58 @@ mod tests {
             .timestamp();
         let mut item = task_list_item("deadline");
         for (due_on, label, color) in [
-            ("2026-07-13", "3d!", RED),
-            ("2026-07-16", "today", YELLOW),
-            ("2026-07-24", "Jul24", ACCENT),
+            ("2026-07-13", "3d!", THEME.danger),
+            ("2026-07-16", "today", THEME.attention),
+            ("2026-07-24", "Jul24", THEME.accent),
         ] {
             item.task.due_on = Some(due_on.to_string());
-            let cell = due_cell(&item, now);
+            let cell = due_cell(THEME, &item, now);
             assert_eq!(cell.to_string(), label);
             assert_eq!(cell.spans[0].style.fg, Some(color), "{due_on}");
         }
 
         item.task.status = crate::choices::TaskStatus::Done;
-        let cell = due_cell(&item, now);
+        let cell = due_cell(THEME, &item, now);
         assert_eq!(cell.to_string(), "Jul24");
-        assert_eq!(cell.spans[0].style.fg, Some(FG_DIM));
+        assert_eq!(cell.spans[0].style.fg, Some(THEME.fg_dim));
 
         item.task.due_on = None;
-        assert_eq!(due_cell(&item, now).to_string(), "");
+        assert_eq!(due_cell(THEME, &item, now).to_string(), "");
     }
 
     #[test]
     fn task_state_prefix_distinguishes_cursor_and_mark_states() {
-        let ordinary = Line::from(task_state_prefix(false, true, false));
-        let selected = Line::from(task_state_prefix(true, true, false));
-        let marked = Line::from(task_state_prefix(false, true, true));
-        let combined = Line::from(task_state_prefix(true, true, true));
-        let inactive = task_state_prefix(true, false, false);
+        let ordinary = Line::from(task_state_prefix(THEME, false, true, false));
+        let selected = Line::from(task_state_prefix(THEME, true, true, false));
+        let marked = Line::from(task_state_prefix(THEME, false, true, true));
+        let combined = Line::from(task_state_prefix(THEME, true, true, true));
+        let inactive = task_state_prefix(THEME, true, false, false);
 
         assert_eq!(ordinary.to_string(), "   ");
         assert_eq!(selected.to_string(), "›  ");
         assert_eq!(marked.to_string(), " ● ");
         assert_eq!(combined.to_string(), "›● ");
         assert_eq!(UnicodeWidthStr::width(TASK_CURSOR_GLYPH), 1);
-        assert_eq!(selected.spans[0].style.fg, Some(ACCENT));
+        assert_eq!(selected.spans[0].style.fg, Some(THEME.accent));
         assert!(
             selected.spans[0]
                 .style
                 .add_modifier
                 .contains(Modifier::BOLD)
         );
-        assert_eq!(inactive[0].style, SELECTED_INACTIVE);
-        assert_eq!(combined.spans[1].style.fg, Some(YELLOW));
-        assert_eq!(row_style(true, true, true, false, false), SELECTED);
+        assert_eq!(inactive[0].style, THEME.selected_inactive());
+        assert_eq!(combined.spans[1].style.fg, Some(THEME.attention));
+        assert_eq!(
+            row_style(THEME, true, true, true, false, false),
+            THEME.selected()
+        );
     }
 
     #[test]
     fn selected_and_unselected_refs_start_at_the_same_cell() {
         let item = task_list_item("aligned");
         let selected = task_ref_cell(
+            THEME,
             &item,
             11,
             TaskRowState {
@@ -903,6 +991,7 @@ mod tests {
             },
         );
         let ordinary = task_ref_cell(
+            THEME,
             &item,
             11,
             TaskRowState {
@@ -955,7 +1044,7 @@ mod tests {
         item.has_notes = true;
 
         assert_eq!(
-            metadata_cell(&item, EpicSelectionContext::default(), false).to_string(),
+            metadata_cell(THEME, &item, EpicSelectionContext::default(), false).to_string(),
             "✎"
         );
     }
@@ -965,10 +1054,10 @@ mod tests {
         let mut item = task_list_item("epic");
         item.task.is_epic = true;
 
-        let line = metadata_cell(&item, EpicSelectionContext::default(), false);
+        let line = metadata_cell(THEME, &item, EpicSelectionContext::default(), false);
 
         assert_eq!(line.to_string(), EPIC_MARKER);
-        assert_eq!(line.spans[0].style.fg, Some(YELLOW));
+        assert_eq!(line.spans[0].style.fg, Some(THEME.attention));
     }
 
     #[test]
@@ -989,14 +1078,20 @@ mod tests {
         });
 
         let epic_selection = EpicSelectionContext::from_selected(Some(&child));
-        let line = metadata_cell(&parent, epic_selection, false);
+        let line = metadata_cell(THEME, &parent, epic_selection, false);
 
         assert!(epic_selection.highlights_parent(&parent));
         assert_eq!(line.to_string(), EPIC_MARKER);
-        assert_eq!(line.spans[0].style.fg, Some(ACCENT));
+        assert_eq!(line.spans[0].style.fg, Some(THEME.accent));
         assert!(line.spans[0].style.sub_modifier.contains(Modifier::BOLD));
-        assert_eq!(row_style(false, true, false, true, false), RELATED);
-        assert_eq!(row_style(true, true, false, true, false), SELECTED);
+        assert_eq!(
+            row_style(THEME, false, true, false, true, false),
+            THEME.related()
+        );
+        assert_eq!(
+            row_style(THEME, true, true, false, true, false),
+            THEME.selected()
+        );
     }
 
     #[test]
@@ -1017,12 +1112,13 @@ mod tests {
             selected_epic_id: Some(selected_epic.as_str()),
             ..EpicSelectionContext::default()
         };
-        let line = metadata_cell(&item, epic_selection, false);
+        let line = metadata_cell(THEME, &item, epic_selection, false);
 
         assert_eq!(line.to_string(), EPIC_CHILD_MARKER);
-        assert_eq!(line.spans[0].style.fg, Some(ACCENT));
+        assert_eq!(line.spans[0].style.fg, Some(THEME.accent));
         assert_eq!(
             metadata_cell(
+                THEME,
                 &item,
                 EpicSelectionContext {
                     selected_epic_id: Some("other-epic"),
@@ -1046,7 +1142,7 @@ mod tests {
         item.dependent_count = 1;
 
         assert_eq!(
-            metadata_cell(&item, EpicSelectionContext::default(), false).to_string(),
+            metadata_cell(THEME, &item, EpicSelectionContext::default(), false).to_string(),
             "←2 →1"
         );
     }
@@ -1057,7 +1153,7 @@ mod tests {
         item.task.description = "details".to_string();
 
         assert_eq!(
-            metadata_cell(&item, EpicSelectionContext::default(), false).to_string(),
+            metadata_cell(THEME, &item, EpicSelectionContext::default(), false).to_string(),
             ""
         );
     }

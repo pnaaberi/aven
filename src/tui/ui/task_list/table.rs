@@ -15,9 +15,7 @@ use crate::queue::now_seconds;
 use crate::tui::app::Focus;
 use crate::tui::overlay::TextInputView;
 use crate::tui::store::TaskListRenderMode;
-use crate::tui::theme::{
-    ACCENT, BG, BG_ALT, BORDER, INVERSE_FG, RELATED, SELECTED, SELECTED_INACTIVE,
-};
+use crate::tui::theme::Theme;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
@@ -56,6 +54,7 @@ pub(super) struct TaskListTaskRow {
 
 pub(super) fn render_task_list(
     frame: &mut Frame,
+    theme: &Theme,
     source: &TaskListSource<'_>,
     table_state: &mut TableState,
     focus: Focus,
@@ -63,8 +62,9 @@ pub(super) fn render_task_list(
     inline_title_editor: Option<&TextInputView>,
     marked_task_ids: &BTreeSet<crate::ids::TaskId>,
 ) {
-    frame.render_widget(Block::new().style(Style::new().bg(BG)), area);
+    frame.render_widget(Block::new().style(Style::new().bg(theme.bg)), area);
     let model = build_task_list_render_model(
+        theme,
         source,
         table_state,
         focus,
@@ -78,6 +78,7 @@ pub(super) fn render_task_list(
 
     render_task_header(
         frame,
+        theme,
         model.row_areas[0],
         model.layout,
         model.render_mode,
@@ -95,7 +96,7 @@ pub(super) fn render_task_list(
         );
         super::super::empty_state::render_empty_state(
             frame,
-            &crate::tui::theme::Theme::dark(),
+            theme,
             body,
             crate::tui::ui::empty_state::task_empty_state_for(&source.empty_state),
         );
@@ -108,16 +109,17 @@ pub(super) fn render_task_list(
         };
         match row {
             TaskListRenderRow::Group(group) => {
-                render_group_row(frame, &group.label, group.count, row_area);
+                render_group_row(frame, theme, &group.label, group.count, row_area);
             }
             TaskListRenderRow::Task(row) => {
-                render_task_row_from_model(frame, row_area, &model.layout, row);
+                render_task_row_from_model(frame, theme, row_area, &model.layout, row);
             }
         }
     }
 
     render_task_scrollbar(
         frame,
+        theme,
         model.scroll,
         model.row_count,
         model.viewport_rows,
@@ -127,6 +129,7 @@ pub(super) fn render_task_list(
 }
 
 pub(super) fn build_task_list_render_model(
+    theme: &Theme,
     source: &TaskListSource<'_>,
     table_state: &mut TableState,
     focus: Focus,
@@ -184,7 +187,7 @@ pub(super) fn build_task_list_render_model(
             TaskListRow::Task { task_index } => {
                 let Some(item) = source.tasks.get(*task_index) else {
                     rows.push(TaskListRenderRow::Task(TaskListTaskRow {
-                        style: row_style(false, focus == Focus::Tasks, false, false, false),
+                        style: row_style(theme, false, focus == Focus::Tasks, false, false, false),
                         cells: blank_task_row_cells(),
                         state: TaskRowState::default(),
                     }));
@@ -194,6 +197,7 @@ pub(super) fn build_task_list_render_model(
                 let marked = marked_task_ids.contains(&item.task.id);
                 let related = epic_selection.highlights_parent(item);
                 let style = row_style(
+                    theme,
                     selected,
                     focus == Focus::Tasks,
                     marked,
@@ -217,6 +221,7 @@ pub(super) fn build_task_list_render_model(
                             widths: &column_widths,
                             state_column,
                             compact_status,
+                            theme,
                         },
                         TaskRowState {
                             selected,
@@ -239,6 +244,7 @@ pub(super) fn build_task_list_render_model(
                             widths: &column_widths,
                             state_column,
                             compact_status,
+                            theme,
                         },
                         TaskRowState {
                             selected,
@@ -265,7 +271,7 @@ pub(super) fn build_task_list_render_model(
             } => {
                 let Some(item) = source.tasks.get(*task_index) else {
                     rows.push(TaskListRenderRow::Task(TaskListTaskRow {
-                        style: row_style(false, focus == Focus::Tasks, false, false, false),
+                        style: row_style(theme, false, focus == Focus::Tasks, false, false, false),
                         cells: blank_task_row_cells(),
                         state: TaskRowState::default(),
                     }));
@@ -275,6 +281,7 @@ pub(super) fn build_task_list_render_model(
                 let marked = marked_task_ids.contains(&item.task.id);
                 rows.push(TaskListRenderRow::Task(TaskListTaskRow {
                     style: row_style(
+                        theme,
                         selected,
                         focus == Focus::Tasks,
                         marked,
@@ -295,6 +302,7 @@ pub(super) fn build_task_list_render_model(
                             widths: &column_widths,
                             state_column,
                             compact_status,
+                            theme,
                         },
                         TaskRowState {
                             selected,
@@ -329,6 +337,7 @@ pub(super) fn build_task_list_render_model(
 
 pub(super) fn render_task_scrollbar(
     frame: &mut Frame,
+    theme: &Theme,
     scroll: usize,
     row_count: usize,
     viewport_rows: usize,
@@ -343,8 +352,8 @@ pub(super) fn render_task_scrollbar(
         .end_symbol(None)
         .thumb_symbol("┃")
         .track_symbol(Some("│"))
-        .thumb_style(Style::new().fg(ACCENT).bg(BG))
-        .track_style(Style::new().fg(BORDER).bg(BG));
+        .thumb_style(Style::new().fg(theme.accent).bg(theme.bg))
+        .track_style(Style::new().fg(theme.scrollbar_track).bg(theme.bg));
     let mut scrollbar_state = ScrollbarState::new(row_count)
         .position(scrollbar_position(
             scroll,
@@ -366,6 +375,7 @@ pub(super) fn list_scrollbar_area(area: Rect) -> Rect {
 
 pub(super) fn render_task_header(
     frame: &mut Frame,
+    theme: &Theme,
     area: Rect,
     layout: TableLayout,
     render_mode: TaskListRenderMode,
@@ -374,8 +384,8 @@ pub(super) fn render_task_header(
     compact_status: bool,
 ) {
     let style = Style::new()
-        .fg(INVERSE_FG)
-        .bg(BORDER)
+        .fg(theme.inverse_fg)
+        .bg(theme.table_header_bg)
         .add_modifier(Modifier::BOLD);
     frame.render_widget(Block::new().style(style), area);
     let time_header = match render_mode {
@@ -422,24 +432,31 @@ pub(super) fn status_header(compact_status: bool) -> &'static str {
     if compact_status { "S" } else { "STATUS" }
 }
 
-pub(super) fn render_group_row(frame: &mut Frame, label: &str, count: usize, area: Rect) {
+pub(super) fn render_group_row(
+    frame: &mut Frame,
+    theme: &Theme,
+    label: &str,
+    count: usize,
+    area: Rect,
+) {
     frame.render_widget(
         Paragraph::new(Line::from(vec![
-            Span::styled(" ▸ ", Style::new().fg(ACCENT).bg(BG_ALT)),
+            Span::styled(" ▸ ", Style::new().fg(theme.accent).bg(theme.bg_row_group)),
             Span::styled(
                 format!("{} ({count})", label.to_uppercase()),
                 Style::new()
-                    .fg(ACCENT)
-                    .bg(BG_ALT)
+                    .fg(theme.accent)
+                    .bg(theme.bg_row_group)
                     .add_modifier(Modifier::BOLD),
             ),
         ]))
-        .style(Style::new().bg(BG_ALT)),
+        .style(Style::new().bg(theme.bg_row_group)),
         area,
     );
 }
 
 pub(super) fn row_style(
+    theme: &Theme,
     selected: bool,
     focused: bool,
     marked: bool,
@@ -447,13 +464,17 @@ pub(super) fn row_style(
     blocked: bool,
 ) -> Style {
     let style = if selected {
-        if focused { SELECTED } else { SELECTED_INACTIVE }
+        if focused {
+            theme.selected()
+        } else {
+            theme.selected_inactive()
+        }
     } else if related {
-        RELATED
+        theme.related()
     } else if marked {
-        Style::new().bg(BG_ALT)
+        Style::new().bg(theme.bg_row_marked)
     } else {
-        Style::new().bg(BG)
+        Style::new().bg(theme.bg)
     };
     if blocked && !selected {
         style.add_modifier(Modifier::DIM)
@@ -464,15 +485,17 @@ pub(super) fn row_style(
 
 pub(super) fn render_task_row_from_model(
     frame: &mut Frame,
+    theme: &Theme,
     area: Rect,
     layout: &TableLayout,
     row: &TaskListTaskRow,
 ) {
-    render_task_row_cells(frame, area, row.style, layout, &row.cells, row.state);
+    render_task_row_cells(frame, theme, area, row.style, layout, &row.cells, row.state);
 }
 
 pub(super) fn render_task_row_cells(
     frame: &mut Frame,
+    theme: &Theme,
     area: Rect,
     style: Style,
     layout: &TableLayout,
@@ -484,6 +507,7 @@ pub(super) fn render_task_row_cells(
     if state_area.width > 0 {
         frame.render_widget(
             Paragraph::new(Line::from(task_state_prefix(
+                theme,
                 state.selected,
                 state.focused,
                 state.marked,
@@ -502,7 +526,6 @@ pub(super) fn render_task_row_cells(
 mod tests {
     use super::super::tests::*;
     use super::*;
-    use crate::tui::theme::FG;
 
     #[test]
     fn label_header_cell_aligns_with_label_column_content() {
@@ -529,6 +552,7 @@ mod tests {
             .draw(|frame| {
                 render_task_header(
                     frame,
+                    THEME,
                     frame.area(),
                     TableLayout::resolve(&columns, &TableColumn::DEFAULT, frame.area().width),
                     TaskListRenderMode::Flat,
@@ -563,6 +587,7 @@ mod tests {
             .draw(|frame| {
                 render_task_header(
                     frame,
+                    THEME,
                     frame.area(),
                     TableLayout::resolve(&columns, &TableColumn::DEFAULT, frame.area().width),
                     TaskListRenderMode::Flat,
@@ -597,6 +622,7 @@ mod tests {
             .draw(|frame| {
                 render_task_header(
                     frame,
+                    THEME,
                     frame.area(),
                     TableLayout::resolve(&columns, &TableColumn::DEFAULT, frame.area().width),
                     TaskListRenderMode::Flat,
@@ -610,9 +636,9 @@ mod tests {
 
         let mut item = task_list_item("future deadline");
         item.task.due_on = Some("2999-01-01".to_string());
-        let cell = task_time_cell(&item, 0, TaskListRenderMode::Flat, true, true);
+        let cell = task_time_cell(THEME, &item, 0, TaskListRenderMode::Flat, true, true);
         assert_eq!(cell.to_string(), "Jan1");
-        assert_eq!(cell.spans[0].style.fg, Some(ACCENT));
+        assert_eq!(cell.spans[0].style.fg, Some(THEME.accent));
     }
 
     #[test]
@@ -639,7 +665,7 @@ mod tests {
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
             .draw(|frame| {
-                render_task_scrollbar(frame, 6, 10, 4, 0, frame.area());
+                render_task_scrollbar(frame, THEME, 6, 10, 4, 0, frame.area());
             })
             .unwrap();
         let buffer = terminal.backend().buffer();
@@ -683,7 +709,7 @@ mod tests {
         let buffer = render_task_row_buffer(&item, Some(&editor));
 
         assert_eq!(buffer[(18, 0)].symbol(), " ");
-        assert_eq!(buffer[(18, 0)].style().bg, Some(FG));
+        assert_eq!(buffer[(18, 0)].style().bg, Some(THEME.fg));
     }
 
     #[test]
@@ -698,9 +724,12 @@ mod tests {
 
     #[test]
     fn blocked_rows_are_dimmed_unless_selected() {
-        let blocked = row_style(false, true, false, false, true);
+        let blocked = row_style(THEME, false, true, false, false, true);
         assert!(blocked.add_modifier.contains(Modifier::DIM));
 
-        assert_eq!(row_style(true, true, false, false, true), SELECTED);
+        assert_eq!(
+            row_style(THEME, true, true, false, false, true),
+            THEME.selected()
+        );
     }
 }

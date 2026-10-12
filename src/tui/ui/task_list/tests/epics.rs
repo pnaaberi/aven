@@ -2,7 +2,6 @@ use super::super::layout::TableLayout;
 use super::super::preview::task_preview_lines;
 use super::super::sizing::*;
 use super::*;
-use crate::tui::theme::{FG, FG_MUTED, RED, YELLOW};
 use chrono::TimeZone;
 
 #[test]
@@ -52,6 +51,7 @@ fn reordered_epics_keep_summary_and_inline_editing_in_semantic_cells() {
             state.select(Some(selected));
             let area = Rect::new(0, 0, width, 5);
             let model = build_task_list_render_model(
+                THEME,
                 &list.source(),
                 &mut state,
                 Focus::Tasks,
@@ -64,6 +64,7 @@ fn reordered_epics_keep_summary_and_inline_editing_in_semantic_cells() {
                 .draw(|frame| {
                     render_task_list(
                         frame,
+                        THEME,
                         &list.source(),
                         &mut state,
                         Focus::Tasks,
@@ -79,7 +80,7 @@ fn reordered_epics_keep_summary_and_inline_editing_in_semantic_cells() {
                 Rect::new(0, selected as u16 + 1, width, 1),
             );
             assert!(text_in_cell(buffer, title).contains("edit"));
-            assert_eq!(buffer[(title.x + 4, title.y)].style().bg, Some(FG));
+            assert_eq!(buffer[(title.x + 4, title.y)].style().bg, Some(THEME.fg));
             let summary = model
                 .layout
                 .cell(TableColumn::Labels, Rect::new(0, 1, width, 1));
@@ -116,7 +117,7 @@ fn collapsed_epic_rows_show_outcomes_signals_and_subtree_activity() {
     assert!(rendered.contains("!1 ←1 · 1/5 done ×1"));
     assert!(!rendered.contains("Verify recovery email"));
 
-    let preview = task_preview_lines(&list.tasks[0], 120, 12)
+    let preview = task_preview_lines(THEME, &list.tasks[0], 120, 12)
         .into_iter()
         .map(|line| line.to_string())
         .collect::<Vec<_>>()
@@ -201,15 +202,15 @@ fn empty_epic_row_uses_standard_placeholders() {
     };
     list.tasks[0].epic_rollup = Some(rollup.clone());
 
-    let preview = task_preview_lines(&list.tasks[0], 100, 12)
+    let preview = task_preview_lines(THEME, &list.tasks[0], 100, 12)
         .into_iter()
         .map(|line| line.to_string())
         .collect::<Vec<_>>()
         .join("\n");
 
-    let cell = epic_summary_cell(&rollup, 24);
+    let cell = epic_summary_cell(THEME, &rollup, 24);
     assert_eq!(cell.to_string(), "-");
-    assert_eq!(cell.spans[0].style.fg, Some(FG_MUTED));
+    assert_eq!(cell.spans[0].style.fg, Some(THEME.fg_muted));
     assert!(preview.contains("children none"));
 }
 
@@ -226,10 +227,10 @@ fn epic_summary_preserves_outcome_and_signal_semantics() {
         latest_activity_at: String::new(),
     };
 
-    let normal = epic_summary_cell(&rollup, 24);
+    let normal = epic_summary_cell(THEME, &rollup, 24);
     assert_eq!(normal.to_string(), "!1 ←1 · 2/6 done ×1");
     assert!(normal.width() <= 24);
-    let compact = epic_summary_cell(&rollup, 17);
+    let compact = epic_summary_cell(THEME, &rollup, 17);
     assert_eq!(compact.to_string(), "!1 ←1 · ✓2/6 ×1");
     assert!(compact.width() <= 17);
     for summary in [&normal, &compact] {
@@ -241,7 +242,7 @@ fn epic_summary_preserves_outcome_and_signal_semantics() {
                 .unwrap()
                 .style
                 .fg,
-            Some(RED)
+            Some(THEME.danger)
         );
         assert!(
             summary
@@ -269,7 +270,7 @@ fn epic_summary_preserves_outcome_and_signal_semantics() {
         ..crate::query::EpicRollup::default()
     };
     assert_eq!(
-        epic_summary_cell(&open_only, 24).to_string(),
+        epic_summary_cell(THEME, &open_only, 24).to_string(),
         "3 ready · 0/3 done"
     );
 
@@ -278,7 +279,7 @@ fn epic_summary_preserves_outcome_and_signal_semantics() {
         done: 2,
         ..crate::query::EpicRollup::default()
     };
-    let resolved = epic_summary_cell(&resolved, 24);
+    let resolved = epic_summary_cell(THEME, &resolved, 24);
     assert_eq!(resolved.to_string(), "resolved · 2/2 done");
     assert!(
         !resolved.spans[0]
@@ -292,18 +293,18 @@ fn epic_summary_preserves_outcome_and_signal_semantics() {
         canceled: 2,
         ..crate::query::EpicRollup::default()
     };
-    let canceled = epic_summary_cell(&canceled, 24);
+    let canceled = epic_summary_cell(THEME, &canceled, 24);
     assert_eq!(canceled.to_string(), "resolved · 0/2 done ×2");
-    assert_eq!(canceled.spans[3].style.fg, Some(RED));
+    assert_eq!(canceled.spans[3].style.fg, Some(THEME.danger));
 
     let stalled = crate::query::EpicRollup {
         total: 3,
         open: 3,
         ..crate::query::EpicRollup::default()
     };
-    let stalled = epic_summary_cell(&stalled, 24);
+    let stalled = epic_summary_cell(THEME, &stalled, 24);
     assert_eq!(stalled.to_string(), "0 ready · 0/3 done");
-    assert_eq!(stalled.spans[0].style.fg, Some(YELLOW));
+    assert_eq!(stalled.spans[0].style.fg, Some(THEME.attention));
 }
 
 #[test]
@@ -317,12 +318,12 @@ fn epic_time_column_uses_subtree_activity_and_respects_due_order() {
     parent.task.due_on = Some("2026-06-23".to_string());
 
     assert_eq!(
-        epic_activity_cell(&parent, now, false, true).to_string(),
+        epic_activity_cell(THEME, &parent, now, false, true).to_string(),
         "1d"
     );
     assert_eq!(
-        epic_activity_cell(&parent, now, true, true).to_string(),
-        task_time_cell(&parent, now, TaskListRenderMode::Epics, true, true).to_string()
+        epic_activity_cell(THEME, &parent, now, true, true).to_string(),
+        task_time_cell(THEME, &parent, now, TaskListRenderMode::Epics, true, true).to_string()
     );
     let child_activity = task_seconds_since(&child.task.updated_at, now)
         .map(compact_age)
@@ -350,6 +351,7 @@ fn epic_header_switches_between_activity_and_due_semantics() {
             .draw(|frame| {
                 render_task_header(
                     frame,
+                    THEME,
                     frame.area(),
                     TableLayout::resolve(&columns, &TableColumn::DEFAULT, frame.area().width),
                     TaskListRenderMode::Epics,

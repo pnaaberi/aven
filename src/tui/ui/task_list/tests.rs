@@ -14,12 +14,15 @@ pub(super) use crate::tui::store::{
     TaskQuery, TaskScope, TaskViewState,
 };
 pub(super) use crate::tui::test_support::{task_list_item, task_list_item_with_id};
+pub(super) use crate::tui::theme::Theme;
 pub(super) use ratatui::Terminal;
 pub(super) use ratatui::backend::TestBackend;
 pub(super) use ratatui::layout::{Constraint, Layout, Rect};
 pub(super) use ratatui::style::Modifier;
 pub(super) use ratatui::widgets::TableState;
 pub(super) use std::collections::BTreeSet;
+
+pub(super) const THEME: &Theme = &Theme::dark();
 
 mod columns;
 mod empty_state;
@@ -55,7 +58,7 @@ pub(super) fn render_task_row_buffer_with_mode(
         .draw(|frame| {
             let layout = TableLayout::resolve(&columns, &TableColumn::ALL, frame.area().width);
             let column_widths = layout.widths();
-            let style = row_style(true, true, false, false, false);
+            let style = row_style(THEME, true, true, false, false, false);
             let cells = build_task_row_cells(
                 item,
                 TaskTimeContext {
@@ -75,6 +78,7 @@ pub(super) fn render_task_row_buffer_with_mode(
             );
             render_task_row_cells(
                 frame,
+                THEME,
                 frame.area(),
                 style,
                 &layout,
@@ -121,6 +125,7 @@ pub(super) fn render_task_list_buffer_with_selection(
         .draw(|frame| {
             render_task_list(
                 frame,
+                THEME,
                 source,
                 &mut table_state,
                 Focus::Tasks,

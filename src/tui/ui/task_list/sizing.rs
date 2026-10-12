@@ -1,4 +1,4 @@
-use super::cells::{EpicSelectionContext, is_deferred, metadata_cell};
+use super::cells::{EpicSelectionContext, is_deferred, metadata_char_count};
 use super::source::TaskListSource;
 use super::view_model::TaskListRow;
 use crate::config::TableColumn;
@@ -131,14 +131,11 @@ pub(super) fn metadata_column_width_from_task_refs(
     let width = tasks
         .iter()
         .map(|item| {
-            metadata_cell(
+            metadata_char_count(
                 item,
                 epic_selection,
                 mark_deferred && is_deferred(item, now),
-            )
-            .to_string()
-            .chars()
-            .count() as u16
+            ) as u16
         })
         .max()
         .unwrap_or(0);
@@ -175,6 +172,7 @@ mod tests {
         let mut table_state = TableState::default();
 
         let top_model = build_task_list_render_model(
+            THEME,
             &list.source(),
             &mut table_state,
             Focus::Tasks,
@@ -187,6 +185,7 @@ mod tests {
 
         table_state.select(Some(3));
         let scrolled_model = build_task_list_render_model(
+            THEME,
             &list.source(),
             &mut table_state,
             Focus::Tasks,

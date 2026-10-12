@@ -34,6 +34,7 @@ fn reordered_columns_align_headers_content_and_status_hits() {
             let area = Rect::new(5, 2, width, 5);
             let mut state = TableState::default();
             let model = build_task_list_render_model(
+                THEME,
                 &list.source(),
                 &mut state,
                 Focus::Tasks,
@@ -103,6 +104,7 @@ fn configured_subset_hides_columns_and_keeps_status_geometry() {
     let area = Rect::new(0, 0, 120, 5);
     let mut state = TableState::default();
     let model = build_task_list_render_model(
+        THEME,
         &list.source(),
         &mut state,
         Focus::Tasks,
@@ -156,6 +158,7 @@ fn fallback_state_gutter_preserves_single_column_content() {
         let mut state = TableState::default();
         state.select(Some(0));
         let model = build_task_list_render_model(
+            THEME,
             &list.source(),
             &mut state,
             Focus::Tasks,
@@ -188,6 +191,7 @@ fn fallback_state_gutter_preserves_single_column_content() {
     let mut state = TableState::default();
     state.select(Some(0));
     let model = build_task_list_render_model(
+        THEME,
         &list.source(),
         &mut state,
         Focus::Tasks,
@@ -221,6 +225,7 @@ fn fallback_state_gutter_keeps_singletons_usable_at_narrow_widths() {
         let mut state = TableState::default();
         state.select(Some(0));
         let model = build_task_list_render_model(
+            THEME,
             &list.source(),
             &mut state,
             Focus::Tasks,
@@ -262,6 +267,7 @@ fn empty_content_singletons_keep_a_visible_state_target() {
         let mut state = TableState::default();
         state.select(Some(0));
         let model = build_task_list_render_model(
+            THEME,
             &list.source(),
             &mut state,
             Focus::Tasks,
@@ -308,6 +314,7 @@ fn hidden_ref_keeps_selection_and_marks_on_title() {
             widths: &layout.widths(),
             state_column: layout.state_column(),
             compact_status: false,
+            theme: THEME,
         },
         TaskRowState {
             selected: true,
@@ -342,6 +349,7 @@ fn hidden_status_has_no_mouse_target_but_rows_remain_selectable() {
     let area = Rect::new(3, 2, 80, 5);
     let mut state = TableState::default();
     let model = build_task_list_render_model(
+        THEME,
         &list.source(),
         &mut state,
         Focus::Tasks,
@@ -369,6 +377,7 @@ fn hidden_columns_fit_a_narrow_table_without_phantom_gaps() {
     let area = Rect::new(0, 0, 24, 4);
     let mut state = TableState::default();
     let model = build_task_list_render_model(
+        THEME,
         &list.source(),
         &mut state,
         Focus::Tasks,
@@ -410,6 +419,7 @@ fn reordered_time_column_keeps_contextual_headings_and_values() {
         assert!(text_in_cell(&buffer, Rect::new(0, 0, 4, 1)).contains(heading));
         let mut state = TableState::default();
         let model = build_task_list_render_model(
+            THEME,
             &list.source(),
             &mut state,
             Focus::Tasks,
@@ -457,6 +467,7 @@ fn due_column_shows_every_row_deadline_across_views_and_ordering() {
         let mut state = TableState::default();
         let area = Rect::new(0, 0, 80, 5);
         let model = build_task_list_render_model(
+            THEME,
             &list.source(),
             &mut state,
             Focus::Tasks,
@@ -501,6 +512,7 @@ fn due_column_leaves_undated_tasks_blank() {
     let area = Rect::new(0, 0, 80, 4);
     let mut state = TableState::default();
     let model = build_task_list_render_model(
+        THEME,
         &list.source(),
         &mut state,
         Focus::Tasks,
@@ -531,6 +543,7 @@ fn dedicated_due_column_keeps_time_contextual() {
         list.view_state.order = order;
         let mut state = TableState::default();
         let model = build_task_list_render_model(
+            THEME,
             &list.source(),
             &mut state,
             Focus::Tasks,
@@ -553,6 +566,7 @@ fn dedicated_due_column_keeps_time_contextual() {
     list.view_state.order = TaskOrder::DueOn;
     let mut state = TableState::default();
     let model = build_task_list_render_model(
+        THEME,
         &list.source(),
         &mut state,
         Focus::Tasks,

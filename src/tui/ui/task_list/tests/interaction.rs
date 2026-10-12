@@ -170,7 +170,7 @@ fn deleted_row_marks_metadata_column_and_keeps_status() {
     assert_eq!(cells[3].to_string(), "×");
     assert_eq!(cells[5].to_string(), "□ todo");
     assert!(
-        task_preview_fields_line(&item)
+        task_preview_fields_line(THEME, &item)
             .to_string()
             .contains("deleted yes")
     );
@@ -211,7 +211,7 @@ fn recurring_rows_and_preview_show_series_context() {
     assert!(row_text.contains("↷2"));
     assert!(row_text.contains("×1"));
 
-    let preview = super::super::preview::task_preview_lines(&item, 80, 20)
+    let preview = super::super::preview::task_preview_lines(THEME, &item, 80, 20)
         .into_iter()
         .map(|line| line.to_string())
         .collect::<Vec<_>>()

@@ -287,7 +287,7 @@ fn render_surface(
             crate::tui::ui::sidebar_layout_for(inner, view.focus, view.sidebar_visible)
             && layout.overlay
         {
-            render_sidebar_overlay(frame, store, list, view.focus, body);
+            render_sidebar_overlay(frame, theme, store, list, view.focus, body);
         }
     } else {
         if let Some(layout) =
@@ -301,6 +301,7 @@ fn render_surface(
             };
             render_sidebar(
                 frame,
+                theme,
                 store,
                 list,
                 view.focus,
@@ -460,6 +461,7 @@ fn render_main_surface(
         let column_drag = list.column_drag().cloned();
         render_columns(
             frame,
+            theme,
             store,
             list.table_state_mut(),
             focus,
@@ -471,7 +473,7 @@ fn render_main_surface(
             },
         );
     } else {
-        render_tasks(frame, store, list, focus, area, inline_title_editor);
+        render_tasks(frame, theme, store, list, focus, area, inline_title_editor);
     }
 }
 

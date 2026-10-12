@@ -12,10 +12,7 @@ use crate::tui::store::{
     SidebarEntry, SidebarEntryTarget, TaskQuery, TaskScope, TaskScopeTarget, TuiStore,
 };
 use crate::tui::text::truncate_width;
-use crate::tui::theme::{
-    self, ACCENT, BG, BG_ALT, BORDER, FG, FG_DIM, FG_MUTED, PINK, RED, SELECTED_BG,
-    SELECTED_INACTIVE, YELLOW,
-};
+use crate::tui::theme::Theme;
 
 const QUEUE_MARKER: &str = "\u{f03a}";
 const READY_MARKER: &str = "\u{f04b}";
@@ -147,6 +144,7 @@ pub(crate) fn sidebar_click_at_for(
 
 pub(super) fn render_sidebar_overlay(
     frame: &mut Frame,
+    theme: &Theme,
     store: &TuiStore,
     list: &mut ListSurface,
     focus: Focus,
@@ -154,11 +152,12 @@ pub(super) fn render_sidebar_overlay(
 ) {
     let area = sidebar_overlay_area(area);
     frame.render_widget(Clear, area);
-    render_sidebar(frame, store, list, focus, area, true);
+    render_sidebar(frame, theme, store, list, focus, area, true);
 }
 
 pub(super) fn render_sidebar(
     frame: &mut Frame,
+    theme: &Theme,
     store: &TuiStore,
     list: &mut ListSurface,
     focus: Focus,
@@ -178,7 +177,12 @@ pub(super) fn render_sidebar(
                 }
                 let collapsed = matches!(entry.target,
                     Some(SidebarEntryTarget::Section(section)) if list.section_collapsed(section));
-                return ListItem::new(sidebar_section_line(&entry.label, collapsed, content_width));
+                return ListItem::new(sidebar_section_line(
+                    theme,
+                    &entry.label,
+                    collapsed,
+                    content_width,
+                ));
             }
             let marker = sidebar_icon(entry);
             let label = sidebar_label(entry);
@@ -186,21 +190,22 @@ pub(super) fn render_sidebar(
             let is_active_view = sidebar_entry_active(entry, store);
             let color = match &entry.target {
                 Some(SidebarEntryTarget::Scope(TaskScopeTarget::Project(project))) => {
-                    theme::project_color(project)
+                    theme.project(project)
                 }
-                Some(SidebarEntryTarget::View(TaskQuery::Active)) => FG_MUTED,
-                Some(SidebarEntryTarget::View(TaskQuery::Todo)) => FG_DIM,
-                Some(SidebarEntryTarget::View(TaskQuery::Epics)) => YELLOW,
-                _ => FG,
+                Some(SidebarEntryTarget::View(TaskQuery::Active)) => theme.fg_muted,
+                Some(SidebarEntryTarget::View(TaskQuery::Todo)) => theme.fg_dim,
+                Some(SidebarEntryTarget::View(TaskQuery::Epics)) => theme.attention,
+                _ => theme.fg,
             };
             let label_style = if is_active_view {
-                Style::new().fg(ACCENT).add_modifier(Modifier::BOLD)
+                Style::new().fg(theme.accent).add_modifier(Modifier::BOLD)
             } else if selected {
-                Style::new().fg(FG).add_modifier(Modifier::BOLD)
+                Style::new().fg(theme.fg).add_modifier(Modifier::BOLD)
             } else {
-                Style::new().fg(FG)
+                Style::new().fg(theme.fg)
             };
             let line = sidebar_entry_line(
+                theme,
                 entry,
                 marker,
                 &label,
@@ -222,16 +227,23 @@ pub(super) fn render_sidebar(
     items.extend([
         ListItem::new(Line::from("")),
         ListItem::new(
-            Line::from("FILTERS").style(Style::new().fg(FG_DIM).add_modifier(Modifier::BOLD)),
+            Line::from("FILTERS").style(Style::new().fg(theme.fg_dim).add_modifier(Modifier::BOLD)),
         ),
-        filter_item("▲", "urgent", urgent_count, RED, area.width),
-        filter_item("⚡", "conflicts", conflict_count, PINK, area.width),
+        filter_item(theme, "▲", "urgent", urgent_count, theme.danger, area.width),
+        filter_item(
+            theme,
+            "⚡",
+            "conflicts",
+            conflict_count,
+            theme.conflict,
+            area.width,
+        ),
     ]);
 
     let highlight_style = if focus == Focus::Sidebar {
-        Style::new().bg(SELECTED_BG)
+        Style::new().bg(theme.bg_selected)
     } else {
-        SELECTED_INACTIVE
+        theme.selected_inactive()
     };
     let borders = if overlay {
         Borders::ALL
@@ -243,14 +255,19 @@ pub(super) fn render_sidebar(
             Block::new()
                 .borders(borders)
                 .border_type(BorderType::Rounded)
-                .border_style(Style::new().fg(BORDER))
-                .style(Style::new().bg(BG)),
+                .border_style(Style::new().fg(theme.border))
+                .style(Style::new().bg(theme.bg)),
         )
         .highlight_style(highlight_style);
     frame.render_stateful_widget(sidebar, area, list.sidebar_state_mut());
 }
 
-fn sidebar_section_line(label: &str, collapsed: bool, width: usize) -> Line<'static> {
+fn sidebar_section_line(
+    theme: &Theme,
+    label: &str,
+    collapsed: bool,
+    width: usize,
+) -> Line<'static> {
     let indicator = if collapsed { "▸" } else { "▾" };
     let text = if width < 3 {
         format!("{indicator} ").chars().take(width).collect()
@@ -261,17 +278,17 @@ fn sidebar_section_line(label: &str, collapsed: bool, width: usize) -> Line<'sta
     };
     Line::from(text).style(
         Style::new()
-            .fg(FG_DIM)
-            .bg(BG_ALT)
+            .fg(theme.fg_dim)
+            .bg(theme.bg_raised)
             .add_modifier(Modifier::BOLD),
     )
 }
 
-fn badge(count: i64, active: bool) -> Span<'static> {
+fn badge(theme: &Theme, count: i64, active: bool) -> Span<'static> {
     if count <= 0 {
         return Span::raw(" ");
     }
-    let color = if active { ACCENT } else { FG_MUTED };
+    let color = if active { theme.accent } else { theme.fg_muted };
     Span::styled(
         format!("{count:>2}"),
         Style::new().fg(color).add_modifier(Modifier::BOLD),
@@ -354,6 +371,7 @@ fn sidebar_icon_cell(marker: &str) -> String {
 }
 
 fn sidebar_entry_line(
+    theme: &Theme,
     entry: &SidebarEntry,
     marker: &str,
     label: &str,
@@ -370,9 +388,9 @@ fn sidebar_entry_line(
     let used_width = marker_cell.width() + label.width() + count.width();
     let spacer_width = width.saturating_sub(used_width).max(1);
     let count_style = if active {
-        Style::new().fg(ACCENT).add_modifier(Modifier::BOLD)
+        Style::new().fg(theme.accent).add_modifier(Modifier::BOLD)
     } else {
-        Style::new().fg(FG_MUTED).add_modifier(Modifier::BOLD)
+        Style::new().fg(theme.fg_muted).add_modifier(Modifier::BOLD)
     };
     Line::from(vec![
         Span::styled(marker_cell, Style::new().fg(marker_color)),
@@ -382,7 +400,14 @@ fn sidebar_entry_line(
     ])
 }
 
-fn filter_item(icon: &str, label: &str, count: i64, color: Color, width: u16) -> ListItem<'static> {
+fn filter_item(
+    theme: &Theme,
+    icon: &str,
+    label: &str,
+    count: i64,
+    color: Color,
+    width: u16,
+) -> ListItem<'static> {
     let icon_cell = if icon == "⚡" {
         format!("{icon} ")
     } else {
@@ -392,8 +417,11 @@ fn filter_item(icon: &str, label: &str, count: i64, color: Color, width: u16) ->
     let label_width = (width as usize).saturating_sub(icon_cell.width() + count_width + 2);
     ListItem::new(Line::from(vec![
         Span::styled(icon_cell, Style::new().fg(color)),
-        Span::styled(format!("{label:<label_width$}"), Style::new().fg(FG_MUTED)),
-        badge(count, false),
+        Span::styled(
+            format!("{label:<label_width$}"),
+            Style::new().fg(theme.fg_muted),
+        ),
+        badge(theme, count, false),
     ]))
 }
 
@@ -401,16 +429,18 @@ fn filter_item(icon: &str, label: &str, count: i64, color: Color, width: u16) ->
 mod tests {
     use super::*;
 
+    const THEME: &Theme = &Theme::dark();
+
     #[test]
     fn sidebar_section_indicators_are_right_aligned_without_overflow() {
         for label in ["Views", "Scope", "Projects"] {
             for collapsed in [false, true] {
                 for width in 0..=34 {
-                    let line = sidebar_section_line(label, collapsed, width);
+                    let line = sidebar_section_line(THEME, label, collapsed, width);
                     let text = line.to_string();
                     assert_eq!(line.width(), width);
-                    assert_eq!(line.style.fg, Some(FG_DIM));
-                    assert_eq!(line.style.bg, Some(BG_ALT));
+                    assert_eq!(line.style.fg, Some(THEME.fg_dim));
+                    assert_eq!(line.style.bg, Some(THEME.bg_raised));
                     assert!(line.style.add_modifier.contains(Modifier::BOLD));
                     if width > 0 {
                         let indicator_column = width.saturating_sub(2);
@@ -446,11 +476,12 @@ mod tests {
         };
 
         let rendered = sidebar_entry_line(
+            THEME,
             &entry,
             "●",
             "very-long-project-name",
-            Style::new().fg(FG),
-            FG,
+            Style::new().fg(THEME.fg),
+            THEME.fg,
             false,
             14,
         )
