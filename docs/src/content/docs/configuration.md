@@ -76,6 +76,7 @@ update:
   automatic_checks: true
 
 tui:
+  appearance: auto
   table:
     columns: [ref, title, labels, metadata, project, status, priority, time]
   sidebar:
@@ -251,6 +252,24 @@ update:
 ```
 
 Set `AVEN_NO_UPDATE_CHECK=1` to disable automatic checks for one environment. The environment variable takes precedence over `update.automatic_checks`. `aven update` and the TUI's explicit update command are available with either setting.
+
+## TUI appearance
+
+`tui.appearance` picks the TUI's colors. The default, `auto`, asks the
+terminal for its background color at startup and uses the light theme on light
+backgrounds and the dark theme otherwise. Terminals that don't answer get the
+dark theme, unless `COLORFGBG` says the background is light. Set `dark` or
+`light` to skip detection, for example when it guesses wrong over SSH or inside
+a terminal multiplexer.
+
+```yaml
+tui:
+  appearance: light
+```
+
+Both themes keep the terminal's own background on the main surface. The
+`:toggle-background` command switches between the themes until the TUI exits.
+Edit the local config file and restart the TUI to apply changes.
 
 ## TUI sidebar views
 

@@ -25,7 +25,9 @@ pub use paths::{
     config_dir_path, config_file_path, debug_db_path_from_env, default_db_path,
     default_server_data_path, expand_tilde, resolve_blob_dir, resolve_db_path,
 };
-pub use tui::{SidebarView, TableColumn, TaskColumnConfig, TaskTableConfig, TuiConfig};
+pub use tui::{
+    SidebarView, TableColumn, TaskColumnConfig, TaskTableConfig, TuiAppearance, TuiConfig,
+};
 
 const DEFAULT_WAKE_ADDR: &str = "127.0.0.1:47631";
 const DEFAULT_SYNC_INTERVAL_SECONDS: u64 = 30;

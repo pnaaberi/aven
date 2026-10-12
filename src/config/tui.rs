@@ -15,6 +15,18 @@ pub struct TuiConfig {
     pub columns: Vec<TaskColumnConfig>,
     #[serde(default)]
     pub commands: Vec<CustomTuiCommandConfig>,
+    #[serde(default)]
+    pub appearance: TuiAppearance,
+}
+
+/// Which theme the TUI draws with. `Auto` matches the terminal background.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TuiAppearance {
+    #[default]
+    Auto,
+    Dark,
+    Light,
 }
 
 impl Default for TuiConfig {
@@ -24,6 +36,7 @@ impl Default for TuiConfig {
             sidebar: SidebarConfig::default(),
             columns: default_task_columns(),
             commands: Vec::new(),
+            appearance: TuiAppearance::Auto,
         }
     }
 }
@@ -362,6 +375,26 @@ mod tests {
 
         let text = serde_saphyr::to_string(&config).unwrap();
         assert!(load_config(&text).unwrap().tui.table.compact_status);
+    }
+
+    #[test]
+    fn appearance_defaults_to_auto_and_loads_explicit_themes() {
+        for yaml in ["{}", "tui: {}"] {
+            assert_eq!(
+                load_config(yaml).unwrap().tui.appearance,
+                TuiAppearance::Auto
+            );
+        }
+
+        let config = load_config("tui:\n  appearance: light\n").unwrap();
+        assert_eq!(config.tui.appearance, TuiAppearance::Light);
+        let text = serde_saphyr::to_string(&config).unwrap();
+        assert_eq!(
+            load_config(&text).unwrap().tui.appearance,
+            TuiAppearance::Light
+        );
+
+        assert!(load_config("tui:\n  appearance: sepia\n").is_err());
     }
 
     #[test]

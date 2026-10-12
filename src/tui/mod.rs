@@ -165,11 +165,16 @@ async fn run_with_welcome_intro(
     config: crate::config::AppConfig,
     show_welcome_intro: bool,
 ) -> Result<()> {
+    let appearance = match config.tui.appearance {
+        crate::config::TuiAppearance::Auto => platform::detect_appearance(),
+        crate::config::TuiAppearance::Dark => theme::Appearance::Dark,
+        crate::config::TuiAppearance::Light => theme::Appearance::Light,
+    };
     let mut app =
         app::App::new_with_view_state_and_config(database, workspace, launch.view_state, config)
             .await?;
     app.set_add_task_db_path(db_path);
-    app.set_appearance(platform::detect_appearance());
+    app.set_appearance(appearance);
     match launch.startup {
         store::TuiStartup::AddTaskOnly { natural } => {
             let mut terminal = TerminalSession::init()?;
