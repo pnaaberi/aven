@@ -2,7 +2,7 @@ use ratatui::style::Color;
 
 use crate::sync::encrypted::LocalPhase;
 use crate::tui::store::TuiSyncStatus;
-use crate::tui::theme::{FG_DIM, GREEN, ORANGE, RED};
+use crate::tui::theme::Theme;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum SyncHealth {
@@ -44,36 +44,38 @@ impl SyncStatusSummary {
         }
     }
 
-    pub(super) fn color(&self) -> Color {
+    pub(super) fn color(&self, theme: &Theme) -> Color {
         match self.health {
-            SyncHealth::AccessRefused | SyncHealth::ProtectedStorageUnavailable => RED,
-            SyncHealth::Attention | SyncHealth::Unfinished | SyncHealth::Pending(_) => ORANGE,
-            SyncHealth::Idle => GREEN,
-            SyncHealth::RuntimeDisabled | SyncHealth::NotSetUp => FG_DIM,
+            SyncHealth::AccessRefused | SyncHealth::ProtectedStorageUnavailable => theme.danger,
+            SyncHealth::Attention | SyncHealth::Unfinished | SyncHealth::Pending(_) => {
+                theme.warning
+            }
+            SyncHealth::Idle => theme.success,
+            SyncHealth::RuntimeDisabled | SyncHealth::NotSetUp => theme.fg_dim,
         }
     }
 
-    pub(super) fn badge(&self, status: &TuiSyncStatus) -> (Color, String) {
+    pub(super) fn badge(&self, theme: &Theme, status: &TuiSyncStatus) -> (Color, String) {
         if let Some(invitation) = status.invitation {
             let remaining = invitation
                 .expires_at
                 .saturating_sub(crate::sync::encrypted::unix_now().unwrap_or_default());
             if remaining > 0 {
                 return (
-                    ORANGE,
+                    theme.warning,
                     format!("inviting · {}:{:02}", remaining / 60, remaining % 60),
                 );
             }
         }
         match self.health {
             SyncHealth::AccessRefused | SyncHealth::ProtectedStorageUnavailable => {
-                (RED, "sync error".to_string())
+                (theme.danger, "sync error".to_string())
             }
-            SyncHealth::Attention | SyncHealth::Unfinished => (ORANGE, "sync!".to_string()),
-            SyncHealth::RuntimeDisabled => (FG_DIM, "sync off".to_string()),
-            SyncHealth::NotSetUp => (FG_DIM, "local".to_string()),
-            SyncHealth::Pending(count) => (ORANGE, format!("sync {count}")),
-            SyncHealth::Idle => (GREEN, "sync".to_string()),
+            SyncHealth::Attention | SyncHealth::Unfinished => (theme.warning, "sync!".to_string()),
+            SyncHealth::RuntimeDisabled => (theme.fg_dim, "sync off".to_string()),
+            SyncHealth::NotSetUp => (theme.fg_dim, "local".to_string()),
+            SyncHealth::Pending(count) => (theme.warning, format!("sync {count}")),
+            SyncHealth::Idle => (theme.success, "sync".to_string()),
         }
     }
 }
@@ -121,6 +123,8 @@ mod tests {
     use super::*;
     use crate::tui::store::SyncStatusCheck;
 
+    const THEME: Theme = Theme::dark();
+
     fn set_up() -> TuiSyncStatus {
         TuiSyncStatus {
             set_up: true,
@@ -135,7 +139,10 @@ mod tests {
             let status = TuiSyncStatus { phase, ..set_up() };
             let summary = sync_status_summary(&status);
             assert_eq!(summary.health, SyncHealth::Unfinished);
-            assert_eq!(summary.badge(&status), (ORANGE, "sync!".to_string()));
+            assert_eq!(
+                summary.badge(&THEME, &status),
+                (THEME.warning, "sync!".to_string())
+            );
             assert!(!summary.can_manual_sync);
         }
     }
@@ -150,9 +157,9 @@ mod tests {
             ..set_up()
         };
 
-        let badge = sync_status_summary(&status).badge(&status);
+        let badge = sync_status_summary(&status).badge(&THEME, &status);
 
-        assert_eq!(badge.0, ORANGE);
+        assert_eq!(badge.0, THEME.warning);
         assert!(badge.1.starts_with("inviting · 7:"), "{}", badge.1);
     }
 
@@ -166,7 +173,10 @@ mod tests {
         let summary = sync_status_summary(&status);
 
         assert_eq!(summary.health, SyncHealth::AccessRefused);
-        assert_eq!(summary.badge(&status), (RED, "sync error".to_string()));
+        assert_eq!(
+            summary.badge(&THEME, &status),
+            (THEME.danger, "sync error".to_string())
+        );
         assert!(summary.can_manual_sync);
     }
 
@@ -180,7 +190,10 @@ mod tests {
         let summary = sync_status_summary(&status);
 
         assert_eq!(summary.health, SyncHealth::ProtectedStorageUnavailable);
-        assert_eq!(summary.badge(&status), (RED, "sync error".to_string()));
+        assert_eq!(
+            summary.badge(&THEME, &status),
+            (THEME.danger, "sync error".to_string())
+        );
         assert_eq!(summary.issues[0].label, "Protected keys");
         assert!(summary.can_manual_sync);
     }
@@ -196,7 +209,10 @@ mod tests {
         let summary = sync_status_summary(&status);
 
         assert_eq!(summary.health, SyncHealth::Attention);
-        assert_eq!(summary.badge(&status), (ORANGE, "sync!".to_string()));
+        assert_eq!(
+            summary.badge(&THEME, &status),
+            (THEME.warning, "sync!".to_string())
+        );
     }
 
     #[test]
@@ -230,11 +246,14 @@ mod tests {
         assert_eq!(disabled.health, SyncHealth::RuntimeDisabled);
         assert!(!disabled.can_manual_sync);
         assert_eq!(
-            pending.badge(&TuiSyncStatus {
-                pending_changes: 4,
-                ..set_up()
-            }),
-            (ORANGE, "sync 4".to_string())
+            pending.badge(
+                &THEME,
+                &TuiSyncStatus {
+                    pending_changes: 4,
+                    ..set_up()
+                }
+            ),
+            (THEME.warning, "sync 4".to_string())
         );
         assert!(pending.can_manual_sync);
     }

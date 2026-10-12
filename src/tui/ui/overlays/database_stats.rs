@@ -58,7 +58,13 @@ pub(in crate::tui::ui) fn render_database_stats(
         .style(Style::new().fg(FG).bg(BG_ALT)),
         hint_area,
     );
-    render_vertical_scrollbar(frame, stats_area, lines.len(), scroll);
+    render_vertical_scrollbar(
+        frame,
+        &crate::tui::theme::Theme::dark(),
+        stats_area,
+        lines.len(),
+        scroll,
+    );
 }
 
 fn database_stats_lines(stats: &TuiDatabaseStats) -> Vec<Line<'static>> {

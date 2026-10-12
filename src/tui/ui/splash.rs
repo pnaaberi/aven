@@ -7,7 +7,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
 
 use crate::tui::app_onboarding::OnboardingIntroVisual;
-use crate::tui::theme::BG;
+use crate::tui::theme::Theme;
 
 const LOGO_WIDTH: usize = 60;
 const LOGO_HEIGHT: usize = 28;
@@ -25,13 +25,18 @@ struct Raster {
     white_endpoint: (usize, usize),
 }
 
-pub(crate) fn render_onboarding_splash(frame: &mut Frame, visual: OnboardingIntroVisual) {
-    render_splash(frame, visual);
+pub(crate) fn render_onboarding_splash(
+    frame: &mut Frame,
+    theme: &Theme,
+    visual: OnboardingIntroVisual,
+) {
+    render_splash(frame, theme, visual);
 }
 
-pub(crate) fn render_dimmed_onboarding_splash(frame: &mut Frame) {
+pub(crate) fn render_dimmed_onboarding_splash(frame: &mut Frame, theme: &Theme) {
     render_splash(
         frame,
+        theme,
         OnboardingIntroVisual {
             purple_reveal: 1.0,
             check_reveal: 1.0,
@@ -42,9 +47,9 @@ pub(crate) fn render_dimmed_onboarding_splash(frame: &mut Frame) {
     );
 }
 
-fn render_splash(frame: &mut Frame, visual: OnboardingIntroVisual) {
+fn render_splash(frame: &mut Frame, theme: &Theme, visual: OnboardingIntroVisual) {
     let area = frame.area();
-    frame.render_widget(Block::new().style(Style::new().bg(BG)), area);
+    frame.render_widget(Block::new().style(Style::new().bg(theme.bg)), area);
 
     let Some((width, height)) = splash_size(area) else {
         return;
@@ -53,7 +58,7 @@ fn render_splash(frame: &mut Frame, visual: OnboardingIntroVisual) {
     let lines = (0..height)
         .map(|y| {
             let spans = (0..width)
-                .map(|x| splash_cell(source, x, y, width, height, visual))
+                .map(|x| splash_cell(theme, source, x, y, width, height, visual))
                 .collect::<Vec<_>>();
             Line::from(spans)
         })
@@ -80,6 +85,7 @@ fn splash_size(area: Rect) -> Option<(usize, usize)> {
 }
 
 fn splash_cell(
+    theme: &Theme,
     source: &Raster,
     cell_x: usize,
     cell_y: usize,
@@ -124,10 +130,9 @@ fn splash_cell(
     let white_mask = pixel_mask(&pixels, Pixel::White);
     let purple_mask = pixel_mask(&pixels, Pixel::Purple);
     let occupied_mask = white_mask | purple_mask;
-    let purple = purple_at(cell_y * 2, height * 2);
+    let purple = purple_at(&theme.splash_gradient, cell_y * 2, height * 2);
     let purple = dim_color(purple, visual.dim);
-    let purple = afterglow_color(
-        purple,
+    let glow = afterglow_amount(
         cell_x * 2,
         cell_y * 2,
         width * 2,
@@ -135,7 +140,8 @@ fn splash_cell(
         source,
         visual.afterglow,
     );
-    let white = dim_color(Color::White, visual.dim);
+    let purple = afterglow_color(purple, theme.splash_afterglow, glow);
+    let white = check_color(theme, visual.dim);
 
     if white_mask > 0 {
         let mut style = Style::new().fg(white);
@@ -268,33 +274,33 @@ fn quadrant_glyph(mask: usize) -> char {
     }
 }
 
-fn purple_at(y: usize, height: usize) -> Color {
+fn purple_at(gradient: &[Color; 3], y: usize, height: usize) -> Color {
     let progress = y as f32 / height.saturating_sub(1).max(1) as f32;
     let (start, end, mix) = if progress < 0.52 {
-        ((135.0, 40.0, 250.0), (150.0, 63.0, 255.0), progress / 0.52)
+        (gradient[0], gradient[1], progress / 0.52)
     } else {
-        (
-            (150.0, 63.0, 255.0),
-            (176.0, 108.0, 255.0),
-            (progress - 0.52) / 0.48,
-        )
+        (gradient[1], gradient[2], (progress - 0.52) / 0.48)
     };
-    let rgb = mix_rgb(start, end, mix);
-    Color::Rgb(rgb.0 as u8, rgb.1 as u8, rgb.2 as u8)
+    match (rgb_channels(start), rgb_channels(end)) {
+        (Some(start), Some(end)) => {
+            let rgb = mix_rgb(start, end, mix);
+            Color::Rgb(rgb.0 as u8, rgb.1 as u8, rgb.2 as u8)
+        }
+        _ => start,
+    }
 }
 
-fn afterglow_color(
-    color: Color,
+fn afterglow_amount(
     x: usize,
     y: usize,
     width: usize,
     height: usize,
     source: &Raster,
     progress: f32,
-) -> Color {
+) -> f32 {
     let progress = progress.clamp(0.0, 1.0);
     if progress <= 0.0 || progress >= 1.0 {
-        return color;
+        return 0.0;
     }
     let horizontal = x as f32 / width.saturating_sub(1).max(1) as f32;
     let vertical = y as f32 / height.saturating_sub(1).max(1) as f32;
@@ -307,18 +313,43 @@ fn afterglow_color(
     let distance = (dx * dx + dy * dy).sqrt();
     let radius = progress * 1.25;
     let ring = (1.0 - (distance - radius).abs() / 0.40).clamp(0.0, 1.0);
-    let amount = ring * (std::f32::consts::PI * progress).sin() * 0.35;
+    ring * (std::f32::consts::PI * progress).sin() * 0.35
+}
 
-    match color {
-        Color::Rgb(red, green, blue) => {
-            let rgb = mix_rgb(
-                (red as f32, green as f32, blue as f32),
-                (232.0, 213.0, 255.0),
-                amount,
-            );
+fn afterglow_color(color: Color, glow: Color, amount: f32) -> Color {
+    if amount <= 0.0 {
+        return color;
+    }
+    match (color, rgb_channels(glow)) {
+        (Color::Rgb(red, green, blue), Some(glow)) => {
+            let rgb = mix_rgb((red as f32, green as f32, blue as f32), glow, amount);
             Color::Rgb(rgb.0 as u8, rgb.1 as u8, rgb.2 as u8)
         }
         _ => color,
+    }
+}
+
+fn check_color(theme: &Theme, dim: f32) -> Color {
+    let dim = dim.clamp(0.0, 1.0);
+    match (
+        rgb_channels(theme.splash_check),
+        rgb_channels(theme.splash_check_dimmed),
+    ) {
+        (Some(start), Some(end)) => Color::Rgb(
+            mix_channel(start.0 as u8, end.0 as u8, dim),
+            mix_channel(start.1 as u8, end.1 as u8, dim),
+            mix_channel(start.2 as u8, end.2 as u8, dim),
+        ),
+        _ if dim < 1.0 => theme.splash_check,
+        _ => theme.splash_check_dimmed,
+    }
+}
+
+fn rgb_channels(color: Color) -> Option<(f32, f32, f32)> {
+    match color {
+        Color::Rgb(red, green, blue) => Some((red as f32, green as f32, blue as f32)),
+        Color::White => Some((255.0, 255.0, 255.0)),
+        _ => None,
     }
 }
 
@@ -330,10 +361,6 @@ fn dim_color(color: Color, amount: f32) -> Color {
             mix_channel(green, green / 3, amount),
             mix_channel(blue, blue / 3, amount),
         ),
-        Color::White => {
-            let channel = mix_channel(255, 85, amount);
-            Color::Rgb(channel, channel, channel)
-        }
         _ => color,
     }
 }
@@ -382,8 +409,11 @@ mod tests {
     fn completed_afterglow_restores_the_dimmed_gradient() {
         let logo = logo();
         let color = Color::Rgb(50, 21, 85);
-        assert_eq!(afterglow_color(color, 60, 28, 120, 56, logo, 0.0), color);
-        assert_eq!(afterglow_color(color, 60, 28, 120, 56, logo, 1.0), color);
+        let glow = Theme::dark().splash_afterglow;
+        for progress in [0.0, 1.0] {
+            let amount = afterglow_amount(60, 28, 120, 56, logo, progress);
+            assert_eq!(afterglow_color(color, glow, amount), color);
+        }
     }
 
     #[test]

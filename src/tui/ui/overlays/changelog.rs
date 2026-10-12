@@ -51,7 +51,13 @@ pub(in crate::tui::ui) fn render_changelog(frame: &mut Frame, markdown: &str, sc
         .style(Style::new().fg(FG).bg(BG_ALT)),
         hint,
     );
-    render_vertical_scrollbar(frame, body, rendered.len(), scroll);
+    render_vertical_scrollbar(
+        frame,
+        &crate::tui::theme::Theme::dark(),
+        body,
+        rendered.len(),
+        scroll,
+    );
 }
 
 pub(crate) fn changelog_link_at(

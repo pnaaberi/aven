@@ -156,6 +156,7 @@ pub(in crate::tui::ui) fn render_sync_dialog(frame: &mut Frame, view: &SyncDialo
     if layout.scrolling() {
         render_vertical_scrollbar(
             frame,
+            &crate::tui::theme::Theme::dark(),
             layout.body_area,
             layout.body.lines.len(),
             layout.start as u16,
@@ -307,7 +308,11 @@ fn home_lines(body: &mut Body, view: &SyncDialogView<'_>, width: usize) {
     // A manual sync replaces the status in place, so nothing below moves.
     let (mark, headline, color) = match view.syncing {
         Some(started_at) => (spinner(started_at), "Syncing…", ACCENT),
-        None => ("●", summary.headline(), summary.color()),
+        None => (
+            "●",
+            summary.headline(),
+            summary.color(&crate::tui::theme::Theme::dark()),
+        ),
     };
     lines.push(Line::from(vec![
         Span::styled(format!("{mark} "), Style::new().fg(color)),

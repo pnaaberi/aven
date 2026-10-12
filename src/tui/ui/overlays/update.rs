@@ -249,7 +249,13 @@ fn render_available_update(
                 .style(Style::new().fg(FG).bg(BG_ALT)),
                 notes_text_area,
             );
-            render_vertical_scrollbar(frame, notes_area, rendered.len(), scroll);
+            render_vertical_scrollbar(
+                frame,
+                &crate::tui::theme::Theme::dark(),
+                notes_area,
+                rendered.len(),
+                scroll,
+            );
         }
     }
 

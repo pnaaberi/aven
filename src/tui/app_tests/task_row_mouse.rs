@@ -29,8 +29,13 @@ fn bulk_footer_click(
     let area = crate::tui::ui::footer_area(Rect::new(0, 0, size.0, size.1));
     let column = (area.x..area.x.saturating_add(area.width))
         .find(|column| {
-            crate::tui::ui::bulk_footer_action_at(area, count, *column, area.y.saturating_add(1))
-                == Some(action)
+            crate::tui::ui::bulk_footer_action_at(
+                &crate::tui::theme::Theme::dark(),
+                area,
+                count,
+                *column,
+                area.y.saturating_add(1),
+            ) == Some(action)
         })
         .expect("expected bulk footer action");
     task_row_click(column, area.y.saturating_add(1))

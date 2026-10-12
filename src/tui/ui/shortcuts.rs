@@ -269,7 +269,13 @@ impl HelpLayout {
                 area,
             );
         }
-        render_vertical_scrollbar(frame, self.content, rows, scroll);
+        render_vertical_scrollbar(
+            frame,
+            &crate::tui::theme::Theme::dark(),
+            self.content,
+            rows,
+            scroll,
+        );
     }
 }
 
@@ -481,7 +487,13 @@ fn render_scrollable_help_lines(
         Paragraph::new(Text::from(visible)).style(Style::new().fg(FG).bg(BG_ALT)),
         area,
     );
-    render_vertical_scrollbar(frame, area, content_height, scroll);
+    render_vertical_scrollbar(
+        frame,
+        &crate::tui::theme::Theme::dark(),
+        area,
+        content_height,
+        scroll,
+    );
 }
 
 fn focused_epic_child(target: Option<&DetailTargetId>) -> bool {

@@ -527,7 +527,13 @@ pub(super) fn render_recurrence_detail(
             .wrap(Wrap { trim: false }),
         body,
     );
-    render_vertical_scrollbar(frame, body, content_height, scroll);
+    render_vertical_scrollbar(
+        frame,
+        &crate::tui::theme::Theme::dark(),
+        body,
+        content_height,
+        scroll,
+    );
     let has_current = detail
         .current_occurrence
         .as_ref()

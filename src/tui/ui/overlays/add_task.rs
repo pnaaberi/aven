@@ -879,7 +879,13 @@ fn render_composer_help(frame: &mut Frame, content: Rect, scroll: u16) {
         help_area,
     );
     if help_area.height > 0 {
-        render_vertical_scrollbar(frame, help_area, COMPOSER_HELP_TOPICS.len(), scroll);
+        render_vertical_scrollbar(
+            frame,
+            &crate::tui::theme::Theme::dark(),
+            help_area,
+            COMPOSER_HELP_TOPICS.len(),
+            scroll,
+        );
     }
     if inner.height > 0 {
         let hint_area = Rect {

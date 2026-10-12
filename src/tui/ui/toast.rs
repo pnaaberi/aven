@@ -5,7 +5,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 
 use super::inline_code::code_spans;
-use crate::tui::theme::{BG, BG_PANEL, BLUE, FG, FG_DIM, GREEN, ORANGE, RED};
+use crate::tui::theme::Theme;
 use crate::tui::toast::{Toast, ToastSeverity};
 
 struct ToastTone {
@@ -13,23 +13,23 @@ struct ToastTone {
     color: Color,
 }
 
-fn toast_tone(severity: ToastSeverity) -> ToastTone {
+fn toast_tone(theme: &Theme, severity: ToastSeverity) -> ToastTone {
     match severity {
         ToastSeverity::Info => ToastTone {
             icon: "•",
-            color: BLUE,
+            color: theme.info,
         },
         ToastSeverity::Warning => ToastTone {
             icon: "!",
-            color: ORANGE,
+            color: theme.warning,
         },
         ToastSeverity::Error => ToastTone {
             icon: "!",
-            color: RED,
+            color: theme.danger,
         },
         ToastSeverity::Success => ToastTone {
             icon: "✓",
-            color: GREEN,
+            color: theme.success,
         },
     }
 }
@@ -39,10 +39,13 @@ fn toast_width(content: &Line<'_>, frame_width: u16) -> u16 {
     content_width.clamp(20, frame_width.saturating_sub(5))
 }
 
-fn toast_message_spans(message: &str, fill: Color) -> Vec<Span<'static>> {
-    let message_style = Style::new().fg(FG).bg(fill).add_modifier(Modifier::BOLD);
+fn toast_message_spans(theme: &Theme, message: &str, fill: Color) -> Vec<Span<'static>> {
+    let message_style = Style::new()
+        .fg(theme.fg)
+        .bg(fill)
+        .add_modifier(Modifier::BOLD);
     let separator_style = Style::new()
-        .fg(FG_DIM)
+        .fg(theme.fg_dim)
         .bg(fill)
         .add_modifier(Modifier::BOLD);
     let mut spans = Vec::new();
@@ -55,11 +58,11 @@ fn toast_message_spans(message: &str, fill: Color) -> Vec<Span<'static>> {
     spans
 }
 
-pub(super) fn render_toast(frame: &mut Frame, toast: &Toast) {
-    let tone = toast_tone(toast.severity);
-    let fill = BG_PANEL;
+pub(super) fn render_toast(frame: &mut Frame, theme: &Theme, toast: &Toast) {
+    let tone = toast_tone(theme, toast.severity);
+    let fill = theme.bg_panel;
     let mut spans = vec![
-        Span::styled("", Style::new().fg(fill).bg(BG)),
+        Span::styled("", Style::new().fg(fill).bg(theme.bg)),
         Span::styled("▌", Style::new().fg(tone.color).bg(fill)),
         Span::styled(" ", Style::new().bg(fill)),
     ];
@@ -69,10 +72,10 @@ pub(super) fn render_toast(frame: &mut Frame, toast: &Toast) {
             Span::styled(" ", Style::new().bg(fill)),
         ]);
     }
-    spans.extend(toast_message_spans(toast.message.as_str(), fill));
+    spans.extend(toast_message_spans(theme, toast.message.as_str(), fill));
     spans.extend([
         Span::styled(" ", Style::new().bg(fill)),
-        Span::styled("", Style::new().fg(fill).bg(BG)),
+        Span::styled("", Style::new().fg(fill).bg(theme.bg)),
     ]);
     let content = Line::from(spans);
     let width = toast_width(&content, frame.area().width);
@@ -90,7 +93,7 @@ pub(super) fn render_toast(frame: &mut Frame, toast: &Toast) {
     };
     frame.render_widget(Clear, area);
     frame.render_widget(
-        Paragraph::new(content).style(Style::new().fg(FG).bg(BG)),
+        Paragraph::new(content).style(Style::new().fg(theme.fg).bg(theme.bg)),
         area,
     );
 }
@@ -118,6 +121,7 @@ mod tests {
             .draw(|frame| {
                 render_toast(
                     frame,
+                    &Theme::dark(),
                     &Toast::new("filters cleared", ToastSeverity::Success),
                 )
             })
@@ -128,18 +132,25 @@ mod tests {
 
     #[test]
     fn toast_tone_uses_explicit_severity() {
-        assert_eq!(toast_tone(ToastSeverity::Info).icon, "•");
-        assert_eq!(toast_tone(ToastSeverity::Warning).icon, "!");
-        assert_eq!(toast_tone(ToastSeverity::Error).icon, "!");
-        assert_eq!(toast_tone(ToastSeverity::Success).icon, "✓");
+        assert_eq!(toast_tone(&Theme::dark(), ToastSeverity::Info).icon, "•");
+        assert_eq!(toast_tone(&Theme::dark(), ToastSeverity::Warning).icon, "!");
+        assert_eq!(toast_tone(&Theme::dark(), ToastSeverity::Error).icon, "!");
+        assert_eq!(toast_tone(&Theme::dark(), ToastSeverity::Success).icon, "✓");
     }
 
     #[test]
     fn toast_tone_uses_severity_colors() {
-        assert_eq!(toast_tone(ToastSeverity::Info).color, BLUE);
-        assert_eq!(toast_tone(ToastSeverity::Warning).color, ORANGE);
-        assert_eq!(toast_tone(ToastSeverity::Error).color, RED);
-        assert_eq!(toast_tone(ToastSeverity::Success).color, GREEN);
+        let theme = Theme::dark();
+        assert_eq!(toast_tone(&theme, ToastSeverity::Info).color, theme.info);
+        assert_eq!(
+            toast_tone(&theme, ToastSeverity::Warning).color,
+            theme.warning
+        );
+        assert_eq!(toast_tone(&theme, ToastSeverity::Error).color, theme.danger);
+        assert_eq!(
+            toast_tone(&theme, ToastSeverity::Success).color,
+            theme.success
+        );
     }
 
     #[test]
@@ -147,7 +158,13 @@ mod tests {
         let backend = TestBackend::new(60, 20);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|frame| render_toast(frame, &Toast::new("nothing to undo", ToastSeverity::Info)))
+            .draw(|frame| {
+                render_toast(
+                    frame,
+                    &Theme::dark(),
+                    &Toast::new("nothing to undo", ToastSeverity::Info),
+                )
+            })
             .unwrap();
         let rendered = buffer_text(terminal.backend());
         assert!(rendered.contains("• nothing to undo"));
@@ -161,6 +178,7 @@ mod tests {
             .draw(|frame| {
                 render_toast(
                     frame,
+                    &Theme::dark(),
                     &Toast::new("⠋ adding task with LLM", ToastSeverity::Info).without_icon(),
                 )
             })
@@ -172,7 +190,8 @@ mod tests {
 
     #[test]
     fn toast_separators_use_muted_text_color() {
-        let spans = toast_message_spans("saved · u undo · g . return", BG_PANEL);
+        let theme = Theme::dark();
+        let spans = toast_message_spans(&theme, "saved · u undo · g . return", theme.bg_panel);
 
         assert_eq!(
             spans
@@ -181,10 +200,10 @@ mod tests {
                 .collect::<String>(),
             "saved │ u undo │ g . return"
         );
-        assert_eq!(spans[0].style.fg, Some(FG));
-        assert_eq!(spans[1].style.fg, Some(FG_DIM));
-        assert_eq!(spans[2].style.fg, Some(FG));
-        assert_eq!(spans[3].style.fg, Some(FG_DIM));
+        assert_eq!(spans[0].style.fg, Some(theme.fg));
+        assert_eq!(spans[1].style.fg, Some(theme.fg_dim));
+        assert_eq!(spans[2].style.fg, Some(theme.fg));
+        assert_eq!(spans[3].style.fg, Some(theme.fg_dim));
     }
 
     #[test]

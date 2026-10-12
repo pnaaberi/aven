@@ -170,6 +170,7 @@ impl App {
             let marked_task_count = self.bulk_scope_marked_task_count();
             let terminal_area = Rect::new(0, 0, terminal_size.width, terminal_size.height);
             if let Some(action) = crate::tui::ui::bulk_footer_action_at(
+                &self.theme,
                 crate::tui::ui::footer_area(terminal_area),
                 marked_task_count,
                 mouse.column,
@@ -192,6 +193,7 @@ impl App {
             && self.detail_underlay()
             && matches!(
                 crate::tui::ui::header_target_at(
+                    &self.theme,
                     &self.store,
                     self.update.badge().as_ref(),
                     header,
@@ -215,6 +217,7 @@ impl App {
             return Ok(());
         }
         if let Some(target) = crate::tui::ui::header_target_at(
+            &self.theme,
             &self.store,
             self.update.badge().as_ref(),
             header,

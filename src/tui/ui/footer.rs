@@ -6,7 +6,7 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::tui::event::{Action, CommandContext};
 
-use crate::tui::theme::{self, BG, BG_PANEL, BORDER, FG, FG_DIM, FG_MUTED, YELLOW};
+use crate::tui::theme::Theme;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum FooterMode {
@@ -31,6 +31,7 @@ pub(super) enum FooterMode {
 }
 
 pub(super) fn footer_bar(
+    theme: &Theme,
     mode: FooterMode,
     width: u16,
     marked_task_count: usize,
@@ -41,20 +42,20 @@ pub(super) fn footer_bar(
         mode
     };
     let spans = if mode == FooterMode::Bulk {
-        visible_bulk_footer_segments(width, marked_task_count)
+        visible_bulk_footer_segments(theme, width, marked_task_count)
             .into_iter()
             .flat_map(|segment| segment.spans)
             .collect()
     } else {
         let mut spans = if matches!(mode, FooterMode::StatusChoice | FooterMode::PriorityChoice) {
-            marked_task_indicator(marked_task_count)
+            marked_task_indicator(theme, marked_task_count)
         } else {
             Vec::new()
         };
         let indicator_width = spans_width(&spans);
         for (keys, label) in footer_hints(mode, width.saturating_sub(indicator_width)) {
-            spans.extend(key(keys));
-            spans.push(cmd(mode, label));
+            spans.extend(key(theme, keys));
+            spans.push(cmd(theme, mode, label));
         }
         spans
     };
@@ -62,9 +63,9 @@ pub(super) fn footer_bar(
         .block(
             Block::new()
                 .borders(Borders::TOP)
-                .border_style(Style::new().fg(BORDER)),
+                .border_style(Style::new().fg(theme.border)),
         )
-        .style(Style::new().fg(FG).bg(BG))
+        .style(Style::new().fg(theme.fg).bg(theme.bg))
 }
 
 struct BulkFooterSegment {
@@ -72,22 +73,24 @@ struct BulkFooterSegment {
     action: Option<Action>,
 }
 
-fn bulk_footer_segments(count: usize) -> Vec<BulkFooterSegment> {
+fn bulk_footer_segments(theme: &Theme, count: usize) -> Vec<BulkFooterSegment> {
     vec![
         BulkFooterSegment {
             spans: vec![Span::styled(
                 format!(" ● {count} marked  "),
-                Style::new().fg(YELLOW).add_modifier(Modifier::BOLD),
+                Style::new()
+                    .fg(theme.attention)
+                    .add_modifier(Modifier::BOLD),
             )],
             action: None,
         },
-        bulk_action_segment("actions", Action::BeginCommand),
-        bulk_action_segment("clear", Action::ClearMarks),
-        bulk_action_segment("undo", Action::Undo),
+        bulk_action_segment(theme, "actions", Action::BeginCommand),
+        bulk_action_segment(theme, "clear", Action::ClearMarks),
+        bulk_action_segment(theme, "undo", Action::Undo),
     ]
 }
 
-fn bulk_action_segment(label: &str, action: Action) -> BulkFooterSegment {
+fn bulk_action_segment(theme: &Theme, label: &str, action: Action) -> BulkFooterSegment {
     let keys = if action == Action::ClearMarks {
         "Esc/t C"
     } else {
@@ -97,18 +100,21 @@ fn bulk_action_segment(label: &str, action: Action) -> BulkFooterSegment {
             .and_then(|command| command.keys(CommandContext::Normal).first())
             .map_or("", |keys| keys.label)
     };
-    let mut spans = key(keys);
-    spans.push(Span::styled(format!(" {label}  "), Style::new().fg(FG_DIM)));
+    let mut spans = key(theme, keys);
+    spans.push(Span::styled(
+        format!(" {label}  "),
+        Style::new().fg(theme.fg_dim),
+    ));
     BulkFooterSegment {
         spans,
         action: Some(action),
     }
 }
 
-fn visible_bulk_footer_segments(width: u16, count: usize) -> Vec<BulkFooterSegment> {
+fn visible_bulk_footer_segments(theme: &Theme, width: u16, count: usize) -> Vec<BulkFooterSegment> {
     let mut used = 0_u16;
     let mut visible = Vec::new();
-    for segment in bulk_footer_segments(count) {
+    for segment in bulk_footer_segments(theme, count) {
         let segment_width = spans_width(&segment.spans);
         if !visible.is_empty() && used.saturating_add(segment_width) > width {
             break;
@@ -127,6 +133,7 @@ fn spans_width(spans: &[Span<'_>]) -> u16 {
 }
 
 pub(crate) fn bulk_footer_action_at(
+    theme: &Theme,
     area: Rect,
     marked_task_count: usize,
     column: u16,
@@ -140,7 +147,7 @@ pub(crate) fn bulk_footer_action_at(
         return None;
     }
     let mut start = area.x;
-    for segment in visible_bulk_footer_segments(area.width, marked_task_count) {
+    for segment in visible_bulk_footer_segments(theme, area.width, marked_task_count) {
         let end = start.saturating_add(spans_width(&segment.spans));
         if start <= column && column < end {
             return segment.action;
@@ -150,13 +157,15 @@ pub(crate) fn bulk_footer_action_at(
     None
 }
 
-fn marked_task_indicator(count: usize) -> Vec<Span<'static>> {
+fn marked_task_indicator(theme: &Theme, count: usize) -> Vec<Span<'static>> {
     if count == 0 {
         return Vec::new();
     }
     vec![Span::styled(
         format!(" ● {count} marked  "),
-        Style::new().fg(YELLOW).add_modifier(Modifier::BOLD),
+        Style::new()
+            .fg(theme.attention)
+            .add_modifier(Modifier::BOLD),
     )]
 }
 
@@ -461,13 +470,13 @@ fn footer_hints(mode: FooterMode, width: u16) -> &'static [(&'static str, &'stat
     }
 }
 
-fn key(label: &str) -> Vec<Span<'static>> {
+fn key(theme: &Theme, label: &str) -> Vec<Span<'static>> {
     let key_style = Style::new()
-        .fg(FG_MUTED)
-        .bg(BG_PANEL)
+        .fg(theme.fg_muted)
+        .bg(theme.bg_panel)
         .add_modifier(Modifier::BOLD);
-    let separator_style = Style::new().fg(FG_DIM).bg(BG_PANEL);
-    let edge_style = Style::new().fg(BG_PANEL).bg(BG);
+    let separator_style = Style::new().fg(theme.fg_dim).bg(theme.bg_panel);
+    let edge_style = Style::new().fg(theme.bg_panel).bg(theme.bg);
     let mut spans = vec![Span::styled("".to_string(), edge_style)];
     for (index, part) in label.split('/').enumerate() {
         if index > 0 {
@@ -479,10 +488,10 @@ fn key(label: &str) -> Vec<Span<'static>> {
     spans
 }
 
-fn cmd(mode: FooterMode, label: &str) -> Span<'static> {
+fn cmd(theme: &Theme, mode: FooterMode, label: &str) -> Span<'static> {
     let style = match mode {
-        FooterMode::StatusChoice => theme::status_style(label),
-        FooterMode::PriorityChoice => theme::priority_style(label),
+        FooterMode::StatusChoice => theme.status(label),
+        FooterMode::PriorityChoice => theme.priority(label),
         FooterMode::Bulk
         | FooterMode::List
         | FooterMode::Columns
@@ -498,7 +507,7 @@ fn cmd(mode: FooterMode, label: &str) -> Span<'static> {
         | FooterMode::DetailAttachment
         | FooterMode::DetailEpicChild
         | FooterMode::AttachmentPreview
-        | FooterMode::DetailSelection => Style::new().fg(FG_DIM),
+        | FooterMode::DetailSelection => Style::new().fg(theme.fg_dim),
     };
     Span::styled(format!(" {label}  "), style)
 }
@@ -523,7 +532,12 @@ mod tests {
         let backend = TestBackend::new(128, 3);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|frame| frame.render_widget(footer_bar(FooterMode::Detail, 128, 0), frame.area()))
+            .draw(|frame| {
+                frame.render_widget(
+                    footer_bar(&Theme::dark(), FooterMode::Detail, 128, 0),
+                    frame.area(),
+                )
+            })
             .unwrap();
         let rendered = buffer_text(terminal.backend());
 
@@ -541,7 +555,12 @@ mod tests {
         let backend = TestBackend::new(100, 3);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|frame| frame.render_widget(footer_bar(FooterMode::List, 100, 3), frame.area()))
+            .draw(|frame| {
+                frame.render_widget(
+                    footer_bar(&Theme::dark(), FooterMode::List, 100, 3),
+                    frame.area(),
+                )
+            })
             .unwrap();
         let rendered = buffer_text(terminal.backend());
 
@@ -558,16 +577,21 @@ mod tests {
         let backend = TestBackend::new(100, 3);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|frame| frame.render_widget(footer_bar(FooterMode::List, 100, 3), frame.area()))
+            .draw(|frame| {
+                frame.render_widget(
+                    footer_bar(&Theme::dark(), FooterMode::List, 100, 3),
+                    frame.area(),
+                )
+            })
             .unwrap();
         let buffer = terminal.backend().buffer();
         let key_column = (0..100)
             .find(|&column| buffer[(column, 1)].symbol() == ":")
             .expect("expected command key");
 
-        assert_eq!(buffer[(key_column, 1)].bg, BG_PANEL);
-        assert_eq!(buffer[(key_column - 1, 1)].bg, BG);
-        assert_eq!(buffer[(key_column + 1, 1)].bg, BG);
+        assert_eq!(buffer[(key_column, 1)].bg, Theme::dark().bg_panel);
+        assert_eq!(buffer[(key_column - 1, 1)].bg, Theme::dark().bg);
+        assert_eq!(buffer[(key_column + 1, 1)].bg, Theme::dark().bg);
     }
 
     #[test]
@@ -575,7 +599,12 @@ mod tests {
         let backend = TestBackend::new(100, 3);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|frame| frame.render_widget(footer_bar(FooterMode::Detail, 100, 3), frame.area()))
+            .draw(|frame| {
+                frame.render_widget(
+                    footer_bar(&Theme::dark(), FooterMode::Detail, 100, 3),
+                    frame.area(),
+                )
+            })
             .unwrap();
         let rendered = buffer_text(terminal.backend());
 
@@ -587,13 +616,13 @@ mod tests {
     fn bulk_footer_actions_share_rendered_hit_ranges() {
         let area = Rect::new(0, 0, 100, 2);
         let actions = (0..area.width)
-            .filter_map(|column| bulk_footer_action_at(area, 3, column, 1))
+            .filter_map(|column| bulk_footer_action_at(&Theme::dark(), area, 3, column, 1))
             .collect::<Vec<_>>();
 
         assert!(actions.contains(&Action::BeginCommand));
         assert!(actions.contains(&Action::ClearMarks));
         assert!(actions.contains(&Action::Undo));
-        assert_eq!(bulk_footer_action_at(area, 3, 5, 0), None);
+        assert_eq!(bulk_footer_action_at(&Theme::dark(), area, 3, 5, 0), None);
     }
 
     #[test]
@@ -602,7 +631,10 @@ mod tests {
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
             .draw(|frame| {
-                frame.render_widget(footer_bar(FooterMode::StatusChoice, 100, 3), frame.area())
+                frame.render_widget(
+                    footer_bar(&Theme::dark(), FooterMode::StatusChoice, 100, 3),
+                    frame.area(),
+                )
             })
             .unwrap();
         let rendered = buffer_text(terminal.backend());
@@ -617,7 +649,12 @@ mod tests {
         let backend = TestBackend::new(100, 3);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|frame| frame.render_widget(footer_bar(FooterMode::List, 100, 0), frame.area()))
+            .draw(|frame| {
+                frame.render_widget(
+                    footer_bar(&Theme::dark(), FooterMode::List, 100, 0),
+                    frame.area(),
+                )
+            })
             .unwrap();
         let rendered = buffer_text(terminal.backend());
 

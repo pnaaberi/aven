@@ -6,9 +6,7 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 use unicode_width::UnicodeWidthStr;
 
 use crate::tui::store::{TaskLayout, TaskQuery, TaskScope, TuiStore};
-use crate::tui::theme::{
-    self, ACCENT, BG, BG_PANEL, BLUE, BORDER, FG, FG_DIM, FG_MUTED, GREEN, INVERSE_FG, ORANGE, PINK,
-};
+use crate::tui::theme::Theme;
 
 const HEADER_STATUS_GAP: u16 = 2;
 
@@ -35,6 +33,7 @@ struct HeaderHitbox {
 
 pub(super) fn render_header(
     frame: &mut Frame,
+    theme: &Theme,
     store: &TuiStore,
     update: Option<&crate::tui::app_update::UpdateBadgeView>,
     area: Rect,
@@ -42,8 +41,8 @@ pub(super) fn render_header(
     frame.render_widget(
         Block::new()
             .borders(Borders::BOTTOM)
-            .border_style(Style::new().fg(BORDER))
-            .style(Style::new().bg(BG)),
+            .border_style(Style::new().fg(theme.border))
+            .style(Style::new().bg(theme.bg)),
         area,
     );
     let content_area = Rect {
@@ -52,18 +51,22 @@ pub(super) fn render_header(
         ..area
     };
     if area.width >= 84 {
-        let status_width = header_status_width(store);
+        let status_width = header_status_width(theme, store);
         let [left, right] =
             Layout::horizontal([Constraint::Fill(1), Constraint::Length(status_width)])
                 .areas(content_area);
-        frame.render_widget(header_line(store, update, left.width), left);
-        frame.render_widget(header_status(store), right);
+        frame.render_widget(header_line(theme, store, update, left.width), left);
+        frame.render_widget(header_status(theme, store), right);
     } else {
-        frame.render_widget(header_line(store, update, content_area.width), content_area);
+        frame.render_widget(
+            header_line(theme, store, update, content_area.width),
+            content_area,
+        );
     }
 }
 
 pub(crate) fn header_target_at(
+    theme: &Theme,
     store: &TuiStore,
     update: Option<&crate::tui::app_update::UpdateBadgeView>,
     area: Rect,
@@ -75,7 +78,7 @@ pub(crate) fn header_target_at(
     }
     let content_width = area.width.saturating_sub(1);
     let line_width = if area.width >= 84 {
-        let status_width = header_status_width(store);
+        let status_width = header_status_width(theme, store);
         content_width.saturating_sub(status_width)
     } else {
         content_width
@@ -89,7 +92,7 @@ pub(crate) fn header_target_at(
         return None;
     }
     let local_x = x.saturating_sub(area.x);
-    header_hitboxes(store, update, line_width)
+    header_hitboxes(theme, store, update, line_width)
         .into_iter()
         .find(|hitbox| local_x >= hitbox.start && local_x < hitbox.end)
         .map(|hitbox| {
@@ -112,27 +115,31 @@ impl HeaderTarget {
 }
 
 fn header_line(
+    theme: &Theme,
     store: &TuiStore,
     update: Option<&crate::tui::app_update::UpdateBadgeView>,
     width: u16,
 ) -> Paragraph<'static> {
-    Paragraph::new(Line::from(header_spans(store, update, width))).style(Style::new().fg(FG).bg(BG))
+    Paragraph::new(Line::from(header_spans(theme, store, update, width)))
+        .style(Style::new().fg(theme.fg).bg(theme.bg))
 }
 
 fn header_spans(
+    theme: &Theme,
     store: &TuiStore,
     update: Option<&crate::tui::app_update::UpdateBadgeView>,
     width: u16,
 ) -> Vec<Span<'static>> {
-    header_layout(store, update, width).spans
+    header_layout(theme, store, update, width).spans
 }
 
 fn header_hitboxes(
+    theme: &Theme,
     store: &TuiStore,
     update: Option<&crate::tui::app_update::UpdateBadgeView>,
     width: u16,
 ) -> Vec<HeaderHitbox> {
-    header_layout(store, update, width).hitboxes
+    header_layout(theme, store, update, width).hitboxes
 }
 
 struct HeaderLayout {
@@ -184,6 +191,7 @@ impl HeaderLayout {
 }
 
 fn header_layout(
+    theme: &Theme,
     store: &TuiStore,
     update: Option<&crate::tui::app_update::UpdateBadgeView>,
     width: u16,
@@ -191,43 +199,46 @@ fn header_layout(
     let compact = width < 120;
     let mut layout = HeaderLayout::new();
     layout.push_text(
-        Span::styled(" aven", Style::new().fg(FG).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " aven",
+            Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
+        ),
         Some(HeaderTarget::Home),
     );
     layout.push_text(
         Span::styled(
             format!(" v{}", crate::update::CURRENT_VERSION),
-            Style::new().fg(FG_DIM),
+            Style::new().fg(theme.fg_dim),
         ),
         Some(HeaderTarget::Changelog),
     );
     if let Some(update) = update {
-        layout.push_text(separator(), None);
-        layout.push(update_badge(update), Some(HeaderTarget::Update));
+        layout.push_text(separator(theme), None);
+        layout.push(update_badge(theme, update), Some(HeaderTarget::Update));
     }
-    layout.push_text(separator(), None);
+    layout.push_text(separator(theme), None);
     layout.push(
         vec![
             Span::styled(
                 if compact { "ws " } else { "workspace " },
-                Style::new().fg(FG_DIM),
+                Style::new().fg(theme.fg_dim),
             ),
             Span::styled(
                 store.active_workspace.key.clone(),
-                Style::new().fg(FG).add_modifier(Modifier::BOLD),
+                Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
             ),
         ],
         Some(HeaderTarget::Workspace { column: 0 }),
     );
-    layout.push_text(separator(), None);
-    let mut scope = vec![Span::styled("scope ", Style::new().fg(FG_DIM))];
-    scope.extend(scope_badge(store));
+    layout.push_text(separator(theme), None);
+    let mut scope = vec![Span::styled("scope ", Style::new().fg(theme.fg_dim))];
+    scope.extend(scope_badge(theme, store));
     layout.push(scope, Some(HeaderTarget::Scope { column: 0 }));
-    layout.push_text(separator(), None);
-    let mut view = vec![Span::styled("view ", Style::new().fg(FG_DIM))];
-    view.extend(view_badge(store));
+    layout.push_text(separator(theme), None);
+    let mut view = vec![Span::styled("view ", Style::new().fg(theme.fg_dim))];
+    view.extend(view_badge(theme, store));
     layout.push(view, Some(HeaderTarget::Query { column: 0 }));
-    layout.push_text(separator(), None);
+    layout.push_text(separator(theme), None);
     let columns_supported = store.view_state.query.supports_layout(TaskLayout::Columns);
     let layout_label = match store.view_state.layout {
         TaskLayout::List if !columns_supported => " 󰉹 list only ",
@@ -236,33 +247,34 @@ fn header_layout(
     };
     let layout_style = if columns_supported {
         Style::new()
-            .fg(FG)
-            .bg(BG_PANEL)
+            .fg(theme.fg)
+            .bg(theme.bg_panel)
             .add_modifier(Modifier::BOLD)
     } else {
-        Style::new().fg(FG_MUTED).bg(BG_PANEL)
+        Style::new().fg(theme.fg_muted).bg(theme.bg_panel)
     };
     layout.push(
         vec![Span::styled(layout_label, layout_style)],
         Some(HeaderTarget::Layout),
     );
-    layout.push(active_filter_spans(store), None);
+    layout.push(active_filter_spans(theme, store), None);
 
-    let order = active_order_spans(store);
+    let order = active_order_spans(theme, store);
     if (!compact || width >= 84) && layout.segment_fits(&order, width) {
         layout.push(order, Some(HeaderTarget::Order { column: 0 }));
     }
 
-    for (index, (label, count, color, active, target)) in header_metric_entries(store, compact)
-        .into_iter()
-        .enumerate()
+    for (index, (label, count, color, active, target)) in
+        header_metric_entries(theme, store, compact)
+            .into_iter()
+            .enumerate()
     {
         let prefix = if index == 0 {
-            vec![separator()]
+            vec![separator(theme)]
         } else {
             vec![Span::raw(" ")]
         };
-        let badge = metric(label, count, color, active);
+        let badge = metric(theme, label, count, color, active);
         let mut segment = prefix.clone();
         segment.extend(badge.clone());
         if !layout.segment_fits(&segment, width) {
@@ -295,18 +307,19 @@ fn separator_text() -> &'static str {
 }
 
 #[cfg(test)]
-fn header_metrics(store: &TuiStore, compact: bool) -> Vec<Span<'static>> {
+fn header_metrics(theme: &Theme, store: &TuiStore, compact: bool) -> Vec<Span<'static>> {
     let mut spans = Vec::new();
-    for (label, count, color, active, _) in header_metric_entries(store, compact) {
+    for (label, count, color, active, _) in header_metric_entries(theme, store, compact) {
         if !spans.is_empty() {
             spans.push(Span::raw(" "));
         }
-        spans.extend(metric(label, count, color, active));
+        spans.extend(metric(theme, label, count, color, active));
     }
     spans
 }
 
 fn header_metric_entries(
+    theme: &Theme,
     store: &TuiStore,
     compact: bool,
 ) -> Vec<(&'static str, i64, Color, bool, TaskQuery)> {
@@ -315,35 +328,35 @@ fn header_metric_entries(
         (
             "queue",
             store.counts.open,
-            ACCENT,
+            theme.accent,
             view == TaskQuery::Queue,
             TaskQuery::Queue,
         ),
         (
             "open",
             store.counts.open,
-            GREEN,
+            theme.success,
             view == TaskQuery::Open,
             TaskQuery::Open,
         ),
         (
             "todo",
             store.counts.todo,
-            BLUE,
+            theme.status_todo,
             view == TaskQuery::Todo,
             TaskQuery::Todo,
         ),
         (
             "inbox",
             store.counts.inbox,
-            FG_MUTED,
+            theme.fg_muted,
             view == TaskQuery::Inbox,
             TaskQuery::Inbox,
         ),
         (
             "conflicts",
             store.counts.conflicts,
-            PINK,
+            theme.conflict,
             view == TaskQuery::Conflicts,
             TaskQuery::Conflicts,
         ),
@@ -354,15 +367,22 @@ fn header_metric_entries(
         .collect()
 }
 
-fn separator() -> Span<'static> {
-    Span::styled(separator_text(), Style::new().fg(BORDER))
+fn separator(theme: &Theme) -> Span<'static> {
+    Span::styled(separator_text(), Style::new().fg(theme.border))
 }
 
-fn update_badge(update: &crate::tui::app_update::UpdateBadgeView) -> Vec<Span<'static>> {
-    let fill = if update.restart { ORANGE } else { ACCENT };
-    let edge = Style::new().fg(fill).bg(BG);
+fn update_badge(
+    theme: &Theme,
+    update: &crate::tui::app_update::UpdateBadgeView,
+) -> Vec<Span<'static>> {
+    let fill = if update.restart {
+        theme.warning
+    } else {
+        theme.accent
+    };
+    let edge = Style::new().fg(fill).bg(theme.bg);
     let label = Style::new()
-        .fg(INVERSE_FG)
+        .fg(theme.inverse_fg)
         .bg(fill)
         .add_modifier(Modifier::BOLD);
     vec![
@@ -372,28 +392,25 @@ fn update_badge(update: &crate::tui::app_update::UpdateBadgeView) -> Vec<Span<'s
     ]
 }
 
-fn scope_badge(store: &TuiStore) -> Vec<Span<'static>> {
+fn scope_badge(theme: &Theme, store: &TuiStore) -> Vec<Span<'static>> {
     let badge_style = Style::new()
-        .fg(FG)
-        .bg(BG_PANEL)
+        .fg(theme.fg)
+        .bg(theme.bg_panel)
         .add_modifier(Modifier::BOLD);
     match &store.view_state.scope {
         TaskScope::Workspace => vec![Span::styled(" workspace ", badge_style)],
         TaskScope::Project(project) => vec![
             Span::styled(" project ", badge_style),
-            Span::styled(
-                project.clone(),
-                badge_style.fg(theme::project_color(project)),
-            ),
+            Span::styled(project.clone(), badge_style.fg(theme.project(project))),
             Span::styled(" ", badge_style),
         ],
     }
 }
 
-fn view_badge(store: &TuiStore) -> Vec<Span<'static>> {
+fn view_badge(theme: &Theme, store: &TuiStore) -> Vec<Span<'static>> {
     let badge_style = Style::new()
-        .fg(FG)
-        .bg(BG_PANEL)
+        .fg(theme.fg)
+        .bg(theme.bg_panel)
         .add_modifier(Modifier::BOLD);
     vec![Span::styled(
         format!(" {} ", active_view_label(store)),
@@ -423,11 +440,17 @@ fn active_view_label(store: &TuiStore) -> &'static str {
     }
 }
 
-fn metric(label: &str, count: i64, color: Color, active: bool) -> Vec<Span<'static>> {
-    let fill = if active { color } else { BG_PANEL };
-    let fg = if active { INVERSE_FG } else { color };
+fn metric(
+    theme: &Theme,
+    label: &str,
+    count: i64,
+    color: Color,
+    active: bool,
+) -> Vec<Span<'static>> {
+    let fill = if active { color } else { theme.bg_panel };
+    let fg = if active { theme.inverse_fg } else { color };
     let style = Style::new().fg(fg).bg(fill).add_modifier(Modifier::BOLD);
-    let edge_style = Style::new().fg(fill).bg(BG);
+    let edge_style = Style::new().fg(fill).bg(theme.bg);
     vec![
         Span::styled("".to_string(), edge_style),
         Span::styled(format!("{label} {count}"), style),
@@ -435,16 +458,16 @@ fn metric(label: &str, count: i64, color: Color, active: bool) -> Vec<Span<'stat
     ]
 }
 
-fn active_order_spans(store: &TuiStore) -> Vec<Span<'static>> {
+fn active_order_spans(theme: &Theme, store: &TuiStore) -> Vec<Span<'static>> {
     if store.view_state.query == TaskQuery::Recurring {
         return Vec::new();
     }
     let mut spans = vec![
-        separator(),
-        Span::styled("order ", Style::new().fg(FG_DIM)),
+        separator(theme),
+        Span::styled("order ", Style::new().fg(theme.fg_dim)),
         Span::styled(
             store.sort_label(),
-            Style::new().fg(FG_MUTED).add_modifier(Modifier::BOLD),
+            Style::new().fg(theme.fg_muted).add_modifier(Modifier::BOLD),
         ),
     ];
     if !matches!(
@@ -453,111 +476,115 @@ fn active_order_spans(store: &TuiStore) -> Vec<Span<'static>> {
     ) {
         spans.push(Span::styled(
             format!(" {}", store.sort_direction_label()),
-            Style::new().fg(FG_DIM),
+            Style::new().fg(theme.fg_dim),
         ));
     }
     spans
 }
 
-fn active_filter_spans(store: &TuiStore) -> Vec<Span<'static>> {
+fn active_filter_spans(theme: &Theme, store: &TuiStore) -> Vec<Span<'static>> {
     if store.view_state.query == TaskQuery::Recurring {
-        let mut parts = vec![vec![filter_part(format!(
-            "lifecycle={}",
-            store.view_state.recurring.lifecycle.as_str()
-        ))]];
+        let mut parts = vec![vec![filter_part(
+            theme,
+            format!(
+                "lifecycle={}",
+                store.view_state.recurring.lifecycle.as_str()
+            ),
+        )]];
         if let Some(search) = store.view_state.recurring.search.as_deref() {
-            parts.push(vec![filter_part(format!("search={search}"))]);
+            parts.push(vec![filter_part(theme, format!("search={search}"))]);
         }
         let mut spans = vec![
-            separator(),
-            Span::styled("filter ", Style::new().fg(FG_DIM)),
+            separator(theme),
+            Span::styled("filter ", Style::new().fg(theme.fg_dim)),
         ];
-        spans.extend(join_filter_parts(parts));
+        spans.extend(join_filter_parts(theme, parts));
         return spans;
     }
     let modifiers = &store.view_state.filter_modifiers;
     let mut parts = Vec::new();
     if let Some(label) = &modifiers.label {
-        parts.push(vec![filter_part(format!("label={label}"))]);
+        parts.push(vec![filter_part(theme, format!("label={label}"))]);
     }
     if let Some(priority) = &modifiers.priority {
-        parts.push(vec![filter_part(format!("priority={priority}"))]);
+        parts.push(vec![filter_part(theme, format!("priority={priority}"))]);
     }
     match modifiers.closed {
         crate::tui::store::ClosedTaskVisibility::Default => {}
         crate::tui::store::ClosedTaskVisibility::Included => {
-            parts.push(vec![filter_part("include_closed")]);
+            parts.push(vec![filter_part(theme, "include_closed")]);
         }
         crate::tui::store::ClosedTaskVisibility::Only => {
-            parts.push(vec![filter_part("closed_only")]);
+            parts.push(vec![filter_part(theme, "closed_only")]);
         }
     }
     if modifiers.deleted_only {
-        parts.push(vec![filter_part("deleted_only")]);
+        parts.push(vec![filter_part(theme, "deleted_only")]);
     } else if modifiers.include_deleted {
-        parts.push(vec![filter_part("include_deleted")]);
+        parts.push(vec![filter_part(theme, "include_deleted")]);
     }
     if let Some(match_count) = store.view_state.projection_origin.match_count() {
-        parts.push(vec![filter_part(format!("matches={match_count}"))]);
+        parts.push(vec![filter_part(theme, format!("matches={match_count}"))]);
     }
     if parts.is_empty() {
         Vec::new()
     } else {
         let mut spans = vec![
-            separator(),
-            Span::styled("filter ", Style::new().fg(FG_DIM)),
+            separator(theme),
+            Span::styled("filter ", Style::new().fg(theme.fg_dim)),
         ];
-        spans.extend(join_filter_parts(parts));
+        spans.extend(join_filter_parts(theme, parts));
         spans
     }
 }
 
-fn filter_part(content: impl Into<std::borrow::Cow<'static, str>>) -> Span<'static> {
+fn filter_part(theme: &Theme, content: impl Into<std::borrow::Cow<'static, str>>) -> Span<'static> {
     Span::styled(
         content,
-        Style::new().fg(FG_MUTED).add_modifier(Modifier::BOLD),
+        Style::new().fg(theme.fg_muted).add_modifier(Modifier::BOLD),
     )
 }
 
-fn join_filter_parts(parts: Vec<Vec<Span<'static>>>) -> Vec<Span<'static>> {
+fn join_filter_parts(theme: &Theme, parts: Vec<Vec<Span<'static>>>) -> Vec<Span<'static>> {
     let mut spans = Vec::new();
     for part in parts {
         if !spans.is_empty() {
-            spans.push(filter_part(" "));
+            spans.push(filter_part(theme, " "));
         }
         spans.extend(part);
     }
     spans
 }
 
-fn header_status_width(store: &TuiStore) -> u16 {
-    let (_, label) = sync_status_label(store);
+fn header_status_width(theme: &Theme, store: &TuiStore) -> u16 {
+    let (_, label) = sync_status_label(theme, store);
     label.width() as u16 + 3
 }
 
-fn header_status(store: &TuiStore) -> Paragraph<'static> {
-    let (dot_color, label) = sync_status_label(store);
+fn header_status(theme: &Theme, store: &TuiStore) -> Paragraph<'static> {
+    let (dot_color, label) = sync_status_label(theme, store);
     let spans = vec![
         Span::raw(" "),
         Span::styled("●", Style::new().fg(dot_color)),
-        Span::styled(format!(" {label}"), Style::new().fg(FG_DIM)),
+        Span::styled(format!(" {label}"), Style::new().fg(theme.fg_dim)),
     ];
     Paragraph::new(Line::from(spans))
         .alignment(Alignment::Right)
-        .style(Style::new().fg(FG_DIM).bg(BG))
+        .style(Style::new().fg(theme.fg_dim).bg(theme.bg))
 }
 
-fn sync_status_label(store: &TuiStore) -> (Color, String) {
+fn sync_status_label(theme: &Theme, store: &TuiStore) -> (Color, String) {
     if store.sync_busy {
-        return (ACCENT, "syncing".to_string());
+        return (theme.accent, "syncing".to_string());
     }
     if !store.sync_status.enabled
         && !store.sync_status.runtime_allowed
         && store.database_path().file_name() == Some(std::ffi::OsStr::new("demo.sqlite"))
     {
-        return (GREEN, "sync".to_string());
+        return (theme.success, "sync".to_string());
     }
-    super::sync_status_model::sync_status_summary(&store.sync_status).badge(&store.sync_status)
+    super::sync_status_model::sync_status_summary(&store.sync_status)
+        .badge(theme, &store.sync_status)
 }
 
 #[cfg(test)]
@@ -600,34 +627,49 @@ mod tests {
     #[tokio::test]
     async fn sync_status_badge_distinguishes_local_attention_and_disabled_sync() {
         let (mut store, _dir) = test_store().await;
+        let theme = Theme::dark();
         store.sync_status.enabled = true;
-        assert_eq!(sync_status_label(&store), (FG_DIM, "local".to_string()));
+        assert_eq!(
+            sync_status_label(&theme, &store),
+            (theme.fg_dim, "local".to_string())
+        );
 
         store.sync_status.set_up = true;
         store.sync_status.phase = crate::sync::encrypted::LocalPhase::SetUp;
         store.sync_status.conflicts = 2;
-        assert_eq!(sync_status_label(&store), (ORANGE, "sync!".to_string()));
+        assert_eq!(
+            sync_status_label(&theme, &store),
+            (theme.warning, "sync!".to_string())
+        );
 
         store.sync_busy = true;
-        assert_eq!(sync_status_label(&store), (ACCENT, "syncing".to_string()));
+        assert_eq!(
+            sync_status_label(&theme, &store),
+            (theme.accent, "syncing".to_string())
+        );
         store.sync_busy = false;
 
         store.sync_status.conflicts = 0;
         store.sync_status.runtime_allowed = false;
-        assert_eq!(sync_status_label(&store), (FG_DIM, "sync off".to_string()));
+        assert_eq!(
+            sync_status_label(&theme, &store),
+            (theme.fg_dim, "sync off".to_string())
+        );
     }
 
     #[tokio::test]
     async fn search_prompt_omits_match_count_filter() {
         let (mut store, _dir) = test_store().await;
+        let theme = Theme::dark();
         store.show_view(TaskQuery::Search).await.unwrap();
 
-        assert!(!spans_text(active_filter_spans(&store)).contains("matches="));
+        assert!(!spans_text(active_filter_spans(&theme, &store)).contains("matches="));
     }
 
     #[tokio::test]
     async fn header_parts_render_scope_view_metrics_filters_and_order() {
         let (mut store, _dir) = test_store().await;
+        let theme = Theme::dark();
         store.view_state = TaskViewState {
             scope: TaskScope::Project("mobile-app".to_string()),
             query: TaskQuery::Open,
@@ -651,52 +693,60 @@ mod tests {
         };
 
         assert_eq!(store.active_workspace.key, "default");
-        assert_eq!(spans_text(scope_badge(&store)), " project mobile-app ");
-        assert_eq!(spans_text(view_badge(&store)), " open ");
-        assert!(spans_text(header_metrics(&store, false)).contains("open 3"));
-        assert!(spans_text(header_metrics(&store, false)).contains("todo 2"));
-        assert!(spans_text(header_metrics(&store, false)).contains("conflicts 1"));
         assert_eq!(
-            spans_text(active_filter_spans(&store)),
+            spans_text(scope_badge(&theme, &store)),
+            " project mobile-app "
+        );
+        assert_eq!(spans_text(view_badge(&theme, &store)), " open ");
+        assert!(spans_text(header_metrics(&theme, &store, false)).contains("open 3"));
+        assert!(spans_text(header_metrics(&theme, &store, false)).contains("todo 2"));
+        assert!(spans_text(header_metrics(&theme, &store, false)).contains("conflicts 1"));
+        assert_eq!(
+            spans_text(active_filter_spans(&theme, &store)),
             " │ filter label=backend priority=urgent include_closed include_deleted matches=2"
         );
 
         store.view_state.filter_modifiers.deleted_only = true;
         assert_eq!(
-            spans_text(active_filter_spans(&store)),
+            spans_text(active_filter_spans(&theme, &store)),
             " │ filter label=backend priority=urgent include_closed deleted_only matches=2"
         );
         store.view_state.filter_modifiers.deleted_only = false;
         store.view_state.filter_modifiers.closed = crate::tui::store::ClosedTaskVisibility::Only;
-        assert!(spans_text(active_filter_spans(&store)).contains("closed_only"));
+        assert!(spans_text(active_filter_spans(&theme, &store)).contains("closed_only"));
         assert_eq!(
-            spans_text(active_order_spans(&store)),
+            spans_text(active_order_spans(&theme, &store)),
             " │ order priority desc"
         );
-        assert!(!spans_text(active_filter_spans(&store)).contains("project="));
-        assert_ne!(spans_text(view_badge(&store)), " project mobile-app ");
+        assert!(!spans_text(active_filter_spans(&theme, &store)).contains("project="));
+        assert_ne!(
+            spans_text(view_badge(&theme, &store)),
+            " project mobile-app "
+        );
     }
 
     #[tokio::test]
     async fn list_only_query_disables_layout_control_visually() {
         let (store, _dir) = test_store().await;
+        let theme = Theme::dark();
 
-        let layout_span = header_spans(&store, None, 150)
+        let layout_span = header_spans(&theme, &store, None, 150)
             .into_iter()
             .find(|span| span.content.contains("list only"))
             .unwrap();
 
         assert_eq!(layout_span.content, " 󰉹 list only ");
-        assert_eq!(layout_span.style.fg, Some(FG_MUTED));
+        assert_eq!(layout_span.style.fg, Some(theme.fg_muted));
         assert!(!layout_span.style.add_modifier.contains(Modifier::BOLD));
     }
 
     #[tokio::test]
     async fn compact_header_omits_order_when_it_does_not_fit() {
         let (mut store, _dir) = test_store().await;
+        let theme = Theme::dark();
         store.counts = crate::query::SidebarCounts::default();
 
-        let rendered = spans_text(header_spans(&store, None, 75));
+        let rendered = spans_text(header_spans(&theme, &store, None, 75));
 
         assert!(!rendered.contains("order"));
     }
@@ -704,9 +754,10 @@ mod tests {
     #[tokio::test]
     async fn constrained_header_keeps_complete_filter_ahead_of_metrics() {
         let (mut store, _dir) = test_store().await;
+        let theme = Theme::dark();
         store.view_state.filter_modifiers.label = Some("capture".to_string());
 
-        let rendered = spans_text(header_spans(&store, None, 78));
+        let rendered = spans_text(header_spans(&theme, &store, None, 78));
 
         assert!(rendered.contains("filter label=capture"), "{rendered:?}");
         assert!(!rendered.contains("queue 3"), "{rendered:?}");
@@ -716,9 +767,10 @@ mod tests {
     #[tokio::test]
     async fn constrained_header_adds_only_complete_priority_metrics() {
         let (mut store, _dir) = test_store().await;
+        let theme = Theme::dark();
         store.view_state.filter_modifiers.label = Some("capture".to_string());
 
-        let rendered = spans_text(header_spans(&store, None, 116));
+        let rendered = spans_text(header_spans(&theme, &store, None, 116));
 
         assert!(rendered.contains("filter label=capture"), "{rendered:?}");
         assert!(rendered.contains("queue 3"), "{rendered:?}");
@@ -736,6 +788,7 @@ mod tests {
     #[tokio::test]
     async fn sync_indicator_keeps_space_after_complete_left_segment() {
         let (mut store, _dir) = test_store().await;
+        let theme = Theme::dark();
         store.view_state.query = TaskQuery::Todo;
         store.sync_status.enabled = true;
         store.sync_status.set_up = true;
@@ -745,7 +798,7 @@ mod tests {
         let mut terminal = Terminal::new(backend).unwrap();
 
         terminal
-            .draw(|frame| render_header(frame, &store, None, frame.area()))
+            .draw(|frame| render_header(frame, &theme, &store, None, frame.area()))
             .unwrap();
 
         let first_row = terminal.backend().buffer().content[..width as usize]
@@ -760,30 +813,37 @@ mod tests {
     #[tokio::test]
     async fn queue_header_shows_ranked_order_without_direction() {
         let (mut store, _dir) = test_store().await;
+        let theme = Theme::dark();
         store.view_state.query = TaskQuery::Queue;
         store.view_state.direction = crate::query::SortDirection::Desc;
 
-        assert_eq!(spans_text(view_badge(&store)), " queue ");
-        assert_eq!(spans_text(active_order_spans(&store)), " │ order ranked");
+        assert_eq!(spans_text(view_badge(&theme, &store)), " queue ");
+        assert_eq!(
+            spans_text(active_order_spans(&theme, &store)),
+            " │ order ranked"
+        );
     }
 
     #[tokio::test]
     async fn update_badge_is_clear_clickable_and_visible_on_narrow_headers() {
         let (store, _dir) = test_store().await;
+        let theme = Theme::dark();
         let update = crate::tui::app_update::UpdateBadgeView {
             label: "update available v9.0.0".to_string(),
             restart: false,
         };
         let wide = Rect::new(0, 0, 150, 2);
         assert!((0..wide.width).any(|column| {
-            header_target_at(&store, Some(&update), wide, column, 0) == Some(HeaderTarget::Update)
+            header_target_at(&theme, &store, Some(&update), wide, column, 0)
+                == Some(HeaderTarget::Update)
         }));
         let narrow = Rect::new(0, 0, 70, 2);
         assert!((0..narrow.width).any(|column| {
-            header_target_at(&store, Some(&update), narrow, column, 0) == Some(HeaderTarget::Update)
+            header_target_at(&theme, &store, Some(&update), narrow, column, 0)
+                == Some(HeaderTarget::Update)
         }));
         assert!(
-            spans_text(header_spans(&store, Some(&update), narrow.width))
+            spans_text(header_spans(&theme, &store, Some(&update), narrow.width))
                 .contains("update available v9.0.0")
         );
     }
@@ -791,12 +851,13 @@ mod tests {
     #[tokio::test]
     async fn header_click_targets_follow_rendered_segments() {
         let (mut store, _dir) = test_store().await;
+        let theme = Theme::dark();
         store.view_state.scope = TaskScope::Project("mobile-app".to_string());
         store.view_state.filter_modifiers.label = Some("capture".to_string());
         let area = Rect::new(7, 4, 157, 2);
         let content_width = area.width.saturating_sub(1);
-        let line_width = content_width.saturating_sub(header_status_width(&store));
-        let rendered = spans_text(header_spans(&store, None, line_width));
+        let line_width = content_width.saturating_sub(header_status_width(&theme, &store));
+        let rendered = spans_text(header_spans(&theme, &store, None, line_width));
         let column_for = |text: &str| {
             let byte = rendered.find(text).unwrap();
             area.x
@@ -804,11 +865,12 @@ mod tests {
         };
 
         assert_eq!(
-            header_target_at(&store, None, area, column_for("aven") + 1, area.y),
+            header_target_at(&theme, &store, None, area, column_for("aven") + 1, area.y),
             Some(HeaderTarget::Home)
         );
         assert_eq!(
             header_target_at(
+                &theme,
                 &store,
                 None,
                 area,
@@ -818,43 +880,58 @@ mod tests {
             Some(HeaderTarget::Changelog)
         );
         assert_eq!(
-            header_target_at(&store, None, area, column_for("workspace default"), area.y),
+            header_target_at(
+                &theme,
+                &store,
+                None,
+                area,
+                column_for("workspace default"),
+                area.y
+            ),
             Some(HeaderTarget::Workspace {
                 column: column_for("workspace default")
             })
         );
         assert_eq!(
-            header_target_at(&store, None, area, column_for("scope "), area.y),
+            header_target_at(&theme, &store, None, area, column_for("scope "), area.y),
             Some(HeaderTarget::Scope {
                 column: column_for("scope ")
             })
         );
         assert_eq!(
-            header_target_at(&store, None, area, column_for("view "), area.y),
+            header_target_at(&theme, &store, None, area, column_for("view "), area.y),
             Some(HeaderTarget::Query {
                 column: column_for("view ")
             })
         );
         assert_eq!(
-            header_target_at(&store, None, area, column_for("󰉹 list"), area.y),
+            header_target_at(&theme, &store, None, area, column_for("󰉹 list"), area.y),
             Some(HeaderTarget::Layout)
         );
         assert_eq!(
-            header_target_at(&store, None, area, column_for("label=capture"), area.y),
+            header_target_at(
+                &theme,
+                &store,
+                None,
+                area,
+                column_for("label=capture"),
+                area.y
+            ),
             None
         );
         assert_eq!(
-            header_target_at(&store, None, area, column_for("order "), area.y),
+            header_target_at(&theme, &store, None, area, column_for("order "), area.y),
             Some(HeaderTarget::Order {
                 column: column_for(" │ order ")
             })
         );
         assert_eq!(
-            header_target_at(&store, None, area, column_for("queue 3"), area.y),
+            header_target_at(&theme, &store, None, area, column_for("queue 3"), area.y),
             Some(HeaderTarget::MetricView(TaskQuery::Queue))
         );
         assert_eq!(
             header_target_at(
+                &theme,
                 &store,
                 None,
                 area,
@@ -864,7 +941,14 @@ mod tests {
             Some(HeaderTarget::SyncStatus)
         );
         assert_eq!(
-            header_target_at(&store, None, area, column_for("queue 3"), area.y + 1),
+            header_target_at(
+                &theme,
+                &store,
+                None,
+                area,
+                column_for("queue 3"),
+                area.y + 1
+            ),
             None
         );
     }

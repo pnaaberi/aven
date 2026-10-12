@@ -609,6 +609,7 @@ async fn header_click_opens_scope_menu_and_selects_scope() {
     let (scope_column, menu_column) = (0..140)
         .find_map(|column| {
             match crate::tui::ui::header_target_at(
+                &app.theme,
                 &app.store,
                 None,
                 ratatui::layout::Rect::new(0, 0, 140, 2),
@@ -656,6 +657,7 @@ async fn header_click_opens_view_menu_and_selects_view() {
     let (view_column, menu_column) = (0..140)
         .find_map(|column| {
             match crate::tui::ui::header_target_at(
+                &app.theme,
                 &app.store,
                 None,
                 ratatui::layout::Rect::new(0, 0, 140, 2),
@@ -721,6 +723,7 @@ async fn header_click_switches_directly_when_two_workspaces_are_available() {
         .find(|column| {
             matches!(
                 crate::tui::ui::header_target_at(
+                    &app.theme,
                     &app.store,
                     None,
                     ratatui::layout::Rect::new(0, 0, 140, 2),
@@ -757,6 +760,7 @@ async fn header_click_opens_workspace_menu_when_more_than_two_are_available() {
     let (workspace_column, menu_column) = (0..140)
         .find_map(|column| {
             match crate::tui::ui::header_target_at(
+                &app.theme,
                 &app.store,
                 None,
                 ratatui::layout::Rect::new(0, 0, 140, 2),
@@ -797,6 +801,7 @@ async fn header_metric_click_still_selects_view_directly() {
         .find(|column| {
             matches!(
                 crate::tui::ui::header_target_at(
+                    &app.theme,
                     &app.store,
                     None,
                     ratatui::layout::Rect::new(0, 0, 180, 2),
@@ -818,6 +823,7 @@ async fn header_metric_click_still_selects_view_directly() {
         .find(|column| {
             matches!(
                 crate::tui::ui::header_target_at(
+                    &app.theme,
                     &app.store,
                     None,
                     ratatui::layout::Rect::new(0, 0, 180, 2),
@@ -855,6 +861,7 @@ async fn header_click_opens_order_menu_and_selects_order() {
     let (order_column, menu_column) = (0..140)
         .find_map(|column| {
             match crate::tui::ui::header_target_at(
+                &app.theme,
                 &app.store,
                 None,
                 ratatui::layout::Rect::new(0, 0, 140, 2),

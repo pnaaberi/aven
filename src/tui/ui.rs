@@ -225,7 +225,7 @@ fn render_surface(
     frame.render_widget(Block::new().style(Style::new().bg(BG)), frame.area());
 
     if view.surface == ViewSurface::AddTask {
-        render_add_task_surface(frame, view);
+        render_add_task_surface(frame, theme, view);
         return;
     }
 
@@ -250,10 +250,10 @@ fn render_surface(
         })
     ) {
         if let Some(intro) = view.onboarding_intro {
-            render_onboarding_splash(frame, intro);
+            render_onboarding_splash(frame, theme, intro);
             render_onboarding_raised(frame, intro.dialog_reveal);
         } else {
-            render_dimmed_onboarding_splash(frame);
+            render_dimmed_onboarding_splash(frame, theme);
             render_onboarding(frame);
         }
         return;
@@ -269,7 +269,7 @@ fn render_surface(
     .areas(inner);
     let footer = footer_area(inner);
 
-    render_header(frame, store, view.update_badge.as_ref(), header);
+    render_header(frame, theme, store, view.update_badge.as_ref(), header);
     let inline_title_editor = inline_title_editor(view, store);
     let inline_detail_title_editor = inline_detail_title_editor(view);
     if body.width < 100 {
@@ -363,7 +363,12 @@ fn render_surface(
         mode => mode,
     };
     frame.render_widget(
-        footer_bar(footer_mode, footer.width, view.visible_marked_task_count),
+        footer_bar(
+            theme,
+            footer_mode,
+            footer.width,
+            view.visible_marked_task_count,
+        ),
         footer,
     );
 
@@ -416,7 +421,7 @@ fn render_surface(
         render_prefix_hints(frame, view);
     }
     if let Some(toast) = &view.notification {
-        render_toast(frame, toast);
+        render_toast(frame, theme, toast);
     }
 }
 
@@ -474,7 +479,7 @@ fn add_task_dialog_prefix_active(view: &ViewState) -> bool {
     )
 }
 
-fn render_add_task_surface(frame: &mut Frame, view: &ViewState) {
+fn render_add_task_surface(frame: &mut Frame, theme: &Theme, view: &ViewState) {
     if frame.area().width < 30 || frame.area().height < 8 {
         frame.render_widget(
             Paragraph::new("terminal too small for add task")
@@ -492,7 +497,7 @@ fn render_add_task_surface(frame: &mut Frame, view: &ViewState) {
         render_prefix_hints(frame, view);
     }
     if let Some(toast) = &view.notification {
-        render_toast(frame, toast);
+        render_toast(frame, theme, toast);
     }
 }
 
