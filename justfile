@@ -91,6 +91,25 @@ build:
 check-types:
     @scripts/quiet-check check-types cargo check --workspace --all-targets --locked
 
+# Compile the committed Aven.app icon resources from macos/Aven.icon (needs Xcode 26)
+macos-icon:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out=$(mktemp -d)
+    trap 'rm -rf "$out"' EXIT
+    xcrun actool macos/Aven.icon --compile "$out" --platform macosx \
+        --minimum-deployment-target 11.0 --app-icon Aven \
+        --output-partial-info-plist "$out/partial.plist" >/dev/null
+    for key in CFBundleIconFile CFBundleIconName; do
+        expected=$(plutil -extract "$key" raw "$out/partial.plist")
+        actual=$(plutil -extract "$key" raw macos/Info.plist)
+        if [[ $actual != "$expected" ]]; then
+            echo "macos/Info.plist $key is '$actual'; actool expects '$expected'" >&2
+            exit 1
+        fi
+    done
+    cp "$out/Assets.car" "$out/Aven.icns" macos/Resources/
+
 # Test generic locking, hook isolation and worktree setup
 public-tooling-test:
     scripts/test-process-lock

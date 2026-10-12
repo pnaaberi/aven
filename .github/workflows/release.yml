@@ -129,6 +129,12 @@ jobs:
         with:
           name: unsigned-${{ matrix.artifact }}
           path: unsigned
+      # The bundle copies the unsigned binary, so both are signed from the same bytes.
+      - name: Assemble Aven.app
+        run: |
+          version=$(sed -n '/^\[package\]/,/^\[/s/^version = "\(.*\)"$/\1/p' Cargo.toml)
+          mkdir unsigned-app
+          scripts/assemble-macos-app "unsigned/${BIN_NAME}" "$version" unsigned-app
       - name: Sign
         env:
           APPLE_DEVELOPER_ID_CERT_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_CERT_BASE64 }}
@@ -136,11 +142,13 @@ jobs:
           APPLE_DEVELOPER_ID_IDENTITY: ${{ secrets.APPLE_DEVELOPER_ID_IDENTITY }}
         run: |
           chmod 755 "unsigned/${BIN_NAME}"
-          scripts/sign-macos-release "unsigned/${BIN_NAME}"
+          scripts/sign-macos-release "unsigned/${BIN_NAME}" unsigned-app/Aven.app
       - name: Package
         run: |
           tar -C unsigned -czf "${{ matrix.artifact }}.tar.gz" "$BIN_NAME"
           shasum -a 256 "${{ matrix.artifact }}.tar.gz" > "${{ matrix.artifact }}.sha256"
+          tar --no-mac-metadata -C unsigned-app -czf "${{ matrix.artifact }}-app.tar.gz" Aven.app
+          shasum -a 256 "${{ matrix.artifact }}-app.tar.gz" > "${{ matrix.artifact }}-app.sha256"
       - name: Smoke test packaged binary
         run: |
           package_dir="package-${{ matrix.artifact }}"
@@ -151,12 +159,29 @@ jobs:
           scripts/verify-macos-release "$package_dir/${BIN_NAME}" "${{ matrix.architecture }}"
           scripts/test-verify-macos-release "$package_dir/${BIN_NAME}"
           "$package_dir/${BIN_NAME}" --help </dev/null
+      - name: Smoke test packaged app
+        run: |
+          package_dir="package-${{ matrix.artifact }}-app"
+          mkdir "$package_dir"
+          shasum -a 256 -c "${{ matrix.artifact }}-app.sha256"
+          if tar -tzf "${{ matrix.artifact }}-app.tar.gz" | grep -v '^Aven\.app/'; then
+            echo "::error::app archive contains entries outside Aven.app/"
+            exit 1
+          fi
+          tar -xzf "${{ matrix.artifact }}-app.tar.gz" -C "$package_dir"
+          diff -r unsigned-app/Aven.app "$package_dir/Aven.app"
+          scripts/verify-macos-release "$package_dir/Aven.app" "${{ matrix.architecture }}"
+          scripts/test-verify-macos-release "$package_dir/Aven.app"
+          ln -s "$PWD/$package_dir/Aven.app/Contents/MacOS/${BIN_NAME}" "$package_dir/${BIN_NAME}"
+          "$package_dir/${BIN_NAME}" --help </dev/null
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ${{ matrix.artifact }}
           path: |
             ${{ matrix.artifact }}.tar.gz
             ${{ matrix.artifact }}.sha256
+            ${{ matrix.artifact }}-app.tar.gz
+            ${{ matrix.artifact }}-app.sha256
 
   release:
     needs: [build, sign-macos]
