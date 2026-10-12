@@ -14,8 +14,6 @@ pub(crate) use metadata::{DetailMetadataTarget, detail_copy_target_at, detail_me
 
 use crate::tui::theme::Theme;
 #[cfg(test)]
-use crate::tui::theme::{BORDER, FG_MUTED};
-#[cfg(test)]
 use attachments::{DetailBodyAttachmentPlacement, DetailBodyImagePlacement};
 #[cfg(test)]
 use body::build_detail_body_document;
@@ -323,6 +321,7 @@ fn build_detail_content_model_with_pending(
 ) -> DetailContentRenderModel {
     let epic_children = detail_epic_children(item, None);
     let body = build_detail_body_document(
+        &Theme::dark(),
         item,
         &epic_children,
         area.width as usize,
@@ -331,13 +330,18 @@ fn build_detail_content_model_with_pending(
         pending_attachments,
     );
     let mut model = project_detail_content_model(
-        detail_header_options(item, area.width as usize, inline_title_editor),
+        detail_header_options(
+            &Theme::dark(),
+            item,
+            area.width as usize,
+            inline_title_editor,
+        ),
         &body,
         area.height as usize,
         scroll,
     );
     if let Some(active_target) = active_target {
-        apply_active_style(&mut model, active_target);
+        apply_active_style(&Theme::dark(), &mut model, active_target);
     }
     if inline_title_editor.is_none()
         && let Some(selection) = selection.filter(|selection| selection.task_id == item.task.id)
@@ -345,6 +349,7 @@ fn build_detail_content_model_with_pending(
         let selectable =
             detail_selectable_document_from_body(item, area.width as usize, true, &body);
         apply_detail_selection_from_document(
+            &Theme::dark(),
             &selectable,
             selection,
             &mut model.sticky_lines,
@@ -361,7 +366,7 @@ fn detail_content_lines(
     width: usize,
     inline_title_editor: Option<&TextInputView>,
 ) -> Vec<Line<'static>> {
-    let mut lines = detail_header_options(item, width, inline_title_editor);
+    let mut lines = detail_header_options(&Theme::dark(), item, width, inline_title_editor);
     lines.extend(detail_body_lines(item, width, None));
     lines
 }
@@ -417,6 +422,7 @@ fn detail_body_lines_with_pending_images(
 ) {
     let epic_children = detail_epic_children(item, None);
     let body = build_detail_body_document(
+        &Theme::dark(),
         item,
         &epic_children,
         width,
@@ -426,7 +432,7 @@ fn detail_body_lines_with_pending_images(
     );
     let mut model = project_detail_content_model(Vec::new(), &body, usize::MAX, 0);
     if let Some(active_target) = active_target {
-        apply_active_style(&mut model, active_target);
+        apply_active_style(&Theme::dark(), &mut model, active_target);
     }
     let attachment_placements = body
         .interactive_rows
@@ -456,6 +462,7 @@ fn detail_selectable_document(
 ) -> DetailSelectableDocument {
     let epic_children = detail_epic_children(item, None);
     let body = build_detail_body_document(
+        &Theme::dark(),
         item,
         &epic_children,
         width,
@@ -473,6 +480,7 @@ fn detail_section_body_indices(
     inline_images: Option<&DetailInlineImageContext>,
 ) -> Vec<usize> {
     build_detail_body_document(
+        &Theme::dark(),
         item,
         &detail_epic_children(item, None),
         width,
@@ -492,7 +500,11 @@ fn detail_dependency_lines(item: &TaskListItem, width: usize) -> Vec<Line<'stati
     let mut lines = vec![Line::from("")];
 
     if !item.depends_on.is_empty() {
-        lines.push(dependency_heading("WHY BLOCKED", &item.depends_on));
+        lines.push(dependency_heading(
+            &Theme::dark(),
+            "WHY BLOCKED",
+            &item.depends_on,
+        ));
         lines.extend(dependency_branch_lines(
             &item.depends_on,
             DependencyDirection::Blocker,
@@ -502,7 +514,11 @@ fn detail_dependency_lines(item: &TaskListItem, width: usize) -> Vec<Line<'stati
 
     if !item.blocks.is_empty() {
         lines.push(Line::from(""));
-        lines.push(dependency_heading("WHAT THIS UNLOCKS", &item.blocks));
+        lines.push(dependency_heading(
+            &Theme::dark(),
+            "WHAT THIS UNLOCKS",
+            &item.blocks,
+        ));
         lines.extend(dependency_branch_lines(
             &item.blocks,
             DependencyDirection::Dependent,
@@ -526,13 +542,22 @@ fn dependency_branch_lines(
 
     for (index, link) in links.iter().take(visible).enumerate() {
         let is_last = index + 1 == rendered_len;
-        lines.extend(dependency_tree_item_lines(link, direction, is_last, width));
+        lines.extend(dependency_tree_item_lines(
+            &Theme::dark(),
+            link,
+            direction,
+            is_last,
+            width,
+        ));
     }
 
     if hidden > 0 {
         lines.push(Line::from(vec![
-            Span::styled("└─ ", Style::new().fg(BORDER)),
-            Span::styled(format!("+{hidden} more"), Style::new().fg(FG_MUTED)),
+            Span::styled("└─ ", Style::new().fg(Theme::dark().border)),
+            Span::styled(
+                format!("+{hidden} more"),
+                Style::new().fg(Theme::dark().fg_muted),
+            ),
         ]));
     }
 
@@ -541,7 +566,12 @@ fn dependency_branch_lines(
 
 #[cfg(test)]
 fn detail_metadata_lines(item: &TaskListItem, width: usize) -> Vec<Line<'static>> {
-    detail_metadata_lines_with_children(item, &detail_epic_children(item, None), width)
+    detail_metadata_lines_with_children(
+        &Theme::dark(),
+        item,
+        &detail_epic_children(item, None),
+        width,
+    )
 }
 
 #[cfg(test)]

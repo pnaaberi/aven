@@ -10,7 +10,7 @@ use super::super::truncate::truncate_line_width;
 use crate::query::TaskListItem;
 use crate::task_render::{AttachmentMetadataJson, attachment_state_placeholder, human_file_size};
 use crate::tui::app::WidgetState;
-use crate::tui::theme::{ACCENT, BG, BORDER, FG, FG_DIM, FG_MUTED};
+use crate::tui::theme::Theme;
 
 use super::body::DetailBodyBlock;
 use super::document::detail_body_area;
@@ -59,6 +59,7 @@ pub(super) struct DetailBodyAttachmentPlacement {
     pub(super) height: usize,
 }
 pub(super) fn extend_pending_attachment_section(
+    theme: &Theme,
     lines: &mut Vec<Line<'static>>,
     task_id: &crate::ids::TaskId,
     pending_attachments: &[crate::tui::attachment_controller::PendingAttachmentView],
@@ -75,23 +76,28 @@ pub(super) fn extend_pending_attachment_section(
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
             "ATTACHMENTS",
-            Style::new().fg(FG_DIM).add_modifier(Modifier::BOLD),
+            Style::new().fg(theme.fg_dim).add_modifier(Modifier::BOLD),
         )));
     }
     for attachment in pending {
         let (label, color) = match attachment.status {
             crate::tui::attachment_controller::PendingAttachmentStatus::Preparing => {
-                ("[image: preparing]", FG_MUTED)
+                ("[image: preparing]", theme.fg_muted)
             }
             crate::tui::attachment_controller::PendingAttachmentStatus::Failed => {
-                ("[image: failed]", crate::tui::theme::RED)
+                ("[image: failed]", theme.danger)
             }
         };
-        lines.push(quoted_line(Line::from(label), Style::new().fg(color)));
+        lines.push(quoted_line(
+            theme,
+            Line::from(label),
+            Style::new().fg(color),
+        ));
     }
 }
 
 pub(super) fn extend_attachment_section(
+    theme: &Theme,
     lines: &mut Vec<Line<'static>>,
     placements: &mut Vec<DetailBodyImagePlacement>,
     attachment_placements: &mut Vec<DetailBodyAttachmentPlacement>,
@@ -109,11 +115,11 @@ pub(super) fn extend_attachment_section(
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "ATTACHMENTS",
-        Style::new().fg(FG_DIM).add_modifier(Modifier::BOLD),
+        Style::new().fg(theme.fg_dim).add_modifier(Modifier::BOLD),
     )));
     let content_width = width.saturating_sub(3).max(1);
     for attachment in live {
-        match attachment_detail_block(attachment, content_width, inline_images) {
+        match attachment_detail_block(theme, attachment, content_width, inline_images) {
             DetailBodyBlock::Line(line) => {
                 let focused = inline_images.is_some_and(|context| {
                     context.focused_attachment_id.as_deref()
@@ -125,8 +131,13 @@ pub(super) fn extend_attachment_section(
                     height: 1,
                 });
                 lines.push(quoted_line(
+                    theme,
                     line,
-                    Style::new().fg(if focused { ACCENT } else { FG_MUTED }),
+                    Style::new().fg(if focused {
+                        theme.accent
+                    } else {
+                        theme.fg_muted
+                    }),
                 ));
             }
             DetailBodyBlock::Image {
@@ -144,24 +155,32 @@ pub(super) fn extend_attachment_section(
                     line_index: lines.len(),
                     height: height as usize + 3,
                 });
-                let frame_style = Style::new().fg(if focused { ACCENT } else { BORDER });
-                lines.push(quoted_line(placeholder, Style::new().fg(FG_MUTED)));
+                let frame_style =
+                    Style::new().fg(if focused { theme.accent } else { theme.border });
                 lines.push(quoted_line(
+                    theme,
+                    placeholder,
+                    Style::new().fg(theme.fg_muted),
+                ));
+                lines.push(quoted_line(
+                    theme,
                     Line::from(format!("┌{}┐", "─".repeat(width as usize))),
                     frame_style,
                 ));
                 let line_index = lines.len();
                 for _ in 0..height {
                     lines.push(quoted_line(
+                        theme,
                         Line::from(vec![
                             Span::styled("│", frame_style),
                             Span::raw(" ".repeat(width as usize)),
                             Span::styled("│", frame_style),
                         ]),
-                        Style::new().fg(FG_MUTED),
+                        Style::new().fg(theme.fg_muted),
                     ));
                 }
                 lines.push(quoted_line(
+                    theme,
                     Line::from(format!("└{}┘", "─".repeat(width as usize))),
                     frame_style,
                 ));
@@ -200,6 +219,7 @@ pub(crate) fn attachment_is_locally_previewable(
 }
 
 pub(super) fn attachment_detail_block(
+    theme: &Theme,
     attachment: &AttachmentMetadataJson,
     content_width: usize,
     inline_images: Option<&DetailInlineImageContext>,
@@ -207,7 +227,7 @@ pub(super) fn attachment_detail_block(
     let focused = inline_images.is_some_and(|context| {
         context.focused_attachment_id.as_deref() == Some(attachment.attachment_id.as_str())
     });
-    let placeholder = attachment_detail_line(attachment, content_width, focused);
+    let placeholder = attachment_detail_line(theme, attachment, content_width, focused);
     let Some(inline_images) = inline_images else {
         return DetailBodyBlock::Line(placeholder);
     };
@@ -227,14 +247,23 @@ pub(super) fn attachment_detail_block(
 }
 
 pub(super) fn attachment_detail_line(
+    theme: &Theme,
     attachment: &AttachmentMetadataJson,
     content_width: usize,
     focused: bool,
 ) -> Line<'static> {
-    let state_style = Style::new().fg(if focused { ACCENT } else { FG_MUTED });
-    let filename_style = Style::new().fg(if focused { ACCENT } else { FG });
-    let separator_style = Style::new().fg(if focused { ACCENT } else { FG_DIM });
-    let metadata_style = Style::new().fg(if focused { ACCENT } else { FG_MUTED });
+    let state_style = Style::new().fg(if focused {
+        theme.accent
+    } else {
+        theme.fg_muted
+    });
+    let filename_style = Style::new().fg(if focused { theme.accent } else { theme.fg });
+    let separator_style = Style::new().fg(if focused { theme.accent } else { theme.fg_dim });
+    let metadata_style = Style::new().fg(if focused {
+        theme.accent
+    } else {
+        theme.fg_muted
+    });
     let mut spans = vec![Span::styled(
         attachment_state_placeholder(attachment),
         state_style,
@@ -288,6 +317,7 @@ pub(super) fn image_preview_size(
 }
 
 pub(super) fn render_attachment_preview_message(
+    theme: &Theme,
     frame: &mut Frame,
     area: Rect,
     message: &'static str,
@@ -295,13 +325,14 @@ pub(super) fn render_attachment_preview_message(
     frame.render_widget(
         Paragraph::new(message)
             .alignment(ratatui::layout::Alignment::Center)
-            .style(Style::new().fg(FG_MUTED).bg(BG)),
+            .style(Style::new().fg(theme.fg_muted).bg(theme.bg)),
         area,
     );
 }
 
 pub(crate) fn render_attachment_preview(
     frame: &mut Frame,
+    theme: &Theme,
     item: &TaskListItem,
     attachment_id: &str,
     widgets: &mut WidgetState,
@@ -320,7 +351,7 @@ pub(crate) fn render_attachment_preview(
                 (Some(width), Some(height)) if width > 0 && height > 0
             )
     }) else {
-        render_attachment_preview_message(frame, area, "attachment is unavailable");
+        render_attachment_preview_message(theme, frame, area, "attachment is unavailable");
         return;
     };
     let title = attachment
@@ -330,20 +361,20 @@ pub(crate) fn render_attachment_preview(
         .unwrap_or("Image preview");
     let block = Block::new()
         .borders(Borders::ALL)
-        .border_style(Style::new().fg(ACCENT))
+        .border_style(Style::new().fg(theme.accent))
         .title(format!(" {title} "))
-        .style(Style::new().bg(BG));
+        .style(Style::new().bg(theme.bg));
     let inner = block.inner(area);
     frame.render_widget(block, area);
     let Some(inline_images) = inline_images else {
-        render_attachment_preview_message(frame, inner, "preview unavailable");
+        render_attachment_preview_message(theme, frame, inner, "preview unavailable");
         return;
     };
     if inline_images
         .unavailable_hashes
         .contains(&attachment.sha256)
     {
-        render_attachment_preview_message(frame, inner, "preview unavailable");
+        render_attachment_preview_message(theme, frame, inner, "preview unavailable");
         return;
     }
     let (width, height) = fitted_image_size(attachment, inner.width, inner.height);

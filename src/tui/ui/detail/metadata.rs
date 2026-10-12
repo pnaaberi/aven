@@ -8,13 +8,12 @@ use super::super::task_display::labels_display;
 use super::super::timestamps::local_timestamp_display;
 use crate::query::TaskListItem;
 use crate::tui::text::truncate_width;
-use crate::tui::theme::{ACCENT, BG, BORDER, FG, FG_DIM, FG_MUTED, INVERSE_FG, ORANGE, RED};
+use crate::tui::theme::Theme;
 use crate::tui::widgets::{priority_short, status_chip};
 
 use super::DetailCopyHit;
 use super::document::{detail_body_area, detail_content_layout};
 use super::relationships::{DetailEpicChild, epic_child_counts};
-use crate::tui::theme;
 use unicode_width::UnicodeWidthStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,29 +36,32 @@ struct DetailMetadataRows {
 }
 pub(super) fn render_detail_metadata(
     frame: &mut Frame,
+    theme: &Theme,
     item: &TaskListItem,
     epic_children: &[DetailEpicChild],
     area: Rect,
 ) {
     let block = Block::new()
         .borders(Borders::LEFT)
-        .border_style(Style::new().fg(BORDER))
+        .border_style(Style::new().fg(theme.border))
         .padding(Padding::horizontal(1))
-        .style(Style::new().bg(BG));
+        .style(Style::new().bg(theme.bg));
     let inner = block.inner(area);
     frame.render_widget(block, area);
     frame.render_widget(
         Paragraph::new(Text::from(detail_metadata_lines_with_children(
+            theme,
             item,
             epic_children,
             inner.width as usize,
         )))
-        .style(Style::new().fg(FG).bg(BG)),
+        .style(Style::new().fg(theme.fg).bg(theme.bg)),
         inner,
     );
 }
 
 pub(super) fn detail_metadata_lines_with_children(
+    theme: &Theme,
     item: &TaskListItem,
     epic_children: &[DetailEpicChild],
     width: usize,
@@ -72,33 +74,32 @@ pub(super) fn detail_metadata_lines_with_children(
                 " TASK "
             },
             Style::new()
-                .fg(INVERSE_FG)
-                .bg(BORDER)
+                .fg(theme.inverse_fg)
+                .bg(theme.badge_bg)
                 .add_modifier(Modifier::BOLD),
         )),
         Line::from(""),
-        metadata_label("PROJECT"),
+        metadata_label(theme, "PROJECT"),
         Line::from(vec![
-            Span::styled(
-                "● ",
-                Style::new().fg(theme::project_color(&item.task.project_key)),
-            ),
+            Span::styled("● ", Style::new().fg(theme.project(&item.task.project_key))),
             Span::styled(
                 item.task.project_key.clone(),
-                Style::new().fg(FG).add_modifier(Modifier::BOLD),
+                Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
             ),
         ]),
         Line::from(""),
-        metadata_label("STATUS"),
+        metadata_label(theme, "STATUS"),
         status_chip(item.task.status.as_str()),
         Line::from(""),
-        metadata_label("PRIORITY"),
+        metadata_label(theme, "PRIORITY"),
         Line::from(Span::styled(
             priority_short(item.task.priority.as_str()),
-            theme::priority_style(item.task.priority.as_str()).add_modifier(Modifier::BOLD),
+            theme
+                .priority(item.task.priority.as_str())
+                .add_modifier(Modifier::BOLD),
         )),
         Line::from(""),
-        metadata_label("LABELS"),
+        metadata_label(theme, "LABELS"),
         Line::from(labels_display(&item.labels, ", ")),
     ];
     let now_seconds = crate::queue::now_seconds();
@@ -108,11 +109,11 @@ pub(super) fn detail_metadata_lines_with_children(
         now_seconds,
     );
     let availability_style = if availability.is_some() {
-        Style::new().fg(ACCENT).add_modifier(Modifier::BOLD)
+        Style::new().fg(theme.accent).add_modifier(Modifier::BOLD)
     } else {
-        Style::new().fg(FG_MUTED)
+        Style::new().fg(theme.fg_muted)
     };
-    lines.extend([Line::from(""), metadata_label("AVAILABILITY")]);
+    lines.extend([Line::from(""), metadata_label(theme, "AVAILABILITY")]);
     for value in availability
         .map(Vec::from)
         .unwrap_or_else(|| vec!["none".to_string()])
@@ -125,18 +126,18 @@ pub(super) fn detail_metadata_lines_with_children(
     let due =
         crate::tui::time::due_summary_lines(item.task.due_on.as_deref().unwrap_or(""), now_seconds);
     let due_color = if item.task.due_on.is_none() || !item.task.status.is_open() {
-        FG_MUTED
+        theme.fg_muted
     } else {
         match crate::tui::time::due_state_at(item.task.due_on.as_deref().unwrap_or(""), now_seconds)
         {
-            crate::due::DueState::Overdue(_) => RED,
-            crate::due::DueState::Today => ORANGE,
-            crate::due::DueState::Future(_) => ACCENT,
-            crate::due::DueState::None => FG_MUTED,
+            crate::due::DueState::Overdue(_) => theme.danger,
+            crate::due::DueState::Today => theme.warning,
+            crate::due::DueState::Future(_) => theme.accent,
+            crate::due::DueState::None => theme.fg_muted,
         }
     };
     let due_style = Style::new().fg(due_color).add_modifier(Modifier::BOLD);
-    lines.extend([Line::from(""), metadata_label("DUE")]);
+    lines.extend([Line::from(""), metadata_label(theme, "DUE")]);
     for value in due
         .map(Vec::from)
         .unwrap_or_else(|| vec!["none".to_string()])
@@ -148,22 +149,22 @@ pub(super) fn detail_metadata_lines_with_children(
     }
     lines.extend([
         Line::from(""),
-        metadata_label("REF"),
+        metadata_label(theme, "REF"),
         Line::from(Span::styled(
             item.display_ref.clone(),
-            Style::new().fg(FG).add_modifier(Modifier::BOLD),
+            Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
         )),
         Line::from(""),
-        metadata_label("CREATED"),
+        metadata_label(theme, "CREATED"),
         Line::from(Span::styled(
             local_timestamp_display(&item.task.created_at),
-            Style::new().fg(FG_MUTED),
+            Style::new().fg(theme.fg_muted),
         )),
         Line::from(""),
-        metadata_label("UPDATED"),
+        metadata_label(theme, "UPDATED"),
         Line::from(Span::styled(
             local_timestamp_display(&item.task.updated_at),
-            Style::new().fg(FG_MUTED),
+            Style::new().fg(theme.fg_muted),
         )),
     ]);
     if let Some(recurrence) = item.recurrence.as_ref() {
@@ -173,10 +174,10 @@ pub(super) fn detail_metadata_lines_with_children(
             .unwrap_or("open");
         lines.extend([
             Line::from(""),
-            metadata_label("RECURRENCE"),
+            metadata_label(theme, "RECURRENCE"),
             Line::from(Span::styled(
                 format!("↻ {}", recurrence.series_ref),
-                Style::new().fg(ACCENT).add_modifier(Modifier::BOLD),
+                Style::new().fg(theme.accent).add_modifier(Modifier::BOLD),
             )),
             Line::from(format!("schedule {}", recurrence.rule_label)),
             Line::from(format!("slot {}", recurrence.slot_on)),
@@ -187,31 +188,34 @@ pub(super) fn detail_metadata_lines_with_children(
                 "projection {}",
                 recurrence.projection_state.as_str()
             )),
-            Line::from(Span::styled("history t r h", Style::new().fg(FG_MUTED))),
+            Line::from(Span::styled(
+                "history t r h",
+                Style::new().fg(theme.fg_muted),
+            )),
         ]);
     }
     if let Some(group) = item.recurrence_group.as_ref() {
         lines.extend([
             Line::from(""),
-            metadata_label("SERIES HISTORY"),
+            metadata_label(theme, "SERIES HISTORY"),
             Line::from(format!("completed {}", group.counts.completed)),
             Line::from(format!("skipped {}", group.counts.skipped)),
             Line::from(format!("missed {}", group.counts.missed)),
         ]);
     }
-    lines.extend(detail_epic_metadata_lines(item, epic_children));
+    lines.extend(detail_epic_metadata_lines(theme, item, epic_children));
     if item.has_conflict {
-        lines.extend([Line::from(""), metadata_label("CONFLICTS")]);
+        lines.extend([Line::from(""), metadata_label(theme, "CONFLICTS")]);
         if item.conflicts.is_empty() {
             lines.push(Line::from(Span::styled(
                 "open · c s details · c a current · c r incoming · c m manual",
-                Style::new().fg(ORANGE).add_modifier(Modifier::BOLD),
+                Style::new().fg(theme.warning).add_modifier(Modifier::BOLD),
             )));
         } else {
             for conflict in &item.conflicts {
                 lines.push(Line::from(Span::styled(
                     conflict.field.clone(),
-                    Style::new().fg(ORANGE).add_modifier(Modifier::BOLD),
+                    Style::new().fg(theme.warning).add_modifier(Modifier::BOLD),
                 )));
                 lines.push(Line::from(format!(
                     "current  {}",
@@ -229,7 +233,7 @@ pub(super) fn detail_metadata_lines_with_children(
                 )));
                 lines.push(Line::from(Span::styled(
                     "c a current · c r incoming · c m manual",
-                    Style::new().fg(FG_MUTED),
+                    Style::new().fg(theme.fg_muted),
                 )));
             }
         }
@@ -237,10 +241,10 @@ pub(super) fn detail_metadata_lines_with_children(
     if item.task.deleted {
         lines.extend([
             Line::from(""),
-            metadata_label("DELETED"),
+            metadata_label(theme, "DELETED"),
             Line::from(Span::styled(
                 "yes",
-                Style::new().fg(RED).add_modifier(Modifier::BOLD),
+                Style::new().fg(theme.danger).add_modifier(Modifier::BOLD),
             )),
         ]);
     }
@@ -248,6 +252,7 @@ pub(super) fn detail_metadata_lines_with_children(
 }
 
 fn detail_epic_metadata_lines(
+    theme: &Theme,
     item: &TaskListItem,
     children: &[DetailEpicChild],
 ) -> Vec<Line<'static>> {
@@ -267,8 +272,8 @@ fn detail_epic_metadata_lines(
     );
     let mut lines = vec![
         Line::from(""),
-        metadata_label("CHILDREN"),
-        Line::from(Span::styled(progress, Style::new().fg(FG_DIM))),
+        metadata_label(theme, "CHILDREN"),
+        Line::from(Span::styled(progress, Style::new().fg(theme.fg_dim))),
     ];
     if let Some(rollup) = item.epic_rollup.as_ref()
         && rollup.total > 0
@@ -278,7 +283,7 @@ fn detail_epic_metadata_lines(
                 "{} overdue · {} blocked · {} ready",
                 rollup.overdue, rollup.blocked, rollup.ready
             ),
-            Style::new().fg(FG_DIM),
+            Style::new().fg(theme.fg_dim),
         )));
     }
 
@@ -287,7 +292,7 @@ fn detail_epic_metadata_lines(
             .into_iter()
             .chain(std::iter::once(Line::from(Span::styled(
                 "none",
-                Style::new().fg(FG_MUTED),
+                Style::new().fg(theme.fg_muted),
             ))))
             .collect();
     }
@@ -295,10 +300,10 @@ fn detail_epic_metadata_lines(
     lines
 }
 
-pub(super) fn metadata_label(label: &'static str) -> Line<'static> {
+pub(super) fn metadata_label(theme: &Theme, label: &'static str) -> Line<'static> {
     Line::from(Span::styled(
         label,
-        Style::new().fg(FG_DIM).add_modifier(Modifier::BOLD),
+        Style::new().fg(theme.fg_dim).add_modifier(Modifier::BOLD),
     ))
 }
 

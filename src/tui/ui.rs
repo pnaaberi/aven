@@ -945,7 +945,7 @@ fn render_overlay(
 ) {
     if let OverlayView::AttachmentPreview { attachment_id, .. } = overlay {
         if let Some(item) = store.selected_task(list.selected_task()) {
-            render_attachment_preview(frame, item, attachment_id, widgets, inline_images);
+            render_attachment_preview(frame, theme, item, attachment_id, widgets, inline_images);
         }
         return;
     }

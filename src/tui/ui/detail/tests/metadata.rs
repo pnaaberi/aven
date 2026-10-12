@@ -9,7 +9,15 @@ fn custom_metadata_heading_uses_note_heading_and_keycap_styles() {
         value: "Alex".to_string(),
     }];
     let children = detail_epic_children(&item, None);
-    let body = build_detail_body_document(&item, &children, 80, &BTreeSet::new(), None, &[]);
+    let body = build_detail_body_document(
+        &Theme::dark(),
+        &item,
+        &children,
+        80,
+        &BTreeSet::new(),
+        None,
+        &[],
+    );
     let metadata = body
         .lines
         .iter()

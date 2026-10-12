@@ -26,7 +26,7 @@ fn detail_body_shows_epic_parent_relationship() {
         .iter()
         .find(|span| span.content == EPIC_MARKER)
         .expect("epic parent marker");
-    assert_eq!(marker.style.fg, Some(YELLOW));
+    assert_eq!(marker.style.fg, Some(Theme::dark().attention));
     assert!(
         lines
             .iter()
@@ -405,27 +405,27 @@ fn epic_child_blockers_stay_on_one_row_and_count_hidden_refs() {
         })
         .collect::<Vec<_>>();
     blockers[9].unresolved = false;
-    let lines = epic_child_dependency_lines(&blockers, false, 80, false);
+    let lines = epic_child_dependency_lines(&Theme::dark(), &blockers, false, 80, false);
     assert_eq!(lines.len(), 1);
     assert_eq!(
         lines[0].to_string(),
         "│  ← blocked by APP-B0, APP-B1 +7 more"
     );
     for width in [0, 5, 18, 32, 40, 80] {
-        let lines = epic_child_dependency_lines(&blockers, true, width, true);
+        let lines = epic_child_dependency_lines(&Theme::dark(), &blockers, true, width, true);
         assert_eq!(lines.len(), 1);
         assert!(lines[0].width() <= width);
         assert!(
             lines[0]
                 .spans
                 .iter()
-                .all(|span| span.style.bg == Some(BG_PANEL))
+                .all(|span| span.style.bg == Some(Theme::dark().bg_panel))
         );
     }
     for blocker in &mut blockers {
         blocker.unresolved = false;
     }
-    assert!(epic_child_dependency_lines(&blockers, false, 80, false).is_empty());
+    assert!(epic_child_dependency_lines(&Theme::dark(), &blockers, false, 80, false).is_empty());
 }
 
 #[test]
@@ -445,7 +445,15 @@ fn epic_child_dependency_rows_share_the_child_hit_target() {
         }],
     );
     let children = detail_epic_children(&item, None);
-    let body = build_detail_body_document(&item, &children, 80, &BTreeSet::new(), None, &[]);
+    let body = build_detail_body_document(
+        &Theme::dark(),
+        &item,
+        &children,
+        80,
+        &BTreeSet::new(),
+        None,
+        &[],
+    );
     let child_row = body
         .interactive_rows
         .iter()
@@ -472,7 +480,15 @@ fn removed_epic_child_is_labeled_and_excluded_from_counts() {
         original_position: 0,
     };
     let children = detail_epic_children(&item, Some(&removed));
-    let body = build_detail_body_document(&item, &children, 80, &BTreeSet::new(), None, &[]);
+    let body = build_detail_body_document(
+        &Theme::dark(),
+        &item,
+        &children,
+        80,
+        &BTreeSet::new(),
+        None,
+        &[],
+    );
     let rendered = body
         .lines
         .iter()
@@ -492,7 +508,15 @@ fn linked_references_use_their_own_project_color_and_dim_suffix() {
     item.depends_on = vec![item.epic_children[0].clone()];
     item.blocks = item.depends_on.clone();
     let children = detail_epic_children(&item, None);
-    let body = build_detail_body_document(&item, &children, 120, &BTreeSet::new(), None, &[]);
+    let body = build_detail_body_document(
+        &Theme::dark(),
+        &item,
+        &children,
+        120,
+        &BTreeSet::new(),
+        None,
+        &[],
+    );
     let rows: Vec<_> = body
         .lines
         .iter()
@@ -508,9 +532,9 @@ fn linked_references_use_their_own_project_color_and_dim_suffix() {
             .unwrap();
         assert_eq!(
             prefix.style.fg,
-            Some(theme::project_color("different-project"))
+            Some(Theme::dark().project("different-project"))
         );
-        assert_eq!(suffix.style.fg, Some(FG_DIM));
+        assert_eq!(suffix.style.fg, Some(Theme::dark().fg_dim));
     }
 }
 
@@ -521,7 +545,15 @@ fn legitimate_removed_suffix_remains_a_live_epic_child_title() {
     item.epic_children[0].title = "Investigate literal [removed]".to_string();
 
     let children = detail_epic_children(&item, None);
-    let body = build_detail_body_document(&item, &children, 80, &BTreeSet::new(), None, &[]);
+    let body = build_detail_body_document(
+        &Theme::dark(),
+        &item,
+        &children,
+        80,
+        &BTreeSet::new(),
+        None,
+        &[],
+    );
     let child_line = body
         .lines
         .iter()
@@ -542,7 +574,7 @@ fn legitimate_removed_suffix_remains_a_live_epic_child_title() {
     assert!(rendered.contains("CHILD TASKS open=1 total=1"));
     assert!(rendered.contains("Investigate literal [removed]"));
     assert_eq!(children[0].state, EpicChildState::Live);
-    assert_eq!(child_ref.style.fg, Some(theme::project_color("app")));
+    assert_eq!(child_ref.style.fg, Some(Theme::dark().project("app")));
     assert!(!child_ref.style.add_modifier.contains(Modifier::DIM));
 }
 
@@ -573,7 +605,7 @@ fn hovered_detail_child_uses_link_style() {
         .find(|span| span.content.as_ref() == "APP")
         .unwrap();
 
-    assert_eq!(ref_span.style.bg, Some(BG_PANEL));
+    assert_eq!(ref_span.style.bg, Some(Theme::dark().bg_panel));
 }
 
 #[test]

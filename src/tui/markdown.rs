@@ -3,15 +3,17 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-use crate::tui::theme::{ACCENT, BLUE, CODE, FG_DIM, GREEN};
+use crate::tui::theme::Theme;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum MarkdownBlock {
     Text(Line<'static>),
 }
 
-#[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct MarkdownRenderContext;
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct MarkdownRenderContext<'a> {
+    pub(crate) theme: &'a Theme,
+}
 
 #[derive(Clone, Debug, Default, PartialEq)]
 struct Attrs {
@@ -68,7 +70,8 @@ impl TableState {
     }
 }
 
-struct MarkdownRenderer {
+struct MarkdownRenderer<'a> {
+    theme: &'a Theme,
     max_width: usize,
     blocks: Vec<MarkdownBlock>,
     lines: Vec<LayoutLine>,
@@ -90,14 +93,15 @@ struct MarkdownRenderer {
     table_state: Option<TableState>,
 }
 
-impl MarkdownRenderer {
+impl<'a> MarkdownRenderer<'a> {
     fn new(
         max_width: usize,
-        _context: MarkdownRenderContext,
+        context: MarkdownRenderContext<'a>,
         show_link_urls: bool,
         reflow_soft_breaks: bool,
     ) -> Self {
         Self {
+            theme: context.theme,
             max_width,
             blocks: Vec::new(),
             lines: Vec::new(),
@@ -230,7 +234,7 @@ impl MarkdownRenderer {
     fn flush_lines_to_blocks(&mut self) {
         let lines = std::mem::take(&mut self.lines);
         self.blocks.extend(
-            layout_lines_to_ratatui(lines)
+            layout_lines_to_ratatui(self.theme, lines)
                 .into_iter()
                 .map(MarkdownBlock::Text),
         );
@@ -621,35 +625,37 @@ impl MarkdownRenderer {
     }
 }
 
-pub(crate) fn render_markdown(input: &str, max_width: usize) -> Vec<Line<'static>> {
+pub(crate) fn render_markdown(theme: &Theme, input: &str, max_width: usize) -> Vec<Line<'static>> {
     flatten_markdown_blocks(render_markdown_with_context(
         input,
         max_width,
-        MarkdownRenderContext,
+        MarkdownRenderContext { theme },
     ))
 }
 
 pub(crate) fn render_markdown_without_link_urls(
+    theme: &Theme,
     input: &str,
     max_width: usize,
 ) -> Vec<Line<'static>> {
     flatten_markdown_blocks(render_markdown_internal(
         input,
         max_width,
-        MarkdownRenderContext,
+        MarkdownRenderContext { theme },
         false,
         false,
     ))
 }
 
 pub(crate) fn render_markdown_reflowed_without_link_urls(
+    theme: &Theme,
     input: &str,
     max_width: usize,
 ) -> Vec<Line<'static>> {
     flatten_markdown_blocks(render_markdown_internal(
         input,
         max_width,
-        MarkdownRenderContext,
+        MarkdownRenderContext { theme },
         false,
         true,
     ))
@@ -658,7 +664,7 @@ pub(crate) fn render_markdown_reflowed_without_link_urls(
 pub(crate) fn render_markdown_with_context(
     input: &str,
     max_width: usize,
-    context: MarkdownRenderContext,
+    context: MarkdownRenderContext<'_>,
 ) -> Vec<MarkdownBlock> {
     render_markdown_internal(input, max_width, context, true, false)
 }
@@ -666,7 +672,7 @@ pub(crate) fn render_markdown_with_context(
 pub(crate) fn render_markdown_with_context_without_link_urls(
     input: &str,
     max_width: usize,
-    context: MarkdownRenderContext,
+    context: MarkdownRenderContext<'_>,
 ) -> Vec<MarkdownBlock> {
     render_markdown_internal(input, max_width, context, false, false)
 }
@@ -674,7 +680,7 @@ pub(crate) fn render_markdown_with_context_without_link_urls(
 fn render_markdown_internal(
     input: &str,
     max_width: usize,
-    context: MarkdownRenderContext,
+    context: MarkdownRenderContext<'_>,
     show_link_urls: bool,
     reflow_soft_breaks: bool,
 ) -> Vec<MarkdownBlock> {
@@ -696,6 +702,7 @@ fn render_markdown_internal(
 }
 
 pub(crate) fn render_markdown_preview(
+    theme: &Theme,
     input: &str,
     max_width: usize,
     max_height: usize,
@@ -705,17 +712,17 @@ pub(crate) fn render_markdown_preview(
     }
 
     let max_width = max_width.max(1);
-    let mut lines = render_markdown(input, max_width);
+    let mut lines = render_markdown(theme, input, max_width);
     if lines.len() <= max_height {
         return lines;
     }
 
     lines.truncate(max_height);
-    lines[max_height - 1] = line_with_ellipsis(&lines[max_height - 1], max_width);
+    lines[max_height - 1] = line_with_ellipsis(theme, &lines[max_height - 1], max_width);
     lines
 }
 
-fn line_with_ellipsis(line: &Line<'_>, max_width: usize) -> Line<'static> {
+fn line_with_ellipsis(theme: &Theme, line: &Line<'_>, max_width: usize) -> Line<'static> {
     let content_width = max_width.saturating_sub(1);
     let mut width = 0;
     let mut spans = Vec::new();
@@ -737,7 +744,7 @@ fn line_with_ellipsis(line: &Line<'_>, max_width: usize) -> Line<'static> {
             spans.push(Span::styled(content, span.style));
         }
     }
-    spans.push(Span::styled("…", Style::new().fg(FG_DIM)));
+    spans.push(Span::styled("…", Style::new().fg(theme.fg_dim)));
     Line::from(spans)
 }
 
@@ -750,7 +757,7 @@ pub(crate) fn flatten_markdown_blocks(blocks: Vec<MarkdownBlock>) -> Vec<Line<'s
         .collect()
 }
 
-fn layout_lines_to_ratatui(lines: Vec<LayoutLine>) -> Vec<Line<'static>> {
+fn layout_lines_to_ratatui(theme: &Theme, lines: Vec<LayoutLine>) -> Vec<Line<'static>> {
     lines
         .into_iter()
         .filter(|line| line.runs.is_empty() || line.runs.iter().any(|run| !run.attrs.code_fence))
@@ -759,7 +766,7 @@ fn layout_lines_to_ratatui(lines: Vec<LayoutLine>) -> Vec<Line<'static>> {
                 .runs
                 .into_iter()
                 .filter(|run| !run.attrs.heading_marker && !run.attrs.code_fence)
-                .map(|run| Span::styled(run.text, attrs_to_style(&run.attrs)))
+                .map(|run| Span::styled(run.text, attrs_to_style(theme, &run.attrs)))
                 .collect();
             if spans.is_empty() {
                 Line::from("")
@@ -770,7 +777,7 @@ fn layout_lines_to_ratatui(lines: Vec<LayoutLine>) -> Vec<Line<'static>> {
         .collect()
 }
 
-fn attrs_to_style(attrs: &Attrs) -> Style {
+fn attrs_to_style(theme: &Theme, attrs: &Attrs) -> Style {
     let mut style = Style::new();
     if attrs.bold || attrs.heading {
         style = style.add_modifier(Modifier::BOLD);
@@ -782,16 +789,16 @@ fn attrs_to_style(attrs: &Attrs) -> Style {
         style = style.add_modifier(Modifier::CROSSED_OUT);
     }
     if attrs.dimmed {
-        style = style.fg(FG_DIM);
+        style = style.fg(theme.fg_dim);
     }
     if attrs.code || attrs.code_block_lang.is_some() {
-        style = style.patch(CODE);
+        style = style.patch(theme.code());
     } else if attrs.quote {
-        style = style.fg(GREEN);
+        style = style.fg(theme.quote);
     } else if attrs.link {
-        style = style.fg(BLUE).add_modifier(Modifier::UNDERLINED);
+        style = style.fg(theme.link).add_modifier(Modifier::UNDERLINED);
     } else if attrs.heading {
-        style = style.fg(ACCENT).add_modifier(Modifier::BOLD);
+        style = style.fg(theme.accent).add_modifier(Modifier::BOLD);
     }
     style
 }
@@ -943,7 +950,7 @@ fn render_table_to_lines(rows: &[Vec<String>], _max_width: usize) -> Vec<LayoutL
 
 #[cfg(test)]
 fn render_to_text(input: &str, width: usize) -> String {
-    render_markdown(input, width)
+    render_markdown(&Theme::dark(), input, width)
         .into_iter()
         .map(|line| line.to_string())
         .collect::<Vec<_>>()
@@ -956,7 +963,7 @@ mod tests {
 
     #[test]
     fn empty_input_returns_one_blank_line() {
-        let lines = render_markdown("", 40);
+        let lines = render_markdown(&Theme::dark(), "", 40);
         assert_eq!(lines.len(), 1);
         assert_eq!(lines[0].to_string(), "");
     }
@@ -1046,6 +1053,7 @@ mod tests {
     #[test]
     fn preview_preserves_block_boundaries_and_styles_inline_content() {
         let lines = render_markdown_preview(
+            &Theme::dark(),
             "## Context\n\nFirst **bold** paragraph.\n\n- one\n- `two`",
             40,
             10,
@@ -1075,13 +1083,14 @@ mod tests {
             lines[5]
                 .spans
                 .iter()
-                .any(|span| span.content == "two" && span.style.fg == Some(BLUE))
+                .any(|span| span.content == "two" && span.style.fg == Some(Theme::dark().code))
         );
     }
 
     #[test]
     fn preview_wraps_to_width_and_marks_truncation() {
         let lines = render_markdown_preview(
+            &Theme::dark(),
             "A paragraph with enough words to wrap across several compact preview lines.",
             16,
             2,
@@ -1096,9 +1105,9 @@ mod tests {
 
     #[test]
     fn preview_handles_zero_and_single_line_heights() {
-        assert!(render_markdown_preview("one two three", 8, 0).is_empty());
+        assert!(render_markdown_preview(&Theme::dark(), "one two three", 8, 0).is_empty());
 
-        let lines = render_markdown_preview("one two three", 8, 1);
+        let lines = render_markdown_preview(&Theme::dark(), "one two three", 8, 1);
         assert_eq!(lines.len(), 1);
         assert_eq!(lines[0].to_string(), "one two…");
     }

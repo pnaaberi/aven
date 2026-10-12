@@ -19,7 +19,7 @@ fn detail_header_wraps_the_complete_title_before_metadata() {
     let mut item = detail_test_item();
     item.task.title = "Implement wrapped task titles in the detail pane".to_string();
 
-    let lines = detail_header_options(&item, 18, None);
+    let lines = detail_header_options(&Theme::dark(), &item, 18, None);
     let rendered = lines.iter().map(Line::to_string).collect::<Vec<_>>();
 
     assert_eq!(
@@ -35,7 +35,7 @@ fn detail_header_wraps_the_complete_title_before_metadata() {
 fn detail_header_leads_with_project_context() {
     let item = detail_test_item();
 
-    let lines = detail_header_options(&item, 60, None);
+    let lines = detail_header_options(&Theme::dark(), &item, 60, None);
     let summary = lines
         .iter()
         .find(|line| line.to_string().contains(&item.display_ref))
@@ -44,7 +44,7 @@ fn detail_header_leads_with_project_context() {
     assert!(summary.to_string().starts_with("● app / APP-7KQ9A1X"));
     assert_eq!(
         summary.spans[0].style.fg,
-        Some(theme::project_color(&item.task.project_key))
+        Some(Theme::dark().project(&item.task.project_key))
     );
     let reference_prefix = summary
         .spans
@@ -53,7 +53,7 @@ fn detail_header_leads_with_project_context() {
         .expect("task reference prefix");
     assert_eq!(
         reference_prefix.style.fg,
-        Some(theme::project_color(&item.task.project_key))
+        Some(Theme::dark().project(&item.task.project_key))
     );
 }
 
@@ -62,7 +62,7 @@ fn detail_header_breaks_words_that_exceed_narrow_widths() {
     let mut item = detail_test_item();
     item.task.title = "abcdefghij".to_string();
 
-    let lines = detail_title_lines(&item, 4, None);
+    let lines = detail_title_lines(&Theme::dark(), &item, 4, None);
     let rendered = lines.iter().map(Line::to_string).collect::<Vec<_>>();
 
     assert_eq!(rendered, ["abcd", "efgh", "ij"]);
@@ -75,14 +75,14 @@ fn detail_header_wraps_by_unicode_display_width() {
     let mut item = detail_test_item();
     item.task.title = "ab界cd 界界界".to_string();
 
-    let lines = detail_title_lines(&item, 4, None);
+    let lines = detail_title_lines(&Theme::dark(), &item, 4, None);
     let rendered = lines.iter().map(Line::to_string).collect::<Vec<_>>();
 
     assert_eq!(rendered, ["ab界", "cd", "界界", "界"]);
     assert!(lines.iter().all(|line| line.width() <= 4));
 
     item.task.title = "👩‍💻x".to_string();
-    let emoji = detail_title_lines(&item, 2, None)
+    let emoji = detail_title_lines(&Theme::dark(), &item, 2, None)
         .iter()
         .map(Line::to_string)
         .collect::<Vec<_>>();
@@ -94,14 +94,14 @@ fn detail_header_marks_epics_with_star() {
     let mut item = detail_test_item();
     item.task.is_epic = true;
 
-    let lines = detail_header_options(&item, 60, None);
+    let lines = detail_header_options(&Theme::dark(), &item, 60, None);
     let marker = lines[2]
         .spans
         .iter()
         .find(|span| span.content == EPIC_MARKER)
         .expect("epic marker");
 
-    assert_eq!(marker.style.fg, Some(YELLOW));
+    assert_eq!(marker.style.fg, Some(Theme::dark().attention));
 }
 
 #[test]
@@ -116,7 +116,7 @@ fn inline_title_editing_stays_on_one_clipped_line() {
         cursor: 30,
     };
 
-    let lines = detail_header_options(&item, 10, Some(&editor));
+    let lines = detail_header_options(&Theme::dark(), &item, 10, Some(&editor));
 
     assert_eq!(lines.len(), 4);
     assert!(lines[0].width() <= 10);
@@ -223,8 +223,8 @@ fn detail_selection_highlights_the_selected_range() {
         .find(|span| span.content.as_ref() == "Fix")
         .unwrap();
 
-    assert_eq!(selected.style.bg, Some(ACCENT));
-    assert_eq!(selected.style.fg, Some(INVERSE_FG));
+    assert_eq!(selected.style.bg, Some(Theme::dark().accent));
+    assert_eq!(selected.style.fg, Some(Theme::dark().inverse_fg));
 }
 
 #[test]
@@ -354,7 +354,7 @@ fn detail_note_lines_keep_quote_rail() {
         .expect("missing rendered inline code span");
     assert_eq!(
         code_span.style.fg,
-        Some(crate::tui::theme::BLUE),
+        Some(Theme::dark().code),
         "inline code foreground style was not preserved"
     );
     assert!(

@@ -136,6 +136,7 @@ pub(in crate::tui::ui) fn changelog_lines(
     width: u16,
 ) -> Vec<ratatui::text::Line<'static>> {
     let mut rendered = render_markdown_reflowed_without_link_urls(
+        &crate::tui::theme::Theme::dark(),
         markdown,
         width.saturating_sub(6).max(1) as usize,
     );

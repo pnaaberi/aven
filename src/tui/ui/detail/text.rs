@@ -14,8 +14,7 @@ use crate::tui::markdown::{
     render_markdown_without_link_urls,
 };
 use crate::tui::text::title_line_ranges;
-use crate::tui::theme;
-use crate::tui::theme::{ACCENT, BG_PANEL, BORDER, FG, FG_DIM, INVERSE_FG, YELLOW};
+use crate::tui::theme::Theme;
 use crate::tui::widgets::{priority_short, status_span};
 
 #[derive(Debug, Clone)]
@@ -84,6 +83,7 @@ pub(super) fn detail_selectable_document_from_body(
 }
 
 pub(super) fn apply_detail_selection_from_document(
+    theme: &Theme,
     document: &DetailSelectableDocument,
     selection: &DetailTextSelection,
     sticky_lines: &mut [Line<'static>],
@@ -92,7 +92,7 @@ pub(super) fn apply_detail_selection_from_document(
 ) {
     let range = selection.range();
     for (line, selectable) in sticky_lines.iter_mut().zip(&document.title) {
-        highlight_selectable_line(line, selectable, &range, 0);
+        highlight_selectable_line(theme, line, selectable, &range, 0);
     }
     let body_end = body_start.saturating_add(body_lines.len());
     let first = document
@@ -107,12 +107,13 @@ pub(super) fn apply_detail_selection_from_document(
             .and_then(|index| index.checked_sub(body_start))
             .and_then(|index| body_lines.get_mut(index))
         {
-            highlight_selectable_line(line, selectable, &range, 1);
+            highlight_selectable_line(theme, line, selectable, &range, 1);
         }
     }
 }
 
 pub(super) fn highlight_selectable_line(
+    theme: &Theme,
     line: &mut Line<'static>,
     selectable: &SelectableLine,
     selection: &std::ops::Range<usize>,
@@ -147,7 +148,7 @@ pub(super) fn highlight_selectable_line(
         if selected_start < selected_end {
             rebuilt.push(Span::styled(
                 content[selected_start..selected_end].to_string(),
-                span.style.fg(INVERSE_FG).bg(ACCENT),
+                span.style.fg(theme.inverse_fg).bg(theme.accent),
             ));
         }
         if selected_end < content.len() {
@@ -162,20 +163,18 @@ pub(super) fn highlight_selectable_line(
 }
 
 pub(super) fn detail_header_options(
+    theme: &Theme,
     item: &TaskListItem,
     width: usize,
     inline_title_editor: Option<&TextInputView>,
 ) -> Vec<Line<'static>> {
     let mut summary_spans = vec![
-        Span::styled(
-            "● ",
-            Style::new().fg(theme::project_color(&item.task.project_key)),
-        ),
+        Span::styled("● ", Style::new().fg(theme.project(&item.task.project_key))),
         Span::styled(
             item.task.project_key.clone(),
-            Style::new().fg(FG).add_modifier(Modifier::BOLD),
+            Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
         ),
-        Span::styled(" / ", Style::new().fg(FG_DIM)),
+        Span::styled(" / ", Style::new().fg(theme.fg_dim)),
     ];
     summary_spans.extend(linked_task_ref_spans(
         &item.display_ref,
@@ -183,22 +182,27 @@ pub(super) fn detail_header_options(
     ));
     if item.task.is_epic {
         summary_spans.extend([
-            Span::styled("  ", Style::new().fg(FG_DIM)),
-            Span::styled(EPIC_MARKER, Style::new().fg(YELLOW)),
+            Span::styled("  ", Style::new().fg(theme.fg_dim)),
+            Span::styled(EPIC_MARKER, Style::new().fg(theme.attention)),
         ]);
     }
     summary_spans.extend([
-        Span::styled("   ", Style::new().fg(FG_DIM)),
+        Span::styled("   ", Style::new().fg(theme.fg_dim)),
         status_span(item.task.status.as_str()),
-        Span::styled("   ", Style::new().fg(FG_DIM)),
+        Span::styled("   ", Style::new().fg(theme.fg_dim)),
         Span::styled(
             priority_short(item.task.priority.as_str()),
-            theme::priority_style(item.task.priority.as_str()).add_modifier(Modifier::BOLD),
+            theme
+                .priority(item.task.priority.as_str())
+                .add_modifier(Modifier::BOLD),
         ),
     ]);
-    let mut lines = detail_title_lines(item, width, inline_title_editor);
+    let mut lines = detail_title_lines(theme, item, width, inline_title_editor);
     lines.extend([
-        Line::from(Span::styled("─".repeat(width), Style::new().fg(BORDER))),
+        Line::from(Span::styled(
+            "─".repeat(width),
+            Style::new().fg(theme.border),
+        )),
         Line::from(summary_spans),
         Line::from(""),
     ]);
@@ -206,6 +210,7 @@ pub(super) fn detail_header_options(
 }
 
 pub(super) fn detail_title_lines(
+    theme: &Theme,
     item: &TaskListItem,
     width: usize,
     inline_title_editor: Option<&TextInputView>,
@@ -214,7 +219,7 @@ pub(super) fn detail_title_lines(
         let mut line = clipped_input_line(&editor.input, editor.cursor, width);
         for span in &mut line.spans {
             span.style = Style::new()
-                .fg(FG)
+                .fg(theme.fg)
                 .add_modifier(Modifier::BOLD)
                 .patch(span.style);
         }
@@ -226,7 +231,7 @@ pub(super) fn detail_title_lines(
         .map(|range| {
             Line::from(Span::styled(
                 item.task.title[range].to_string(),
-                Style::new().fg(FG).add_modifier(Modifier::BOLD),
+                Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
             ))
         })
         .collect()
@@ -327,13 +332,18 @@ pub(super) fn plain_metadata_lines(value: &str, width: usize, style: Style) -> V
         .collect()
 }
 
-pub(super) fn quoted_block_lines(body: &str, width: usize, style: Style) -> Vec<Line<'static>> {
+pub(super) fn quoted_block_lines(
+    theme: &Theme,
+    body: &str,
+    width: usize,
+    style: Style,
+) -> Vec<Line<'static>> {
     let content_width = width.saturating_sub(3).max(1);
-    render_markdown_without_link_urls(body, content_width)
+    render_markdown_without_link_urls(theme, body, content_width)
         .into_iter()
         .map(|line| {
             let mut spans = line_with_base_style(line, style).spans;
-            spans.insert(0, Span::styled("│ ", Style::new().fg(BORDER)));
+            spans.insert(0, Span::styled("│ ", Style::new().fg(theme.border)));
             Line::from(spans)
         })
         .collect()
@@ -342,7 +352,7 @@ pub(super) fn quoted_block_lines(body: &str, width: usize, style: Style) -> Vec<
 pub(super) fn detail_body_blocks(
     body: &str,
     content_width: usize,
-    context: MarkdownRenderContext,
+    context: MarkdownRenderContext<'_>,
     _inline_images: Option<&DetailInlineImageContext>,
 ) -> Vec<DetailBodyBlock> {
     render_markdown_with_context_without_link_urls(body, content_width, context)
@@ -353,9 +363,9 @@ pub(super) fn detail_body_blocks(
         .collect()
 }
 
-pub(super) fn quoted_line(line: Line<'static>, style: Style) -> Line<'static> {
+pub(super) fn quoted_line(theme: &Theme, line: Line<'static>, style: Style) -> Line<'static> {
     let mut spans = line_with_base_style(line, style).spans;
-    spans.insert(0, Span::styled("│ ", Style::new().fg(BORDER)));
+    spans.insert(0, Span::styled("│ ", Style::new().fg(theme.border)));
     Line::from(spans)
 }
 
@@ -366,9 +376,9 @@ pub(super) fn line_with_base_style(mut line: Line<'static>, base: Style) -> Line
     line
 }
 
-pub(super) fn keycap_style() -> Style {
+pub(super) fn keycap_style(theme: &Theme) -> Style {
     Style::new()
-        .fg(FG)
-        .bg(BG_PANEL)
+        .fg(theme.fg)
+        .bg(theme.bg_panel)
         .add_modifier(Modifier::BOLD)
 }

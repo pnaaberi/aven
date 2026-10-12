@@ -26,7 +26,7 @@ use super::{
     TextInputView, WidgetState, detail_target_is_actionable,
 };
 use crate::tui::detail_selection::text_cell_at_column;
-use crate::tui::theme::{ACCENT, BG, BG_PANEL, BORDER, FG, FG_DIM, FG_MUTED, Theme};
+use crate::tui::theme::Theme;
 use unicode_width::UnicodeWidthStr;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -112,6 +112,7 @@ impl DetailBodyGeometry {
         });
         let epic_children = detail_epic_children(item, context.removed_epic_child);
         let body = build_detail_body_document(
+            context.theme,
             item,
             &epic_children,
             content_width,
@@ -149,6 +150,7 @@ impl DetailDocument {
     ) -> Self {
         let layout = context.content_layout();
         let sticky_lines = detail_header_options(
+            context.theme,
             item,
             layout.content_area.width as usize,
             context.inline_title_editor,
@@ -228,9 +230,10 @@ impl DetailDocument {
         context: &DetailRenderContext<'_>,
         widgets: &mut WidgetState,
     ) {
+        let theme = context.theme;
         frame.render_widget(Clear, self.layout.body_area);
         frame.render_widget(
-            Block::new().style(Style::new().bg(BG)),
+            Block::new().style(Style::new().bg(theme.bg)),
             self.layout.body_area,
         );
         if self.layout.body_area.width == 0 || self.layout.body_area.height == 0 {
@@ -238,12 +241,12 @@ impl DetailDocument {
         }
         let mut model = self.model.clone();
         if let Some(active_target) = context.active_target {
-            apply_active_style(&mut model, active_target);
+            apply_active_style(theme, &mut model, active_target);
         }
         if context.hovered_target != context.active_target
             && let Some(hovered_target) = context.hovered_target
         {
-            apply_hover_style(&mut model, hovered_target);
+            apply_hover_style(theme, &mut model, hovered_target);
         }
         if context.inline_title_editor.is_none()
             && let Some(selection) = context.selection.filter(|selection| {
@@ -252,6 +255,7 @@ impl DetailDocument {
             })
         {
             apply_detail_selection_from_document(
+                theme,
                 &self.geometry.selectable,
                 selection,
                 &mut model.sticky_lines,
@@ -259,10 +263,11 @@ impl DetailDocument {
                 model.body_start,
             );
         }
-        render_detail_content_from_model(frame, self.layout.content_area, model, widgets);
+        render_detail_content_from_model(frame, theme, self.layout.content_area, model, widgets);
         if self.layout.metadata_area.width > 0 {
             render_detail_metadata(
                 frame,
+                theme,
                 item,
                 &self.geometry.epic_children,
                 self.layout.metadata_area,
@@ -657,7 +662,11 @@ fn interactive_row_lines_mut<'a>(
     Some(&mut model.lines[row_start - visible_start..row_end - visible_start])
 }
 
-pub(super) fn apply_active_style(model: &mut DetailContentRenderModel, target: &DetailTargetId) {
+pub(super) fn apply_active_style(
+    theme: &Theme,
+    model: &mut DetailContentRenderModel,
+    target: &DetailTargetId,
+) {
     let Some(lines) = interactive_row_lines_mut(model, target) else {
         return;
     };
@@ -665,11 +674,11 @@ pub(super) fn apply_active_style(model: &mut DetailContentRenderModel, target: &
         DetailTargetId::CustomMetadata | DetailTargetId::Expand { .. } => {
             for line in lines {
                 for (index, span) in line.spans.iter_mut().enumerate() {
-                    span.style = span.style.bg(BG_PANEL);
+                    span.style = span.style.bg(theme.bg_panel);
                     if index == 0 {
-                        span.style = span.style.fg(BORDER);
+                        span.style = span.style.fg(theme.border);
                     } else {
-                        span.style = span.style.fg(ACCENT).add_modifier(Modifier::BOLD);
+                        span.style = span.style.fg(theme.accent).add_modifier(Modifier::BOLD);
                     }
                 }
             }
@@ -677,14 +686,14 @@ pub(super) fn apply_active_style(model: &mut DetailContentRenderModel, target: &
         DetailTargetId::Note { .. } => {
             for line in lines {
                 for span in &mut line.spans {
-                    span.style = span.style.bg(BG_PANEL);
+                    span.style = span.style.bg(theme.bg_panel);
                 }
             }
         }
         DetailTargetId::Attachment { .. } => {
             for line in lines {
                 for span in line.spans.iter_mut().skip(1) {
-                    span.style = span.style.fg(ACCENT);
+                    span.style = span.style.fg(theme.accent);
                 }
             }
         }
@@ -694,30 +703,34 @@ pub(super) fn apply_active_style(model: &mut DetailContentRenderModel, target: &
         } => {
             for line in lines {
                 for (index, span) in line.spans.iter_mut().enumerate() {
-                    span.style = span.style.bg(BG_PANEL);
+                    span.style = span.style.bg(theme.bg_panel);
                     match index {
-                        0 => span.style = span.style.fg(BORDER),
+                        0 => span.style = span.style.fg(theme.border),
                         1 => {
-                            span.style = span.style.fg(ACCENT).add_modifier(Modifier::BOLD);
+                            span.style = span.style.fg(theme.accent).add_modifier(Modifier::BOLD);
                         }
-                        2 => span.style = span.style.fg(FG_DIM),
+                        2 => span.style = span.style.fg(theme.fg_dim),
                         _ => {}
                     }
                 }
             }
         }
-        DetailTargetId::Task { .. } => apply_link_row_style(lines),
+        DetailTargetId::Task { .. } => apply_link_row_style(theme, lines),
     }
 }
 
-pub(super) fn apply_hover_style(model: &mut DetailContentRenderModel, target: &DetailTargetId) {
+pub(super) fn apply_hover_style(
+    theme: &Theme,
+    model: &mut DetailContentRenderModel,
+    target: &DetailTargetId,
+) {
     let Some(lines) = interactive_row_lines_mut(model, target) else {
         return;
     };
     for line in lines {
         for span in &mut line.spans {
             if matches!(target, DetailTargetId::Note { .. }) {
-                span.style = span.style.bg(BG_PANEL);
+                span.style = span.style.bg(theme.bg_panel);
             } else {
                 span.style = span.style.add_modifier(Modifier::UNDERLINED);
             }
@@ -750,6 +763,7 @@ pub(super) fn visible_detail_image_rect(
 
 pub(super) fn render_detail_content_from_model(
     frame: &mut Frame,
+    theme: &Theme,
     area: Rect,
     model: DetailContentRenderModel,
     widgets: &mut WidgetState,
@@ -777,19 +791,20 @@ pub(super) fn render_detail_content_from_model(
         })
         .collect::<Vec<_>>();
     frame.render_widget(
-        Paragraph::new(Text::from(model.sticky_lines)).style(Style::new().fg(FG).bg(BG)),
+        Paragraph::new(Text::from(model.sticky_lines))
+            .style(Style::new().fg(theme.fg).bg(theme.bg)),
         sticky_area,
     );
     frame.render_widget(
-        Paragraph::new(Text::from(model.lines)).style(Style::new().fg(FG).bg(BG)),
+        Paragraph::new(Text::from(model.lines)).style(Style::new().fg(theme.fg).bg(theme.bg)),
         body_area,
     );
     let body_visible = body_area.height as usize;
     if model.content_height > body_visible {
         frame.render_stateful_widget(
             Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                .style(Style::new().fg(FG_DIM).bg(BG))
-                .thumb_style(Style::new().fg(FG_MUTED)),
+                .style(Style::new().fg(theme.fg_dim).bg(theme.bg))
+                .thumb_style(Style::new().fg(theme.fg_muted)),
             body_area,
             &mut ScrollbarState::new(model.content_height)
                 .position(model.scrollbar_position)

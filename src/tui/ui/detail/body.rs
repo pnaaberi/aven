@@ -12,7 +12,7 @@ use crate::query::TaskListItem;
 use crate::tui::app::{DetailSection, DetailTargetId};
 use crate::tui::markdown::{MarkdownRenderContext, render_markdown_without_link_urls};
 use crate::tui::text::truncate_width;
-use crate::tui::theme::{BORDER, FG, FG_DIM, FG_MUTED};
+use crate::tui::theme::Theme;
 
 use super::DetailInteractiveRow;
 use super::attachments::{
@@ -51,6 +51,7 @@ pub(super) enum DetailBodyBlock {
     },
 }
 pub(super) fn build_detail_body_document(
+    theme: &Theme,
     item: &TaskListItem,
     epic_children: &[DetailEpicChild],
     width: usize,
@@ -61,8 +62,9 @@ pub(super) fn build_detail_body_document(
     let mut lines = Vec::new();
     let mut interactive_rows = Vec::new();
     let mut section_body_indices = vec![0];
-    extend_epic_parent_section(&mut lines, &mut interactive_rows, item, width, None);
+    extend_epic_parent_section(theme, &mut lines, &mut interactive_rows, item, width, None);
     extend_epic_children_section(
+        theme,
         &mut lines,
         &mut interactive_rows,
         item,
@@ -85,7 +87,7 @@ pub(super) fn build_detail_body_document(
     let blocks = detail_body_blocks(
         &description,
         content_width,
-        MarkdownRenderContext,
+        MarkdownRenderContext { theme },
         inline_images,
     );
     let rendered_description = blocks
@@ -120,7 +122,7 @@ pub(super) fn build_detail_body_document(
         }
         match block {
             DetailBodyBlock::Line(line) => {
-                lines.push(quoted_line(line, Style::new().fg(FG_MUTED)));
+                lines.push(quoted_line(theme, line, Style::new().fg(theme.fg_muted)));
             }
             DetailBodyBlock::Image {
                 placeholder,
@@ -130,11 +132,15 @@ pub(super) fn build_detail_body_document(
                 height,
             } => {
                 let line_index = lines.len().saturating_add(1);
-                lines.push(quoted_line(placeholder, Style::new().fg(FG_MUTED)));
+                lines.push(quoted_line(
+                    theme,
+                    placeholder,
+                    Style::new().fg(theme.fg_muted),
+                ));
                 for _ in 0..height {
                     lines.push(Line::from(vec![Span::styled(
                         "│ ",
-                        Style::new().fg(BORDER),
+                        Style::new().fg(theme.border),
                     )]));
                 }
                 image_placements.push(DetailBodyImagePlacement {
@@ -159,13 +165,13 @@ pub(super) fn build_detail_body_document(
         lines.push(Line::from(vec![
             Span::styled(
                 "CUSTOM METADATA",
-                Style::new().fg(FG_DIM).add_modifier(Modifier::BOLD),
+                Style::new().fg(theme.fg_dim).add_modifier(Modifier::BOLD),
             ),
-            Span::styled(" (", Style::new().fg(FG_DIM)),
-            Span::styled("e", keycap_style()),
+            Span::styled(" (", Style::new().fg(theme.fg_dim)),
+            Span::styled("e", keycap_style(theme)),
             Span::raw(" "),
-            Span::styled("m", keycap_style()),
-            Span::styled(" edit)", Style::new().fg(FG_DIM)),
+            Span::styled("m", keycap_style(theme)),
+            Span::styled(" edit)", Style::new().fg(theme.fg_dim)),
         ]));
         let key_width = item
             .metadata
@@ -181,14 +187,14 @@ pub(super) fn build_detail_body_document(
                 for mut line in plain_metadata_lines(
                     &value.key,
                     width.saturating_sub(2),
-                    Style::new().fg(FG_DIM),
+                    Style::new().fg(theme.fg_dim),
                 ) {
                     line.spans.insert(0, Span::raw("  "));
                     lines.push(line);
                 }
             }
             let indent = if long_key { 4 } else { key_width + 4 };
-            let (text, style) = (value.value.as_str(), Style::new().fg(FG));
+            let (text, style) = (value.value.as_str(), Style::new().fg(theme.fg));
             for (index, mut line) in plain_metadata_lines(text, width.saturating_sub(indent), style)
                 .into_iter()
                 .enumerate()
@@ -199,7 +205,7 @@ pub(super) fn build_detail_body_document(
                     " ".repeat(indent)
                 };
                 line.spans
-                    .insert(0, Span::styled(prefix, Style::new().fg(FG_DIM)));
+                    .insert(0, Span::styled(prefix, Style::new().fg(theme.fg_dim)));
                 lines.push(line);
             }
             if value.value.contains('\n') || long_key {
@@ -210,6 +216,7 @@ pub(super) fn build_detail_body_document(
 
     let mut attachment_placements = Vec::new();
     extend_attachment_section(
+        theme,
         &mut lines,
         &mut image_placements,
         &mut attachment_placements,
@@ -227,6 +234,7 @@ pub(super) fn build_detail_body_document(
         });
     }
     extend_pending_attachment_section(
+        theme,
         &mut lines,
         &item.task.id,
         pending_attachments,
@@ -237,6 +245,7 @@ pub(super) fn build_detail_body_document(
     lines.push(Line::from(""));
     section_body_indices.push(lines.len());
     extend_detail_note_section(
+        theme,
         &mut lines,
         &mut interactive_rows,
         &mut hyperlinks,
@@ -250,6 +259,7 @@ pub(super) fn build_detail_body_document(
     {
         let related_start = lines.len();
         extend_related_section(
+            theme,
             &mut lines,
             &mut interactive_rows,
             item,
@@ -262,6 +272,7 @@ pub(super) fn build_detail_body_document(
     if !item.depends_on.is_empty() || !item.blocks.is_empty() {
         let dependency_start = lines.len();
         extend_dependency_sections(
+            theme,
             &mut lines,
             &mut interactive_rows,
             item,
@@ -273,6 +284,7 @@ pub(super) fn build_detail_body_document(
     }
     let activity_start = lines.len();
     extend_activity_section(
+        theme,
         &mut lines,
         &mut interactive_rows,
         item,
@@ -295,6 +307,7 @@ pub(super) fn build_detail_body_document(
 }
 
 pub(super) fn extend_detail_note_section(
+    theme: &Theme,
     lines: &mut Vec<Line<'static>>,
     rows: &mut Vec<DetailInteractiveRow>,
     hyperlinks: &mut Vec<DetailHyperlink>,
@@ -304,35 +317,42 @@ pub(super) fn extend_detail_note_section(
     let mut header = vec![
         Span::styled(
             "NOTES",
-            Style::new().fg(FG_DIM).add_modifier(Modifier::BOLD),
+            Style::new().fg(theme.fg_dim).add_modifier(Modifier::BOLD),
         ),
-        Span::styled(" (", Style::new().fg(FG_DIM)),
-        Span::styled("n", keycap_style()),
-        Span::styled(" add", Style::new().fg(FG_DIM)),
+        Span::styled(" (", Style::new().fg(theme.fg_dim)),
+        Span::styled("n", keycap_style(theme)),
+        Span::styled(" add", Style::new().fg(theme.fg_dim)),
     ];
     if !item.notes.is_empty() && width >= 42 {
         header.extend([
-            Span::styled(" · ", Style::new().fg(FG_DIM)),
-            Span::styled("e", keycap_style()),
-            Span::styled(" edit · ", Style::new().fg(FG_DIM)),
-            Span::styled("D", keycap_style()),
-            Span::styled(" delete", Style::new().fg(FG_DIM)),
+            Span::styled(" · ", Style::new().fg(theme.fg_dim)),
+            Span::styled("e", keycap_style(theme)),
+            Span::styled(" edit · ", Style::new().fg(theme.fg_dim)),
+            Span::styled("D", keycap_style(theme)),
+            Span::styled(" delete", Style::new().fg(theme.fg_dim)),
         ]);
     }
-    header.push(Span::styled(")", Style::new().fg(FG_DIM)));
+    header.push(Span::styled(")", Style::new().fg(theme.fg_dim)));
     lines.push(Line::from(header));
     if item.notes.is_empty() {
-        lines.push(Line::from(Span::styled("none", Style::new().fg(FG_MUTED))));
+        lines.push(Line::from(Span::styled(
+            "none",
+            Style::new().fg(theme.fg_muted),
+        )));
     } else {
         for note in &item.notes {
             lines.push(Line::from(""));
             let mut rendered = vec![Line::from(Span::styled(
                 local_timestamp_display(&note.created_at),
-                Style::new().fg(FG_DIM),
+                Style::new().fg(theme.fg_dim),
             ))];
-            let note_lines = quoted_block_lines(&note.body, width, Style::new().fg(FG));
-            let unquoted_note_lines =
-                render_markdown_without_link_urls(&note.body, width.saturating_sub(3).max(1));
+            let note_lines =
+                quoted_block_lines(theme, &note.body, width, Style::new().fg(theme.fg));
+            let unquoted_note_lines = render_markdown_without_link_urls(
+                theme,
+                &note.body,
+                width.saturating_sub(3).max(1),
+            );
             hyperlinks.extend(markdown_hyperlinks(
                 &note.body,
                 &unquoted_note_lines,
@@ -353,6 +373,7 @@ pub(super) fn extend_detail_note_section(
 }
 
 pub(super) fn extend_activity_section(
+    theme: &Theme,
     lines: &mut Vec<Line<'static>>,
     rows: &mut Vec<DetailInteractiveRow>,
     item: &TaskListItem,
@@ -362,12 +383,12 @@ pub(super) fn extend_activity_section(
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "ACTIVITY",
-        Style::new().fg(FG_DIM).add_modifier(Modifier::BOLD),
+        Style::new().fg(theme.fg_dim).add_modifier(Modifier::BOLD),
     )));
     if item.activity.is_empty() {
         lines.push(Line::from(Span::styled(
             "No recorded task activity.",
-            Style::new().fg(FG_MUTED),
+            Style::new().fg(theme.fg_muted),
         )));
         return;
     }
@@ -381,7 +402,7 @@ pub(super) fn extend_activity_section(
             "Show {count} {}",
             if count == 1 { "event" } else { "events" }
         );
-        push_disclosure_row(lines, rows, disclosure, &label, None);
+        push_disclosure_row(theme, lines, rows, disclosure, &label, None);
         return;
     }
 
@@ -398,7 +419,7 @@ pub(super) fn extend_activity_section(
     if available && let Some(tag) = idle_tag.as_deref() {
         lines.push(Line::from(Span::styled(
             truncate_width(&format!("{tag} · since becoming available"), width),
-            Style::new().fg(FG_DIM),
+            Style::new().fg(theme.fg_dim),
         )));
     } else if anchored_idle.is_none()
         && let Some((index, tag)) = idle_index.zip(idle_tag.as_deref())
@@ -411,14 +432,14 @@ pub(super) fn extend_activity_section(
                 ),
                 width,
             ),
-            Style::new().fg(FG_DIM),
+            Style::new().fg(theme.fg_dim),
         )));
     } else if idle_index.is_none()
         && let Some(tag) = idle_tag.as_deref()
     {
         lines.push(Line::from(Span::styled(
             truncate_width(&format!("{tag} · based on recent task activity"), width),
-            Style::new().fg(FG_DIM),
+            Style::new().fg(theme.fg_dim),
         )));
     }
 
@@ -442,11 +463,11 @@ pub(super) fn extend_activity_section(
         );
         let mut spans = vec![
             Span::raw("  "),
-            Span::styled(timestamp, Style::new().fg(FG_DIM)),
+            Span::styled(timestamp, Style::new().fg(theme.fg_dim)),
             Span::raw("  "),
             Span::styled(icon, recent_actions::action_style(action)),
             Span::raw(" "),
-            Span::styled(summary.clone(), Style::new().fg(FG)),
+            Span::styled(summary.clone(), Style::new().fg(theme.fg)),
         ];
         if show_idle && let Some(tag) = idle_tag.as_deref() {
             let padding = width.saturating_sub(
@@ -455,11 +476,11 @@ pub(super) fn extend_activity_section(
                     + UnicodeWidthStr::width(tag),
             );
             spans.push(Span::raw(" ".repeat(padding.max(2))));
-            spans.push(Span::styled(tag.to_string(), Style::new().fg(FG_DIM)));
+            spans.push(Span::styled(tag.to_string(), Style::new().fg(theme.fg_dim)));
         }
         lines.push(Line::from(spans));
     }
-    push_disclosure_row(lines, rows, disclosure, "Hide activity", None);
+    push_disclosure_row(theme, lines, rows, disclosure, "Hide activity", None);
 }
 
 fn idle_activity_noun(action: &crate::query::RecentActionItem) -> &'static str {

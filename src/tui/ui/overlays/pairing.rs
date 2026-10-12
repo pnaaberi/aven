@@ -121,7 +121,12 @@ fn status_lines(pairing: &PairingOverlay, width: u16) -> Vec<Line<'static>> {
                 "! Couldn't create the invitation",
                 Style::new().fg(RED),
             ))];
-            lines.extend(wrap_with_code(message, Style::new().fg(FG), inner));
+            lines.extend(wrap_with_code(
+                &crate::tui::theme::Theme::dark(),
+                message,
+                Style::new().fg(FG),
+                inner,
+            ));
             lines
         }
         PairingOverlay::Ready(_) => Vec::new(),
@@ -301,6 +306,13 @@ fn wrapped_height(text: &str, width: u16) -> u16 {
 
 fn wrap_text(text: &str, width: u16, style: Style) -> Vec<Line<'static>> {
     text.split('\n')
-        .flat_map(|paragraph| wrap_with_code(paragraph, style, usize::from(width)))
+        .flat_map(|paragraph| {
+            wrap_with_code(
+                &crate::tui::theme::Theme::dark(),
+                paragraph,
+                style,
+                usize::from(width),
+            )
+        })
         .collect()
 }

@@ -77,6 +77,9 @@ pub(crate) struct Theme {
 
     /// Project colors, picked by a stable hash of the project key.
     pub(crate) project_palette: [Color; 14],
+
+    /// Text inside markdown block quotes.
+    pub(crate) quote: Color,
 }
 
 impl Theme {
@@ -152,6 +155,8 @@ impl Theme {
                 Color::Rgb(123, 156, 255),
                 Color::Rgb(232, 128, 214),
             ],
+
+            quote: Color::Rgb(137, 199, 82),
         }
     }
 

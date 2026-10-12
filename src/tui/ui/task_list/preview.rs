@@ -335,6 +335,7 @@ pub(super) fn task_preview_lines(
         }
         let description_height = height.saturating_sub(lines.len());
         lines.extend(render_markdown_preview(
+            &crate::tui::theme::Theme::dark(),
             &description_or_placeholder(&item.task.description),
             width,
             description_height,

@@ -1253,7 +1253,7 @@ fn button_span(label: String, focused: bool, primary: bool) -> Span<'static> {
 }
 
 fn paragraph(text: &str, style: Style, width: usize) -> Vec<Line<'static>> {
-    wrap_with_code(text, style, width)
+    wrap_with_code(&crate::tui::theme::Theme::dark(), text, style, width)
 }
 
 /// A list item: every wrapped line keeps the same two-cell indent.
@@ -1344,7 +1344,7 @@ fn detail_lines(status: &TuiSyncStatus, width: usize) -> Vec<Line<'static>> {
 
 fn wrapped_row(label: &str, value: &str, style: Style, width: usize) -> Vec<Line<'static>> {
     let value_width = width.saturating_sub(LABEL_WIDTH).max(1);
-    let mut lines = wrap_with_code(value, style, value_width);
+    let mut lines = wrap_with_code(&crate::tui::theme::Theme::dark(), value, style, value_width);
     for (index, line) in lines.iter_mut().enumerate() {
         let label = if index == 0 { label } else { "" };
         line.spans.insert(

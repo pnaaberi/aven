@@ -95,7 +95,7 @@ fn detail_attachment_filename_truncates_to_content_width() {
 fn detail_attachment_row_styles_filename_and_metadata() {
     let attachment = attachment_metadata("ATTACHMENT000001", false, true);
 
-    let line = attachment_detail_line(&attachment, 80, false);
+    let line = attachment_detail_line(&Theme::dark(), &attachment, 80, false);
 
     assert_eq!(
         line.spans
@@ -111,17 +111,17 @@ fn detail_attachment_row_styles_filename_and_metadata() {
             "4 B",
         ]
     );
-    assert_eq!(line.spans[0].style.fg, Some(FG_MUTED));
-    assert_eq!(line.spans[1].style.fg, Some(FG));
-    assert_eq!(line.spans[2].style.fg, Some(FG_DIM));
-    assert_eq!(line.spans[3].style.fg, Some(FG_MUTED));
+    assert_eq!(line.spans[0].style.fg, Some(Theme::dark().fg_muted));
+    assert_eq!(line.spans[1].style.fg, Some(Theme::dark().fg));
+    assert_eq!(line.spans[2].style.fg, Some(Theme::dark().fg_dim));
+    assert_eq!(line.spans[3].style.fg, Some(Theme::dark().fg_muted));
 
-    let focused = attachment_detail_line(&attachment, 80, true);
+    let focused = attachment_detail_line(&Theme::dark(), &attachment, 80, true);
     assert!(
         focused
             .spans
             .iter()
-            .all(|span| span.style.fg == Some(ACCENT))
+            .all(|span| span.style.fg == Some(Theme::dark().accent))
     );
 }
 
@@ -324,7 +324,13 @@ fn detail_omits_preview_when_frame_is_clipped_by_viewport() {
 
     terminal
         .draw(|frame| {
-            render_detail_content_from_model(frame, Rect::new(0, 0, 20, 5), model, &mut widgets);
+            render_detail_content_from_model(
+                frame,
+                &Theme::dark(),
+                Rect::new(0, 0, 20, 5),
+                model,
+                &mut widgets,
+            );
         })
         .unwrap();
 
@@ -524,6 +530,7 @@ fn large_attachment_preview_stays_inside_its_border() {
         .draw(|frame| {
             render_attachment_preview(
                 frame,
+                &Theme::dark(),
                 &item,
                 "ATTACHMENT000001",
                 &mut widgets,

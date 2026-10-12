@@ -17,8 +17,15 @@ fn detail_document_projections_share_semantic_body_geometry() {
     item.attachments = vec![attachment_metadata("ATTACHMENT000001", false, true)];
     let images = DetailInlineImageContext::default();
     let children = detail_epic_children(&item, None);
-    let body =
-        build_detail_body_document(&item, &children, 42, &BTreeSet::new(), Some(&images), &[]);
+    let body = build_detail_body_document(
+        &Theme::dark(),
+        &item,
+        &children,
+        42,
+        &BTreeSet::new(),
+        Some(&images),
+        &[],
+    );
     let selectable = detail_selectable_document_from_body(&item, 42, true, &body);
     let model = project_detail_content_model(Vec::new(), &body, usize::MAX, 0);
 
@@ -85,7 +92,11 @@ fn detail_selection_maps_and_highlights_across_wrapped_title_lines() {
         None,
     );
     for line in &model.sticky_lines[..2] {
-        assert!(line.spans.iter().any(|span| span.style.bg == Some(ACCENT)));
+        assert!(
+            line.spans
+                .iter()
+                .any(|span| span.style.bg == Some(Theme::dark().accent))
+        );
     }
 }
 
@@ -155,7 +166,7 @@ fn detail_content_model_prepares_render_lines_and_scrollbar() {
     );
     assert_eq!(
         model.sticky_lines.len(),
-        detail_header_options(&item, 60, None).len()
+        detail_header_options(&Theme::dark(), &item, 60, None).len()
     );
     assert_eq!(model.sticky_lines[0].to_string(), "Fix token refresh race");
     let visible = 5usize.saturating_sub(model.sticky_lines.len().min(5));

@@ -53,7 +53,7 @@ fn toast_message_spans(theme: &Theme, message: &str, fill: Color) -> Vec<Span<'s
         if index > 0 {
             spans.push(Span::styled(" │ ", separator_style));
         }
-        spans.extend(code_spans(part, message_style));
+        spans.extend(code_spans(theme, part, message_style));
     }
     spans
 }
