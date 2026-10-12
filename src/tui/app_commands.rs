@@ -788,7 +788,7 @@ impl App {
             .cloned();
         if state.cycle_input.is_none() {
             state.cycle_input = Some(state.input.text.clone());
-            state.cycle_candidates = state.candidates.iter().cloned().collect();
+            state.cycle_candidates = state.candidates.to_vec();
             state.cycle_index = match state.highlighted {
                 Some(row) => row,
                 None if reverse => state.cycle_candidates.len().saturating_sub(1),
