@@ -755,6 +755,10 @@ impl App {
     }
 
     pub(super) fn complete_command_input(&mut self, state: &mut CommandState, reverse: bool) {
+        let highlighted = state
+            .highlighted
+            .and_then(|row| state.candidates.get(row))
+            .map(|candidate| candidate.index);
         if state.cycle_input.is_none() {
             state.cycle_input = Some(state.input.text.clone());
             state.cycle_candidates = state
@@ -762,11 +766,18 @@ impl App {
                 .iter()
                 .map(|candidate| candidate.index)
                 .collect();
-            state.cycle_index = if reverse {
-                state.cycle_candidates.len().saturating_sub(1)
-            } else {
-                0
+            state.cycle_index = match state.highlighted {
+                Some(row) => row,
+                None if reverse => state.cycle_candidates.len().saturating_sub(1),
+                None => 0,
             };
+        } else if let Some(position) = highlighted
+            .filter(|index| state.cycle_candidates.get(state.cycle_index) != Some(index))
+            .and_then(|index| state.cycle_candidates.iter().position(|c| *c == index))
+        {
+            // The highlight was moved away from the last completion; complete
+            // the row the user is looking at instead of advancing the cycle.
+            state.cycle_index = position;
         } else if !state.cycle_candidates.is_empty() {
             state.cycle_index = if reverse {
                 state

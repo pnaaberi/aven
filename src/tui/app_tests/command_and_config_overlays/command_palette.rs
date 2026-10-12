@@ -852,3 +852,20 @@ async fn detail_workspace_picker_exits_detail_before_retargeting() {
         }))
     ));
 }
+
+#[tokio::test]
+async fn command_overlay_tab_completes_highlighted_row() {
+    let mut app = test_app().await;
+
+    app.begin_command().await;
+    type_chars(&mut app, "stat").await;
+    app.handle_overlay_key(key(KeyCode::Down)).await.unwrap();
+    app.handle_overlay_key(key(KeyCode::Down)).await.unwrap();
+    app.handle_overlay_key(key(KeyCode::Tab)).await.unwrap();
+    assert!(matches!(
+        &app.overlay,
+        Some(OverlayState::Command { state })
+            if state.input.text == "status-inbox"
+                && state.highlighted_name() == Some("status-inbox")
+    ));
+}
