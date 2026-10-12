@@ -6,7 +6,7 @@ use ratatui::widgets::{Paragraph, Wrap};
 
 use super::super::dialog::{Dialog, dialog_hint_line};
 use super::super::scroll::{clamp_scroll_start, render_vertical_scrollbar};
-use super::changelog::{changelog_lines, changelog_link_at_in_area};
+use super::changelog::{changelog_line_count, changelog_lines, changelog_link_at_in_area};
 use crate::tui::overlay::{UpdateActionFocus, UpdateNotesState, UpdateOverlayState, dialog_area};
 use crate::tui::theme::Theme;
 
@@ -51,8 +51,7 @@ pub(crate) fn update_notes_scroll_cap(notes: &UpdateNotesState, terminal_size: S
     };
     let (width, height) = update_dialog_size(terminal_size);
     let visible_rows = height.saturating_sub(7) as usize;
-    changelog_lines(markdown, width, None)
-        .len()
+    changelog_line_count(markdown, width)
         .saturating_sub(visible_rows)
         .try_into()
         .unwrap_or(u16::MAX)
@@ -245,7 +244,7 @@ fn render_available_update(
             notes_text_area,
         ),
         UpdateNotesState::Ready(markdown) => {
-            let rendered = changelog_lines(markdown, content.width, Some(theme));
+            let rendered = changelog_lines(markdown, content.width, theme);
             let start = clamp_scroll_start(scroll, rendered.len(), notes_area.height as usize);
             frame.render_widget(
                 Paragraph::new(Text::from(

@@ -1,7 +1,7 @@
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 use ratatui::Frame;
 use ratatui::layout::{Rect, Size};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Span, Text};
 use ratatui::widgets::Paragraph;
 use unicode_width::UnicodeWidthStr;
@@ -21,7 +21,7 @@ pub(in crate::tui::ui) fn render_changelog(
 ) {
     let terminal_size = Size::new(frame.area().width, frame.area().height);
     let (width, height) = changelog_dialog_size(terminal_size);
-    let rendered = changelog_lines(markdown, width, Some(theme));
+    let rendered = changelog_lines(markdown, width, theme);
     let content = Dialog::new("Changelog", width, height).render_block(frame);
     let body = changelog_body_area(content);
     let text_area = changelog_text_area(body);
@@ -98,17 +98,23 @@ pub(in crate::tui::ui) fn changelog_link_at_in_area(
         return None;
     }
 
-    let lines = changelog_lines(markdown, render_width, None);
-    let start = clamp_scroll_start(scroll, lines.len(), body.height as usize);
+    let rows = changelog_markdown_rows(&Theme::dark(), markdown, render_width);
+    let start = clamp_scroll_start(scroll, rows.len() + 2, body.height as usize);
     let target_line = start.saturating_add(row.saturating_sub(body.y) as usize);
     let links = changelog_links(markdown);
     let mut link_index = 0;
     let mut rendered_link = String::new();
 
-    for (line_index, line) in lines.iter().enumerate().take(target_line.saturating_add(1)) {
+    // Rendered line `index + 1` holds markdown row `index`, below the top padding.
+    for (index, line) in rows.iter().enumerate().take(target_line) {
+        let line_index = index + 1;
         let mut x = body.x;
         for span in &line.spans {
-            let span_width = span.content.width() as u16;
+            let span_width = if span.content == INSTALLED_MARKER {
+                installed_badge_width()
+            } else {
+                span.content.width() as u16
+            };
             let linked =
                 span.style.add_modifier.contains(Modifier::UNDERLINED) && link_index < links.len();
             if linked {
@@ -128,23 +134,38 @@ pub(in crate::tui::ui) fn changelog_link_at_in_area(
     None
 }
 
-/// Changelog reader lines. Without a theme the lines keep their text and
-/// geometry but carry no badge colors, which is enough for hit testing and
-/// scroll limits.
+/// Markdown text the changelog marks the installed version with.
+const INSTALLED_MARKER: &str = "installed";
+const INSTALLED_BADGE: [&str; 4] = ["", " ●", " installed ", ""];
+
+/// Markdown rows of the reader, before padding and the installed badge.
+fn changelog_markdown_rows(
+    theme: &Theme,
+    markdown: &str,
+    width: u16,
+) -> Vec<ratatui::text::Line<'static>> {
+    render_markdown_reflowed_without_link_urls(
+        theme,
+        markdown,
+        width.saturating_sub(6).max(1) as usize,
+    )
+}
+
+/// Number of lines `changelog_lines` produces, for scroll limits.
+pub(in crate::tui::ui) fn changelog_line_count(markdown: &str, width: u16) -> usize {
+    changelog_markdown_rows(&Theme::dark(), markdown, width).len() + 2
+}
+
 pub(in crate::tui::ui) fn changelog_lines(
     markdown: &str,
     width: u16,
-    theme: Option<&Theme>,
+    theme: &Theme,
 ) -> Vec<ratatui::text::Line<'static>> {
-    let mut rendered = render_markdown_reflowed_without_link_urls(
-        &crate::tui::theme::Theme::dark(),
-        markdown,
-        width.saturating_sub(6).max(1) as usize,
-    );
+    let mut rendered = changelog_markdown_rows(theme, markdown, width);
     for line in &mut rendered {
         let mut spans = Vec::new();
         for span in std::mem::take(&mut line.spans) {
-            if span.content == "installed" {
+            if span.content == INSTALLED_MARKER {
                 spans.extend(installed_badge(theme));
             } else {
                 spans.push(span);
@@ -158,19 +179,34 @@ pub(in crate::tui::ui) fn changelog_lines(
     lines
 }
 
-fn installed_badge(theme: Option<&Theme>) -> [Span<'static>; 4] {
-    let style = |colors: fn(&Theme) -> (Color, Color)| {
-        theme.map_or_else(Style::new, |theme| {
-            let (fg, bg) = colors(theme);
-            Style::new().fg(fg).bg(bg)
-        })
-    };
+fn installed_badge(theme: &Theme) -> [Span<'static>; 4] {
+    let [left, dot, label, right] = INSTALLED_BADGE;
     [
-        Span::styled("", style(|t| (t.badge_installed_bg, t.bg_raised))),
-        Span::styled(" ●", style(|t| (t.info, t.badge_installed_bg))),
-        Span::styled(" installed ", style(|t| (t.fg_muted, t.badge_installed_bg))),
-        Span::styled("", style(|t| (t.badge_installed_bg, t.bg_raised))),
+        Span::styled(
+            left,
+            Style::new()
+                .fg(theme.badge_installed_bg)
+                .bg(theme.bg_raised),
+        ),
+        Span::styled(
+            dot,
+            Style::new().fg(theme.info).bg(theme.badge_installed_bg),
+        ),
+        Span::styled(
+            label,
+            Style::new().fg(theme.fg_muted).bg(theme.badge_installed_bg),
+        ),
+        Span::styled(
+            right,
+            Style::new()
+                .fg(theme.badge_installed_bg)
+                .bg(theme.bg_raised),
+        ),
     ]
+}
+
+fn installed_badge_width() -> u16 {
+    INSTALLED_BADGE.iter().map(|part| part.width() as u16).sum()
 }
 
 fn changelog_text_area(body: Rect) -> Rect {
@@ -241,7 +277,7 @@ mod tests {
     #[test]
     fn reader_adds_top_padding_and_styles_installed_badge() {
         let theme = Theme::dark();
-        let lines = changelog_lines("## v1.2.3  `installed`", 80, Some(&theme));
+        let lines = changelog_lines("## v1.2.3  `installed`", 80, &theme);
 
         assert!(lines[0].to_string().is_empty());
         assert!(lines[1].to_string().contains(" ● installed "));
@@ -257,7 +293,7 @@ mod tests {
 
     #[test]
     fn reader_hides_link_destinations_and_reserves_scrollbar_gap() {
-        let lines = changelog_lines("- [Read the guide](/guide/)", 80, None);
+        let lines = changelog_lines("- [Read the guide](/guide/)", 80, &Theme::dark());
         let rendered = lines
             .iter()
             .map(ratatui::text::Line::to_string)
@@ -269,7 +305,11 @@ mod tests {
 
     #[test]
     fn reader_reflows_source_wrapped_entries_to_dialog_width() {
-        let lines = changelog_lines("- alpha beta gamma\n  delta epsilon zeta", 32, None);
+        let lines = changelog_lines(
+            "- alpha beta gamma\n  delta epsilon zeta",
+            32,
+            &Theme::dark(),
+        );
         let rendered = lines
             .iter()
             .map(ratatui::text::Line::to_string)
@@ -294,6 +334,30 @@ mod tests {
             Some("https://aven.raine.dev/guide/".to_string())
         );
         assert_eq!(changelog_link_at(markdown, 0, size, 8, 4), None);
+    }
+
+    #[test]
+    fn layout_helpers_match_styled_lines_after_installed_badge() {
+        let markdown = "- v1.2.3 `installed` see [notes](/notes/)";
+        let lines = changelog_lines(markdown, 80, &Theme::dark());
+        assert_eq!(changelog_line_count(markdown, 80), lines.len());
+
+        let link_x = lines[1]
+            .spans
+            .iter()
+            .take_while(|span| !span.style.add_modifier.contains(Modifier::UNDERLINED))
+            .map(|span| span.content.width() as u16)
+            .sum::<u16>();
+        let body = Rect::new(0, 0, 80, 10);
+        let text_area = changelog_text_area(body);
+        assert_eq!(
+            changelog_link_at_in_area(markdown, 0, 80, body, text_area, link_x, 1),
+            Some("https://aven.raine.dev/notes/".to_string())
+        );
+        assert_eq!(
+            changelog_link_at_in_area(markdown, 0, 80, body, text_area, link_x - 1, 1),
+            None
+        );
     }
 
     #[test]
