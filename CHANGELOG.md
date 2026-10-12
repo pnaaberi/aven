@@ -5,7 +5,7 @@ description: Release notes for aven.
 
 ## v0.1.48 (2026-10-12)
 
-- New light mode for the TUI, with automatic light or dark theme selection to match your terminal background. Thanks to [@grncdr](https://github.com/grncdr)! ([#31](https://github.com/raine/aven/pull/31))
+- New light mode for the TUI, with automatic light or dark theme selection to match your terminal background. Thanks [@grncdr](https://github.com/grncdr)! ([#31](https://github.com/raine/aven/pull/31))
 - New terminal-native mode uses your terminal's own text and background colors with ANSI-colored accents, following your terminal color scheme.
 - Set your preferred theme with [`tui.appearance`](https://aventasks.dev/configuration/#tui-appearance), or switch for the current session with `:theme light`, `:theme dark`, or `:theme terminal`.
 - The Sync dialog offers **Show invitation** to reopen an existing pairing QR code, and `:add-device` points to `:sync` when setup is needed.
