@@ -18,7 +18,12 @@ pub(in crate::tui::ui) fn render_onboarding_raised(frame: &mut Frame, theme: &Th
     if reveal <= 0.0 {
         return;
     }
-    let dialog = Dialog::new("Welcome to aven", ONBOARDING_WIDTH, ONBOARDING_HEIGHT);
+    let dialog = Dialog::new(
+        theme,
+        "Welcome to aven",
+        ONBOARDING_WIDTH,
+        ONBOARDING_HEIGHT,
+    );
     let mut area = dialog.area(frame);
     area.y = area
         .y
@@ -53,11 +58,14 @@ fn onboarding_lines(theme: &Theme) -> Vec<Line<'static>> {
         resource_line(theme, "TUI guide", "https://aven.raine.dev/tui/"),
         resource_line(theme, "Agents guide", "https://aven.raine.dev/agents/"),
         Line::default(),
-        dialog_hint_line(&[
-            ("a", "create first task"),
-            ("?", "shortcuts"),
-            ("Enter", "explore"),
-        ]),
+        dialog_hint_line(
+            theme,
+            &[
+                ("a", "create first task"),
+                ("?", "shortcuts"),
+                ("Enter", "explore"),
+            ],
+        ),
     ]
 }
 

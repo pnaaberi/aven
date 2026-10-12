@@ -9,7 +9,9 @@ use unicode_width::UnicodeWidthStr;
 use super::super::dialog::{Dialog, dialog_hint_line};
 use super::super::scroll::{clamp_scroll_start, render_vertical_scrollbar};
 use crate::tui::changelog::changelog_dialog_size;
-use crate::tui::markdown::render_markdown_reflowed_without_link_urls;
+use crate::tui::markdown::{
+    markdown_reflowed_rows_without_link_urls, render_markdown_reflowed_without_link_urls,
+};
 use crate::tui::overlay::dialog_area;
 use crate::tui::theme::Theme;
 
@@ -22,7 +24,7 @@ pub(in crate::tui::ui) fn render_changelog(
     let terminal_size = Size::new(frame.area().width, frame.area().height);
     let (width, height) = changelog_dialog_size(terminal_size);
     let rendered = changelog_lines(markdown, width, theme);
-    let content = Dialog::new("Changelog", width, height).render_block(frame);
+    let content = Dialog::new(theme, "Changelog", width, height).render_block(frame);
     let body = changelog_body_area(content);
     let text_area = changelog_text_area(body);
     let hint = Rect {
@@ -45,12 +47,15 @@ pub(in crate::tui::ui) fn render_changelog(
         text_area,
     );
     frame.render_widget(
-        Paragraph::new(dialog_hint_line(&[
-            ("j/k", "line"),
-            ("d/u", "half"),
-            ("PgUp/PgDn", "page"),
-            ("Esc", "close"),
-        ]))
+        Paragraph::new(dialog_hint_line(
+            theme,
+            &[
+                ("j/k", "line"),
+                ("d/u", "half"),
+                ("PgUp/PgDn", "page"),
+                ("Esc", "close"),
+            ],
+        ))
         .style(Style::new().fg(theme.fg).bg(theme.bg_raised)),
         hint,
     );
@@ -98,7 +103,7 @@ pub(in crate::tui::ui) fn changelog_link_at_in_area(
         return None;
     }
 
-    let rows = changelog_markdown_rows(&Theme::dark(), markdown, render_width);
+    let rows = changelog_layout_rows(markdown, render_width);
     let start = clamp_scroll_start(scroll, rows.len() + 2, body.height as usize);
     let target_line = start.saturating_add(row.saturating_sub(body.y) as usize);
     let links = changelog_links(markdown);
@@ -151,9 +156,14 @@ fn changelog_markdown_rows(
     )
 }
 
+/// `changelog_markdown_rows` without colors, for layout and hit testing.
+fn changelog_layout_rows(markdown: &str, width: u16) -> Vec<ratatui::text::Line<'static>> {
+    markdown_reflowed_rows_without_link_urls(markdown, width.saturating_sub(6).max(1) as usize)
+}
+
 /// Number of lines `changelog_lines` produces, for scroll limits.
 pub(in crate::tui::ui) fn changelog_line_count(markdown: &str, width: u16) -> usize {
-    changelog_markdown_rows(&Theme::dark(), markdown, width).len() + 2
+    changelog_layout_rows(markdown, width).len() + 2
 }
 
 pub(in crate::tui::ui) fn changelog_lines(

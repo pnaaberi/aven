@@ -139,7 +139,7 @@ pub(in crate::tui::ui) fn render_sync_dialog(
         Some(page) => format!("{SYNC_TITLE} › {page}"),
         None => SYNC_TITLE.to_string(),
     };
-    let mut dialog = Dialog::new(&title, layout.area.width, layout.area.height);
+    let mut dialog = Dialog::new(theme, &title, layout.area.width, layout.area.height);
     if layout.scrolling() {
         dialog = dialog.right_title(Line::from(Span::styled(
             scroll_title(layout.start, layout.body.lines.len(), layout.visible_rows),
@@ -152,7 +152,7 @@ pub(in crate::tui::ui) fn render_sync_dialog(
         layout.body_area,
     );
     frame.render_widget(
-        Paragraph::new(hint_line(view, layout.scrolling()))
+        Paragraph::new(hint_line(theme, view, layout.scrolling()))
             .style(Style::new().fg(theme.fg).bg(theme.bg_raised)),
         layout.footer,
     );
@@ -1145,7 +1145,7 @@ fn invitation_lines(
                     format!("{:<LABEL_WIDTH$}", "Invitation"),
                     Style::new().fg(theme.fg_dim),
                 ),
-                cursor_cell("P"),
+                cursor_cell(theme, "P"),
                 Span::styled("aste the invitation here", Style::new().fg(theme.fg_dim)),
             ]));
             if let Some(error) = error {
@@ -1562,7 +1562,7 @@ fn wrapped_row(
     lines
 }
 
-fn hint_line(view: &SyncDialogView<'_>, scrolling: bool) -> Line<'static> {
+fn hint_line(theme: &Theme, view: &SyncDialogView<'_>, scrolling: bool) -> Line<'static> {
     let mut hints = Vec::new();
     let actions = sync_actions(view.state, view.status, view.activity);
     match view.state.page {
@@ -1629,7 +1629,7 @@ fn hint_line(view: &SyncDialogView<'_>, scrolling: bool) -> Line<'static> {
             hints.push(("Esc", "back"));
         }
     }
-    dialog_hint_line(&hints)
+    dialog_hint_line(theme, &hints)
 }
 
 fn scroll_title(start: usize, total: usize, visible: usize) -> String {

@@ -177,7 +177,7 @@ pub(in crate::tui::ui) fn render_add_task(frame: &mut Frame, theme: &Theme, stat
     } else {
         "Add task"
     };
-    let dialog = Dialog::new(title, 100, height);
+    let dialog = Dialog::new(theme, title, 100, height);
     let area = dialog.area(frame);
     let content = dialog.render_block_at(frame, area);
     render_add_task_body(frame, theme, state, content, area);
@@ -194,7 +194,7 @@ pub(in crate::tui::ui) fn render_add_task_full_frame(
     } else {
         "Add task"
     };
-    let content = Dialog::new(title, area.width, area.height).render_block_at(frame, area);
+    let content = Dialog::new(theme, title, area.width, area.height).render_block_at(frame, area);
     render_add_task_body(frame, theme, state, content, area);
 }
 
@@ -554,7 +554,7 @@ fn metadata_value_spans(theme: &Theme, field: AddTaskStep, value: &str) -> Vec<S
                 Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
             ),
         ],
-        AddTaskStep::Status => vec![status_span(value)],
+        AddTaskStep::Status => vec![status_span(theme, value)],
         AddTaskStep::Priority => vec![Span::styled(
             priority_short(value).to_string(),
             theme.priority(value).add_modifier(Modifier::BOLD),
@@ -811,12 +811,15 @@ fn schedule_editor_lines(theme: &Theme, editor: &ScheduleEditorState) -> Vec<Lin
         )));
     }
     lines.push(Line::from(""));
-    lines.push(dialog_hint_line(&[
-        ("↑/↓", "move"),
-        ("←/→", "choose"),
-        ("Enter", "apply"),
-        ("Esc", "cancel"),
-    ]));
+    lines.push(dialog_hint_line(
+        theme,
+        &[
+            ("↑/↓", "move"),
+            ("←/→", "choose"),
+            ("Enter", "apply"),
+            ("Esc", "cancel"),
+        ],
+    ));
     lines
 }
 
@@ -861,6 +864,7 @@ fn render_add_task_child(
     if matches!(state.mode, AddTaskMode::ConfirmDiscard) {
         render_confirm(
             frame,
+            theme,
             &ConfirmView {
                 title: "Discard draft?".to_string(),
                 prompt: "Discard this task draft?".to_string(),
@@ -912,7 +916,7 @@ fn render_add_task_child(
         width,
         height,
     };
-    let inner = Dialog::new(&title, width, height).render_block_at(frame, area);
+    let inner = Dialog::new(theme, &title, width, height).render_block_at(frame, area);
     frame.render_widget(
         Paragraph::new(Text::from(lines))
             .wrap(Wrap { trim: false })
@@ -930,7 +934,7 @@ fn render_composer_help(frame: &mut Frame, theme: &Theme, content: Rect, scroll:
         width,
         height,
     };
-    let inner = Dialog::new("Composer help", width, height).render_block_at(frame, area);
+    let inner = Dialog::new(theme, "Composer help", width, height).render_block_at(frame, area);
     let help_area = Rect {
         height: inner.height.saturating_sub(2),
         ..inner
@@ -957,8 +961,11 @@ fn render_composer_help(frame: &mut Frame, theme: &Theme, content: Rect, scroll:
             ..inner
         };
         frame.render_widget(
-            Paragraph::new(dialog_hint_line(&[("j/k", "scroll"), ("Esc", "close")]))
-                .style(Style::new().fg(theme.fg).bg(theme.bg_raised)),
+            Paragraph::new(dialog_hint_line(
+                theme,
+                &[("j/k", "scroll"), ("Esc", "close")],
+            ))
+            .style(Style::new().fg(theme.fg).bg(theme.bg_raised)),
             hint_area,
         );
     }
@@ -996,6 +1003,7 @@ fn add_task_picker_lines(
     let mut lines = Vec::new();
     let filter_rows = if matches!(state.mode, crate::tui::overlay::PickerMode::Filter) {
         lines.push(picker_filter_line(
+            theme,
             Span::raw("/"),
             &state.filter,
             state.filter_cursor,
@@ -1050,7 +1058,7 @@ fn add_task_picker_lines(
         )));
     }
     lines.push(Line::from(""));
-    lines.push(picker_hint_line(state.mode, state.multi, "submit"));
+    lines.push(picker_hint_line(theme, state.mode, state.multi, "submit"));
     lines
 }
 
@@ -1080,14 +1088,14 @@ fn placeholder_input_line(
     if input.is_empty() {
         if cursor.is_some() {
             return Line::from(vec![
-                cursor_cell(&placeholder[..1]),
+                cursor_cell(theme, &placeholder[..1]),
                 Span::styled(&placeholder[1..], Style::new().fg(theme.fg_dim)),
             ]);
         }
         return Line::from(Span::styled(placeholder, Style::new().fg(theme.fg_dim)));
     }
     match cursor {
-        Some(cursor) => clipped_input_line(input, cursor, width),
+        Some(cursor) => clipped_input_line(theme, input, cursor, width),
         None => Line::from(input.to_string()),
     }
 }
@@ -1297,101 +1305,134 @@ pub(in crate::tui::ui) fn add_task_hint_line(
     }
 
     match focus {
-        AddTaskStep::Schedule => dialog_hint_line(&[
-            ("type", "schedule"),
-            ("Enter", "details"),
-            ("Tab", "next"),
-            ("F1", "help"),
-            ("Esc", "cancel"),
-        ]),
-        AddTaskStep::Epic => dialog_hint_line(&[
-            ("Enter/Space", "toggle"),
-            ("←/→", "field"),
-            ("Tab", "next"),
-            ("^S", "create"),
-            ("^N", "create with AI"),
-            ("F1", "help"),
-            ("Esc", "cancel"),
-        ]),
+        AddTaskStep::Schedule => dialog_hint_line(
+            theme,
+            &[
+                ("type", "schedule"),
+                ("Enter", "details"),
+                ("Tab", "next"),
+                ("F1", "help"),
+                ("Esc", "cancel"),
+            ],
+        ),
+        AddTaskStep::Epic => dialog_hint_line(
+            theme,
+            &[
+                ("Enter/Space", "toggle"),
+                ("←/→", "field"),
+                ("Tab", "next"),
+                ("^S", "create"),
+                ("^N", "create with AI"),
+                ("F1", "help"),
+                ("Esc", "cancel"),
+            ],
+        ),
         AddTaskStep::Project
         | AddTaskStep::Status
         | AddTaskStep::Priority
         | AddTaskStep::Labels
-        | AddTaskStep::RepeatDue => dialog_hint_line(&[
-            ("Enter", "choose"),
-            ("←/→", "field"),
-            ("Tab", "next"),
-            ("^S", "create"),
-            ("^N", "create with AI"),
-            ("F1", "help"),
-            ("Esc", "cancel"),
-        ]),
-        AddTaskStep::Images => dialog_hint_line(&[
-            ("←/→", "image"),
-            ("D", "remove"),
-            ("Tab", "next"),
-            ("^S", "create"),
-            ("F1", "help"),
-            ("Esc", "cancel"),
-        ]),
-        AddTaskStep::Title if show_repeat_shortcut => dialog_hint_line(&[
-            ("Enter", "create"),
-            ("^G", "create more"),
-            ("↑/↓", "field"),
-            ("Tab", "next"),
-            ("F1", "help"),
-            ("Esc", "cancel"),
-        ]),
-        AddTaskStep::Title => dialog_hint_line(&[
-            ("Enter", "create"),
-            ("↑/↓", "field"),
-            ("Tab", "next"),
-            ("^N", "create with AI"),
-            ("F1", "help"),
-            ("Esc", "cancel"),
-        ]),
-        AddTaskStep::RepeatAt => dialog_hint_line(&[
-            ("←/→", "cursor"),
-            ("HH:MM", "availability time"),
-            ("none", "start of day"),
-            ("Tab", "next"),
-            ("^S", "create"),
-            ("F1", "formats"),
-            ("Esc", "cancel"),
-        ]),
+        | AddTaskStep::RepeatDue => dialog_hint_line(
+            theme,
+            &[
+                ("Enter", "choose"),
+                ("←/→", "field"),
+                ("Tab", "next"),
+                ("^S", "create"),
+                ("^N", "create with AI"),
+                ("F1", "help"),
+                ("Esc", "cancel"),
+            ],
+        ),
+        AddTaskStep::Images => dialog_hint_line(
+            theme,
+            &[
+                ("←/→", "image"),
+                ("D", "remove"),
+                ("Tab", "next"),
+                ("^S", "create"),
+                ("F1", "help"),
+                ("Esc", "cancel"),
+            ],
+        ),
+        AddTaskStep::Title if show_repeat_shortcut => dialog_hint_line(
+            theme,
+            &[
+                ("Enter", "create"),
+                ("^G", "create more"),
+                ("↑/↓", "field"),
+                ("Tab", "next"),
+                ("F1", "help"),
+                ("Esc", "cancel"),
+            ],
+        ),
+        AddTaskStep::Title => dialog_hint_line(
+            theme,
+            &[
+                ("Enter", "create"),
+                ("↑/↓", "field"),
+                ("Tab", "next"),
+                ("^N", "create with AI"),
+                ("F1", "help"),
+                ("Esc", "cancel"),
+            ],
+        ),
+        AddTaskStep::RepeatAt => dialog_hint_line(
+            theme,
+            &[
+                ("←/→", "cursor"),
+                ("HH:MM", "availability time"),
+                ("none", "start of day"),
+                ("Tab", "next"),
+                ("^S", "create"),
+                ("F1", "formats"),
+                ("Esc", "cancel"),
+            ],
+        ),
         AddTaskStep::AvailableAt
         | AddTaskStep::RepeatRule
         | AddTaskStep::TimeZone
-        | AddTaskStep::RepeatStartOn => dialog_hint_line(&[
-            ("←/→", "cursor"),
-            ("empty/now", "immediate"),
-            ("Tab", "next"),
-            ("^S", "create"),
-            ("F1", "formats"),
-            ("Esc", "cancel"),
-        ]),
-        AddTaskStep::Due => dialog_hint_line(&[
-            ("←/→", "cursor"),
-            ("empty/none", "no due date"),
-            ("Tab", "next"),
-            ("^S", "create"),
-            ("F1", "formats"),
-            ("Esc", "cancel"),
-        ]),
-        AddTaskStep::Description if show_repeat_shortcut => dialog_hint_line(&[
-            ("Ctrl-Enter / ^S", "create"),
-            ("^G", "create more"),
-            ("Tab", "next"),
-            ("F1", "help"),
-            ("Esc", "cancel"),
-        ]),
-        AddTaskStep::Description => dialog_hint_line(&[
-            ("Ctrl-Enter / ^S", "create"),
-            ("Tab", "next"),
-            ("^N", "create with AI"),
-            ("F1", "help"),
-            ("Esc", "cancel"),
-        ]),
+        | AddTaskStep::RepeatStartOn => dialog_hint_line(
+            theme,
+            &[
+                ("←/→", "cursor"),
+                ("empty/now", "immediate"),
+                ("Tab", "next"),
+                ("^S", "create"),
+                ("F1", "formats"),
+                ("Esc", "cancel"),
+            ],
+        ),
+        AddTaskStep::Due => dialog_hint_line(
+            theme,
+            &[
+                ("←/→", "cursor"),
+                ("empty/none", "no due date"),
+                ("Tab", "next"),
+                ("^S", "create"),
+                ("F1", "formats"),
+                ("Esc", "cancel"),
+            ],
+        ),
+        AddTaskStep::Description if show_repeat_shortcut => dialog_hint_line(
+            theme,
+            &[
+                ("Ctrl-Enter / ^S", "create"),
+                ("^G", "create more"),
+                ("Tab", "next"),
+                ("F1", "help"),
+                ("Esc", "cancel"),
+            ],
+        ),
+        AddTaskStep::Description => dialog_hint_line(
+            theme,
+            &[
+                ("Ctrl-Enter / ^S", "create"),
+                ("Tab", "next"),
+                ("^N", "create with AI"),
+                ("F1", "help"),
+                ("Esc", "cancel"),
+            ],
+        ),
     }
 }
 

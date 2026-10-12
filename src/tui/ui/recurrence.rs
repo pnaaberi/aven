@@ -569,7 +569,7 @@ pub(super) fn render_recurrence_detail(
     let width = area.width.saturating_sub(4).min(76);
     let height = recurrence_detail_height(&lines, width, area.height.saturating_sub(2));
     let content_height = recurrence_detail_content_height(&lines, width);
-    let content = Dialog::new("Recurring task", width, height).render_block(frame);
+    let content = Dialog::new(theme, "Recurring task", width, height).render_block(frame);
     let [body, footer] =
         Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).areas(content);
     frame.render_widget(
@@ -579,23 +579,17 @@ pub(super) fn render_recurrence_detail(
             .wrap(Wrap { trim: false }),
         body,
     );
-    render_vertical_scrollbar(
-        frame,
-        &crate::tui::theme::Theme::dark(),
-        body,
-        content_height,
-        scroll,
-    );
+    render_vertical_scrollbar(frame, theme, body, content_height, scroll);
     let has_current = detail
         .current_occurrence
         .as_ref()
         .and_then(|occurrence| occurrence.task_id.as_ref())
         .is_some();
     frame.render_widget(
-        Paragraph::new(dialog_hint_line(&recurrence_detail_actions(
-            detail,
-            has_current,
-        )))
+        Paragraph::new(dialog_hint_line(
+            theme,
+            &recurrence_detail_actions(detail, has_current),
+        ))
         .style(Style::new().fg(theme.fg).bg(theme.bg_raised)),
         footer,
     );
@@ -742,7 +736,7 @@ mod tests {
             .unwrap();
         assert_eq!(state.style.fg, Some(Theme::dark().success));
         let detail = detail();
-        let hint = dialog_hint_line(&recurrence_detail_actions(&detail, true));
+        let hint = dialog_hint_line(&Theme::dark(), &recurrence_detail_actions(&detail, true));
         assert_eq!(
             line_text(&hint),
             "Enter open task  t r p pause  t r h history  t r s stop  Esc close"

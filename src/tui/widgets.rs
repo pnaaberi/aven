@@ -5,7 +5,7 @@ use unicode_width::UnicodeWidthStr;
 use crate::query::TaskListItem;
 use crate::queue::unix_seconds;
 use crate::tui::text::truncate_width;
-use crate::tui::theme::{self, FG, FG_DIM, FG_MUTED, GREEN, ORANGE, RED};
+use crate::tui::theme::Theme;
 
 pub(crate) fn priority_icon(priority: &str) -> &'static str {
     match priority {
@@ -43,39 +43,45 @@ fn status_parts(status: &str) -> Option<(&'static str, &'static str)> {
     }
 }
 
-pub(crate) fn status_chip(status: &str) -> Line<'static> {
-    Line::from(status_span(status))
+pub(crate) fn status_chip(theme: &Theme, status: &str) -> Line<'static> {
+    Line::from(status_span(theme, status))
 }
 
 /// Single-glyph status cell used by the compact status column.
 ///
 /// The glyph is the same one the textual status cell starts with, so compact
 /// and textual renderings stay recognizable as the same status.
-pub(crate) fn status_icon_cell(status: &str) -> Line<'static> {
-    Line::from(status_icon_span(status))
+pub(crate) fn status_icon_cell(theme: &Theme, status: &str) -> Line<'static> {
+    Line::from(status_icon_span(theme, status))
 }
 
-pub(crate) fn status_icon_span(status: &str) -> Span<'static> {
-    status_span_inner(status, true)
+pub(crate) fn status_icon_span(theme: &Theme, status: &str) -> Span<'static> {
+    status_span_inner(theme, status, true)
 }
 
-pub(crate) fn status_span(status: &str) -> Span<'static> {
-    status_span_inner(status, false)
+pub(crate) fn status_span(theme: &Theme, status: &str) -> Span<'static> {
+    status_span_inner(theme, status, false)
 }
 
-fn status_span_inner(status: &str, icons_only: bool) -> Span<'static> {
-    let label = match status_parts(status) {
+/// Text of `status_span`, for sizing without styling.
+pub(crate) fn status_text(status: &str) -> String {
+    status_label(status, false)
+}
+
+fn status_label(status: &str, icons_only: bool) -> String {
+    match status_parts(status) {
         Some((icon, _)) if icons_only => icon.to_string(),
         Some((icon, text)) => format!("{icon} {text}"),
         None => status.to_string(),
-    };
-    Span::styled(
-        label,
-        theme::status_style(status).add_modifier(Modifier::BOLD),
-    )
+    }
 }
 
-pub(crate) fn age_style(created_at: &str, now_seconds: i64) -> Style {
+fn status_span_inner(theme: &Theme, status: &str, icons_only: bool) -> Span<'static> {
+    let label = status_label(status, icons_only);
+    Span::styled(label, theme.status(status).add_modifier(Modifier::BOLD))
+}
+
+pub(crate) fn age_style(theme: &Theme, created_at: &str, now_seconds: i64) -> Style {
     let days = unix_seconds(created_at)
         .map(|created| {
             now_seconds
@@ -85,20 +91,20 @@ pub(crate) fn age_style(created_at: &str, now_seconds: i64) -> Style {
         })
         .unwrap_or(0);
     let color = if days < 1 {
-        GREEN
+        theme.success
     } else if days < 4 {
-        FG_MUTED
+        theme.fg_muted
     } else if days < 8 {
-        FG
+        theme.fg
     } else if days < 15 {
-        ORANGE
+        theme.warning
     } else {
-        RED
+        theme.danger
     };
     Style::new().fg(color)
 }
 
-pub(crate) fn title_cell(item: &TaskListItem, max_width: usize) -> Line<'static> {
+pub(crate) fn title_cell(theme: &Theme, item: &TaskListItem, max_width: usize) -> Line<'static> {
     let mut marker = String::new();
     if item.has_conflict {
         marker.push_str("⚡ ");
@@ -109,10 +115,10 @@ pub(crate) fn title_cell(item: &TaskListItem, max_width: usize) -> Line<'static>
     let content_width = max_width.saturating_sub(1);
     let title_style = if item.task.deleted {
         Style::new()
-            .fg(FG_MUTED)
+            .fg(theme.fg_muted)
             .add_modifier(Modifier::CROSSED_OUT)
     } else {
-        Style::new().fg(FG)
+        Style::new().fg(theme.fg)
     };
     let marker_width = marker.width();
     let title_width = content_width.saturating_sub(marker_width);
@@ -133,12 +139,12 @@ pub(crate) fn title_cell(item: &TaskListItem, max_width: usize) -> Line<'static>
     };
     let title = truncate_width(&title_text, title_width);
     Line::from(vec![
-        Span::styled(marker, Style::new().fg(ORANGE)),
+        Span::styled(marker, Style::new().fg(theme.warning)),
         Span::styled(title, title_style),
     ])
 }
 
-pub(crate) fn label_cell(labels: &[String], max_width: usize) -> Line<'static> {
+pub(crate) fn label_cell(theme: &Theme, labels: &[String], max_width: usize) -> Line<'static> {
     if max_width == 0 {
         return Line::from("");
     }
@@ -151,7 +157,7 @@ pub(crate) fn label_cell(labels: &[String], max_width: usize) -> Line<'static> {
     let padding = max_width.saturating_sub(text_width + trailing_gap);
     let mut spans = vec![
         Span::raw(" ".repeat(padding)),
-        Span::styled(text, Style::new().fg(FG_DIM)),
+        Span::styled(text, Style::new().fg(theme.fg_dim)),
     ];
     if trailing_gap > 0 {
         spans.push(Span::raw(" "));
@@ -176,17 +182,19 @@ mod tests {
     use super::*;
     use crate::tui::test_support::task_list_item;
 
+    const THEME: &Theme = &Theme::dark();
+
     #[test]
     fn status_icons_cover_every_status_distinctly() {
         let mut icons = std::collections::BTreeSet::new();
 
         for status in crate::choices::STATUSES {
-            let icon = status_icon_span(status).content.to_string();
+            let icon = status_icon_span(THEME, status).content.to_string();
 
             assert_eq!(icon.chars().count(), 1, "{status}");
             assert!(icons.insert(icon.clone()), "{status} reuses {icon}");
             assert!(
-                status_span(status).content.starts_with(&icon),
+                status_span(THEME, status).content.starts_with(&icon),
                 "{status} text does not start with {icon}"
             );
         }
@@ -196,10 +204,10 @@ mod tests {
 
     #[test]
     fn status_icon_cell_uses_status_style() {
-        let cell = status_icon_cell("done");
+        let cell = status_icon_cell(THEME, "done");
 
         assert_eq!(cell.to_string(), "✓");
-        assert_eq!(cell.spans[0].style.fg, theme::status_style("done").fg);
+        assert_eq!(cell.spans[0].style.fg, THEME.status("done").fg);
         assert!(cell.spans[0].style.add_modifier.contains(Modifier::BOLD));
     }
 
@@ -208,7 +216,7 @@ mod tests {
         let mut item = task_list_item("Short title");
         item.labels = vec!["search".to_string(), "ux".to_string()];
 
-        let rendered = label_cell(&item.labels, 11).to_string();
+        let rendered = label_cell(THEME, &item.labels, 11).to_string();
 
         assert_eq!(rendered, " search +1 ");
         assert_eq!(rendered.chars().count(), 11);
@@ -219,7 +227,7 @@ mod tests {
         let mut item = task_list_item("Short title");
         item.labels = vec!["search".to_string()];
 
-        let line = label_cell(&item.labels, 6);
+        let line = label_cell(THEME, &item.labels, 6);
         let rendered = line.to_string();
 
         assert_eq!(rendered, "search");
@@ -228,7 +236,7 @@ mod tests {
             .iter()
             .find(|span| span.content == "search")
             .unwrap();
-        assert_eq!(label.style.fg, Some(FG_DIM));
+        assert_eq!(label.style.fg, Some(THEME.fg_dim));
         assert_eq!(label.style.bg, None);
         assert!(!label.style.add_modifier.contains(Modifier::BOLD));
     }
@@ -238,7 +246,7 @@ mod tests {
         let mut item = task_list_item("Short title");
         item.labels = vec!["search".to_string()];
 
-        let rendered = label_cell(&item.labels, 5).to_string();
+        let rendered = label_cell(THEME, &item.labels, 5).to_string();
 
         assert_eq!(rendered, "");
     }
@@ -248,7 +256,7 @@ mod tests {
         let mut item = task_list_item("A very long task title");
         item.labels = vec!["search".to_string()];
 
-        let rendered = title_cell(&item, 12).to_string();
+        let rendered = title_cell(THEME, &item, 12).to_string();
 
         assert_eq!(rendered, "A very lon…");
     }
@@ -256,7 +264,7 @@ mod tests {
     #[test]
     fn title_cell_truncates_wide_titles_by_cells() {
         let item = task_list_item("한글입력");
-        let line = title_cell(&item, 6);
+        let line = title_cell(THEME, &item, 6);
 
         assert_eq!(line.to_string(), "한글…");
         assert!(line.width() <= 6);
@@ -265,7 +273,7 @@ mod tests {
     #[test]
     fn label_cell_sizes_wide_labels_by_cells() {
         let labels = vec!["한글".to_string()];
-        let line = label_cell(&labels, 4);
+        let line = label_cell(THEME, &labels, 4);
 
         assert_eq!(line.to_string(), "한글");
         assert_eq!(line.width(), 4);

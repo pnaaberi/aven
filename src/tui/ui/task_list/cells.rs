@@ -88,11 +88,11 @@ pub(super) fn build_task_row_cells(
     )
 }
 
-pub(super) fn status_cell(status: &str, compact_status: bool) -> Line<'static> {
+pub(super) fn status_cell(theme: &Theme, status: &str, compact_status: bool) -> Line<'static> {
     if compact_status {
-        status_icon_cell(status)
+        status_icon_cell(theme, status)
     } else {
-        status_chip(status)
+        status_chip(theme, status)
     }
 }
 
@@ -127,9 +127,13 @@ pub(super) fn build_task_row_cells_for_columns(
     };
     let title_width = column_widths[TableColumn::Title as usize].saturating_sub(state_prefix_width);
     let title = inline_title_editor
-        .map(|editor| inline_title_edit_cell(editor, title_width))
-        .unwrap_or_else(|| title_cell(item, title_width));
-    let labels = label_cell(&item.labels, column_widths[TableColumn::Labels as usize]);
+        .map(|editor| inline_title_edit_cell(theme, editor, title_width))
+        .unwrap_or_else(|| title_cell(theme, item, title_width));
+    let labels = label_cell(
+        theme,
+        &item.labels,
+        column_widths[TableColumn::Labels as usize],
+    );
     TableColumn::ALL
         .into_iter()
         .map(|column| {
@@ -153,7 +157,7 @@ pub(super) fn build_task_row_cells_for_columns(
                     project_cell(theme, item, column_widths[TableColumn::Project as usize])
                 }
                 TableColumn::Status => {
-                    status_cell(item.task.status.as_str(), cell_layout.compact_status)
+                    status_cell(theme, item.task.status.as_str(), cell_layout.compact_status)
                 }
                 TableColumn::Priority => Line::from(Span::styled(
                     priority_icon(item.task.priority.as_str()),
@@ -241,7 +245,7 @@ pub(super) fn task_time_cell(
                     .idle_seconds
                     .map(crate::tui::time::compact_duration)
                     .unwrap_or_default(),
-                age_style(style_input, now_seconds),
+                age_style(theme, style_input, now_seconds),
             ))
         }
         TaskListRenderMode::Flat if is_deferred(item, now_seconds) => Line::from(Span::styled(
@@ -256,7 +260,7 @@ pub(super) fn task_time_cell(
             task_seconds_since(&item.task.created_at, now_seconds)
                 .map(compact_age)
                 .unwrap_or_default(),
-            age_style(&item.task.created_at, now_seconds),
+            age_style(theme, &item.task.created_at, now_seconds),
         )),
     }
 }
@@ -372,7 +376,7 @@ pub(super) fn epic_activity_cell(
         task_seconds_since(activity_at, now_seconds)
             .map(compact_age)
             .unwrap_or_default(),
-        age_style(activity_at, now_seconds),
+        age_style(theme, activity_at, now_seconds),
     ))
 }
 
@@ -400,8 +404,8 @@ pub(super) fn build_epic_parent_row_cells_for_columns(
     };
     let title_width = column_widths[TableColumn::Title as usize].saturating_sub(state_prefix_width);
     let title = inline_title_editor
-        .map(|editor| inline_title_edit_cell(editor, title_width))
-        .unwrap_or_else(|| title_cell(item, title_width));
+        .map(|editor| inline_title_edit_cell(theme, editor, title_width))
+        .unwrap_or_else(|| title_cell(theme, item, title_width));
     let expanded = expanded_epic_ids.contains(&item.task.id);
     let mut ref_spans = if state_column == Some(TableColumn::Ref) {
         task_state_prefix(theme, state.selected, state.focused, state.marked)
@@ -438,7 +442,7 @@ pub(super) fn build_epic_parent_row_cells_for_columns(
                     project_cell(theme, item, column_widths[TableColumn::Project as usize])
                 }
                 TableColumn::Status => {
-                    status_cell(item.task.status.as_str(), cell_layout.compact_status)
+                    status_cell(theme, item.task.status.as_str(), cell_layout.compact_status)
                 }
                 TableColumn::Priority => Line::from(Span::styled(
                     priority_icon(item.task.priority.as_str()),
@@ -531,15 +535,15 @@ pub(super) fn build_epic_child_row_cells_for_columns(
             let cell = match column {
                 TableColumn::Ref => ref_line.clone(),
                 TableColumn::Title => inline_title_editor
-                    .map(|editor| inline_title_edit_cell(editor, title_width))
-                    .unwrap_or_else(|| title_cell(item, title_width)),
+                    .map(|editor| inline_title_edit_cell(theme, editor, title_width))
+                    .unwrap_or_else(|| title_cell(theme, item, title_width)),
                 TableColumn::Labels => Line::default(),
                 TableColumn::Metadata => metadata_cell(theme, item, epic_selection, false),
                 TableColumn::Project => {
                     project_cell(theme, item, column_widths[TableColumn::Project as usize])
                 }
                 TableColumn::Status => {
-                    status_cell(item.task.status.as_str(), cell_layout.compact_status)
+                    status_cell(theme, item.task.status.as_str(), cell_layout.compact_status)
                 }
                 TableColumn::Priority => Line::from(Span::styled(
                     priority_icon(item.task.priority.as_str()),
@@ -555,7 +559,7 @@ pub(super) fn build_epic_child_row_cells_for_columns(
                             task_seconds_since(&item.task.updated_at, time.now_seconds)
                                 .map(compact_age)
                                 .unwrap_or_default(),
-                            age_style(&item.task.updated_at, time.now_seconds),
+                            age_style(theme, &item.task.updated_at, time.now_seconds),
                         ))
                     }
                 }
@@ -686,8 +690,17 @@ pub(super) fn metadata_char_count(
         + separators
 }
 
-pub(super) fn inline_title_edit_cell(editor: &TextInputView, max_width: usize) -> Line<'static> {
-    clipped_input_line(&editor.input, editor.cursor, max_width.saturating_sub(1))
+pub(super) fn inline_title_edit_cell(
+    theme: &Theme,
+    editor: &TextInputView,
+    max_width: usize,
+) -> Line<'static> {
+    clipped_input_line(
+        theme,
+        &editor.input,
+        editor.cursor,
+        max_width.saturating_sub(1),
+    )
 }
 
 pub(super) fn task_state_prefix(
@@ -1020,7 +1033,7 @@ mod tests {
             cursor: 5,
         };
 
-        let rendered = inline_title_edit_cell(&editor, 5).to_string();
+        let rendered = inline_title_edit_cell(&Theme::dark(), &editor, 5).to_string();
 
         assert_eq!(rendered, "cdef");
     }

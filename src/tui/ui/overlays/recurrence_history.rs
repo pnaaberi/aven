@@ -131,14 +131,17 @@ pub(in crate::tui::ui) fn render_recurrence_history(
         ));
     }
     lines.push(Line::default());
-    lines.push(dialog_hint_line(&[
-        ("j/k", "select"),
-        ("PgUp/PgDn", "page"),
-        ("Enter", "open task"),
-        ("Esc", "close"),
-    ]));
+    lines.push(dialog_hint_line(
+        theme,
+        &[
+            ("j/k", "select"),
+            ("PgUp/PgDn", "page"),
+            ("Enter", "open task"),
+            ("Esc", "close"),
+        ],
+    ));
     let height = (lines.len() as u16).saturating_add(2).max(6);
-    Dialog::new(&title, HISTORY_WIDTH, height).render_text(frame, Text::from(lines));
+    Dialog::new(theme, &title, HISTORY_WIDTH, height).render_text(frame, Text::from(lines));
 }
 
 fn history_lines(

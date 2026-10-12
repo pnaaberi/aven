@@ -89,7 +89,7 @@ pub(super) fn detail_metadata_lines_with_children(
         ]),
         Line::from(""),
         metadata_label(theme, "STATUS"),
-        status_chip(item.task.status.as_str()),
+        status_chip(theme, item.task.status.as_str()),
         Line::from(""),
         metadata_label(theme, "PRIORITY"),
         Line::from(Span::styled(

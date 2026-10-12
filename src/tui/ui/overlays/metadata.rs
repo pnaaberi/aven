@@ -17,6 +17,7 @@ pub(in crate::tui::ui) fn render(frame: &mut Frame, theme: &Theme, view: &Metada
     if view.editor.is_some_and(|editor| editor.discard) {
         super::confirm::render_confirm_with_hints(
             frame,
+            theme,
             &crate::tui::overlay::ConfirmView {
                 title: "Discard metadata changes?".to_string(),
                 prompt: "The metadata changes will be lost.".to_string(),
@@ -40,7 +41,7 @@ pub(in crate::tui::ui) fn render(frame: &mut Frame, theme: &Theme, view: &Metada
         .iter()
         .filter(|entry| entry.value.is_some())
         .count();
-    let dialog = Dialog::new(title, 72, layout.area.height);
+    let dialog = Dialog::new(theme, title, 72, layout.area.height);
     let dialog = if view.editor.is_none() {
         dialog.right_title(Line::styled(
             format!("{assigned} assigned"),
@@ -71,6 +72,7 @@ pub(in crate::tui::ui) fn render(frame: &mut Frame, theme: &Theme, view: &Metada
             let value = input.lines.first().map(String::as_str).unwrap_or_default();
             let cursor = crate::tui::text::char_boundary_at_or_before(value, input.column);
             vec![crate::tui::ui::input::input_line(
+                theme,
                 "",
                 &metadata_display(value),
                 metadata_display(&value[..cursor]).len(),
@@ -113,7 +115,7 @@ pub(in crate::tui::ui) fn render(frame: &mut Frame, theme: &Theme, view: &Metada
             let mut line = if key.is_empty() {
                 Line::styled(label, Style::new().fg(theme.fg_muted))
             } else {
-                dialog_hint_line(&[(key, label)])
+                dialog_hint_line(theme, &[(key, label)])
             };
             for span in &mut line.spans {
                 if disabled {
@@ -219,11 +221,15 @@ pub(in crate::tui::ui) fn render(frame: &mut Frame, theme: &Theme, view: &Metada
             }
         }
         frame.render_widget(
-            Paragraph::new(dialog_hint_line(&[("↑↓", "select"), ("Enter", "edit")])).style(style),
+            Paragraph::new(dialog_hint_line(
+                theme,
+                &[("↑↓", "select"), ("Enter", "edit")],
+            ))
+            .style(style),
             layout.browser_hints,
         );
         frame.render_widget(
-            Paragraph::new(dialog_hint_line(&[("Esc", "done")]))
+            Paragraph::new(dialog_hint_line(theme, &[("Esc", "done")]))
                 .alignment(Alignment::Right)
                 .style(style),
             layout.done,

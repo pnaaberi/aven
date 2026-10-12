@@ -6,9 +6,11 @@ use ratatui::widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph, Wr
 
 use crate::tui::overlay::dialog_area;
 use crate::tui::text::truncate_width;
-use crate::tui::theme::{ACCENT, BG_ALT, FG, FG_MUTED};
+use crate::tui::theme::Theme;
+use unicode_width::UnicodeWidthStr;
 
 pub(super) struct Dialog<'a> {
+    theme: &'a Theme,
     title: &'a str,
     width: u16,
     height: u16,
@@ -17,8 +19,9 @@ pub(super) struct Dialog<'a> {
 }
 
 impl<'a> Dialog<'a> {
-    pub(super) fn new(title: &'a str, width: u16, height: u16) -> Self {
+    pub(super) fn new(theme: &'a Theme, title: &'a str, width: u16, height: u16) -> Self {
         Self {
+            theme,
             title,
             width,
             height,
@@ -47,13 +50,13 @@ impl<'a> Dialog<'a> {
     }
 
     pub(super) fn content_area(area: Rect) -> Rect {
-        overlay_block("", area.width).inner(area)
+        overlay_frame().inner(area)
     }
 
     pub(super) fn render_block_at(self, frame: &mut Frame, area: Rect) -> Rect {
         frame.render_widget(Clear, area);
-        let block = overlay_block(self.title, area.width)
-            .title_top(right_edge_title(self.right_title).right_aligned());
+        let block = overlay_block(self.theme, self.title, area.width)
+            .title_top(right_edge_title(self.theme, self.right_title).right_aligned());
         let inner = block.inner(area);
         frame.render_widget(block, area);
         inner
@@ -71,8 +74,10 @@ impl<'a> Dialog<'a> {
         text: impl Into<Text<'text>>,
     ) {
         let wrap = self.wrap;
+        let theme = self.theme;
         let inner = self.render_block_at(frame, area);
-        let mut paragraph = Paragraph::new(text).style(Style::new().fg(FG).bg(BG_ALT));
+        let mut paragraph =
+            Paragraph::new(text).style(Style::new().fg(theme.fg).bg(theme.bg_raised));
         if wrap {
             paragraph = paragraph.wrap(Wrap { trim: false });
         }
@@ -80,32 +85,37 @@ impl<'a> Dialog<'a> {
     }
 }
 
-fn overlay_block(title: &str, width: u16) -> Block<'_> {
+/// Borders and padding of an overlay dialog, which decide its content area.
+fn overlay_frame() -> Block<'static> {
     Block::new()
-        .title(edge_title(title, width))
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(Style::new().fg(ACCENT))
         .padding(Padding::horizontal(1))
-        .style(Style::new().bg(BG_ALT))
 }
 
-fn edge_title(title: &str, width: u16) -> Line<'_> {
+fn overlay_block<'a>(theme: &Theme, title: &'a str, width: u16) -> Block<'a> {
+    overlay_frame()
+        .title(edge_title(theme, title, width))
+        .border_style(Style::new().fg(theme.accent))
+        .style(Style::new().bg(theme.bg_raised))
+}
+
+fn edge_title<'a>(theme: &Theme, title: &'a str, width: u16) -> Line<'a> {
     let title = truncate_width(title, width.saturating_sub(5) as usize);
     Line::from(vec![
-        Span::styled("─ ", Style::new().fg(ACCENT)),
+        Span::styled("─ ", Style::new().fg(theme.accent)),
         Span::raw(title),
-        Span::styled(" ", Style::new().fg(ACCENT)),
+        Span::styled(" ", Style::new().fg(theme.accent)),
     ])
 }
 
-fn right_edge_title(title: Option<Line<'_>>) -> Line<'_> {
+fn right_edge_title<'a>(theme: &Theme, title: Option<Line<'a>>) -> Line<'a> {
     let Some(mut title) = title else {
-        return Line::from(Span::styled("─", Style::new().fg(ACCENT)));
+        return Line::from(Span::styled("─", Style::new().fg(theme.accent)));
     };
     title
         .spans
-        .push(Span::styled(" ─", Style::new().fg(ACCENT)));
+        .push(Span::styled(" ─", Style::new().fg(theme.accent)));
     title
 }
 
@@ -147,17 +157,30 @@ fn dim_color_channel(value: u8) -> u8 {
     (u16::from(value) * 3 / 5) as u8
 }
 
-pub(super) fn dialog_hint_line(items: &[(&str, &str)]) -> Line<'static> {
+/// Width of `dialog_hint_line`, for sizing without styling.
+pub(super) fn dialog_hint_width(items: &[(&str, &str)]) -> usize {
+    let gaps = items.len().saturating_sub(1) * 2;
+    items
+        .iter()
+        .map(|(key, label)| key.width() + 1 + label.width())
+        .sum::<usize>()
+        + gaps
+}
+
+pub(super) fn dialog_hint_line(theme: &Theme, items: &[(&str, &str)]) -> Line<'static> {
     let mut spans = Vec::new();
     for (index, (key, label)) in items.iter().enumerate() {
         if index > 0 {
-            spans.push(Span::styled("  ", Style::new().fg(FG_MUTED)));
+            spans.push(Span::styled("  ", Style::new().fg(theme.fg_muted)));
         }
         spans.push(Span::styled(
             key.to_string(),
-            Style::new().fg(FG).add_modifier(Modifier::BOLD),
+            Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
         ));
-        spans.push(Span::styled(format!(" {label}"), Style::new().fg(FG_MUTED)));
+        spans.push(Span::styled(
+            format!(" {label}"),
+            Style::new().fg(theme.fg_muted),
+        ));
     }
     Line::from(spans)
 }
@@ -165,7 +188,8 @@ pub(super) fn dialog_hint_line(items: &[(&str, &str)]) -> Line<'static> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::theme::FG;
+
+    const THEME: &Theme = &Theme::dark();
 
     #[test]
     fn dimming_darkens_rgb_and_preserves_default_backgrounds() {
@@ -178,8 +202,25 @@ mod tests {
 
     #[test]
     fn dialog_hint_line_styles_keys() {
-        let keys = styled_key_contents(dialog_hint_line(&[("Enter", "submit"), ("Esc", "cancel")]));
+        let keys = styled_key_contents(dialog_hint_line(
+            THEME,
+            &[("Enter", "submit"), ("Esc", "cancel")],
+        ));
         assert_eq!(keys, vec!["Enter", "Esc"]);
+    }
+
+    #[test]
+    fn dialog_hint_width_matches_hint_line() {
+        let items = [
+            ("Ctrl-Enter / ^S", "submit"),
+            ("←→", "select"),
+            ("Esc", "cancel"),
+        ];
+        assert_eq!(
+            dialog_hint_width(&items),
+            dialog_hint_line(THEME, &items).width()
+        );
+        assert_eq!(dialog_hint_width(&[]), 0);
     }
 
     #[test]
@@ -187,7 +228,7 @@ mod tests {
         let backend = ratatui::backend::TestBackend::new(20, 5);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
-            .draw(|frame| Dialog::new("abcdef", 7, 3).render_text(frame, ""))
+            .draw(|frame| Dialog::new(THEME, "abcdef", 7, 3).render_text(frame, ""))
             .unwrap();
         let rendered = (0..terminal.backend().buffer().area.width)
             .map(|column| terminal.backend().buffer()[(column, 1)].symbol())
@@ -200,7 +241,7 @@ mod tests {
     fn styled_key_contents(line: Line<'static>) -> Vec<String> {
         line.spans
             .iter()
-            .filter(|span| span.style.fg == Some(FG))
+            .filter(|span| span.style.fg == Some(THEME.fg))
             .map(|span| span.content.to_string())
             .collect()
     }

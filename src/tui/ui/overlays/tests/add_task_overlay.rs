@@ -852,7 +852,7 @@ fn hint_lines_style_keys() {
         vec!["Enter", "↑/↓", "Tab", "^N", "F1", "Esc"]
     );
 
-    let multiline_keys = styled_key_contents(multiline_hint_line());
+    let multiline_keys = styled_key_contents(multiline_hint_line(&Theme::dark()));
     assert_eq!(multiline_keys, vec!["Ctrl-Enter / ^S", "Esc"]);
 
     let add_task_description_keys = styled_key_contents(add_task_hint_line(
@@ -867,13 +867,14 @@ fn hint_lines_style_keys() {
         vec!["Ctrl-Enter / ^S", "Tab", "^N", "F1", "Esc"]
     );
 
-    let add_task_description_editor_keys = styled_key_contents(add_task_description_hint_line());
+    let add_task_description_editor_keys =
+        styled_key_contents(add_task_description_hint_line(&Theme::dark()));
     assert_eq!(
         add_task_description_editor_keys,
         vec!["Ctrl-Enter / ^S", "Enter", "^P", "^R", "Esc"]
     );
 
-    let add_task_natural_keys = styled_key_contents(add_task_natural_hint_line());
+    let add_task_natural_keys = styled_key_contents(add_task_natural_hint_line(&Theme::dark()));
     assert_eq!(
         add_task_natural_keys,
         vec!["Ctrl-Enter / ^S", "Enter", "Esc"]
@@ -885,7 +886,7 @@ fn hint_lines_style_keys() {
     let priority_keys = styled_key_contents(add_task_priority_hint_line(&Theme::dark()));
     assert_eq!(priority_keys, vec!["n", "l", "m", "h", "u", "Esc"]);
 
-    let confirm_keys = styled_key_contents(confirm_hint_line());
+    let confirm_keys = styled_key_contents(confirm_hint_line(&Theme::dark()));
     assert_eq!(confirm_keys, vec!["y", "n", "Esc"]);
 }
 

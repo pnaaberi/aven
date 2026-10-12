@@ -177,6 +177,7 @@ pub(super) fn detail_header_options(
         Span::styled(" / ", Style::new().fg(theme.fg_dim)),
     ];
     summary_spans.extend(linked_task_ref_spans(
+        theme,
         &item.display_ref,
         &item.task.project_key,
     ));
@@ -188,7 +189,7 @@ pub(super) fn detail_header_options(
     }
     summary_spans.extend([
         Span::styled("   ", Style::new().fg(theme.fg_dim)),
-        status_span(item.task.status.as_str()),
+        status_span(theme, item.task.status.as_str()),
         Span::styled("   ", Style::new().fg(theme.fg_dim)),
         Span::styled(
             priority_short(item.task.priority.as_str()),
@@ -216,7 +217,7 @@ pub(super) fn detail_title_lines(
     inline_title_editor: Option<&TextInputView>,
 ) -> Vec<Line<'static>> {
     if let Some(editor) = inline_title_editor {
-        let mut line = clipped_input_line(&editor.input, editor.cursor, width);
+        let mut line = clipped_input_line(theme, &editor.input, editor.cursor, width);
         for span in &mut line.spans {
             span.style = Style::new()
                 .fg(theme.fg)

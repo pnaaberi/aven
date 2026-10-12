@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
 use crate::tui::app::App;
-use crate::tui::markdown::render_markdown_reflowed_without_link_urls;
+use crate::tui::markdown::markdown_reflowed_rows_without_link_urls;
 use crate::tui::navigation::scroll_with_delta;
 use crate::tui::overlay::{
     ChangelogState, OverlayState, UpdateActionFocus, UpdateNotesState, UpdateOverlayState,
@@ -265,16 +265,12 @@ pub(crate) fn changelog_scroll_cap(markdown: &str, terminal_size: Size) -> u16 {
     let (width, height) = changelog_dialog_size(terminal_size);
     let content_width = width.saturating_sub(6).max(1) as usize;
     let visible_rows = height.saturating_sub(3) as usize;
-    render_markdown_reflowed_without_link_urls(
-        &crate::tui::theme::Theme::dark(),
-        markdown,
-        content_width,
-    )
-    .len()
-    .saturating_add(2)
-    .saturating_sub(visible_rows)
-    .try_into()
-    .unwrap_or(u16::MAX)
+    markdown_reflowed_rows_without_link_urls(markdown, content_width)
+        .len()
+        .saturating_add(2)
+        .saturating_sub(visible_rows)
+        .try_into()
+        .unwrap_or(u16::MAX)
 }
 
 pub(crate) fn changelog_dialog_size(terminal_size: Size) -> (u16, u16) {

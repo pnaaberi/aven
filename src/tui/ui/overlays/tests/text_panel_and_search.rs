@@ -298,6 +298,7 @@ fn text_panel_rendered_border_matches_mouse_boundary() {
                 .draw(|frame| {
                     render_text_panel(
                         frame,
+                        &Theme::dark(),
                         &TextPanelView {
                             title: state.title.clone(),
                             lines: &state.lines,

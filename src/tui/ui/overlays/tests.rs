@@ -14,7 +14,7 @@ use crate::tui::store::{
     DatabaseStatsPriorityCounts, DatabaseStatsStatusCounts, SyncStatusCheck, TuiDatabaseStats,
     TuiSyncStatus,
 };
-use crate::tui::theme::{FG, Theme};
+use crate::tui::theme::Theme;
 use crate::tui::widgets::priority_icon;
 use ratatui::Frame;
 use ratatui::Terminal;
@@ -66,8 +66,8 @@ fn render_non_help_overlay_content(frame: &mut Frame, overlay: &OverlayView<'_>)
         OverlayView::MultilineInput(state) => render_multiline_input(frame, theme, state),
         OverlayView::Picker(state) => render_picker(frame, theme, state),
         OverlayView::TagCombobox(state) => render_tag_combobox(frame, theme, state),
-        OverlayView::Confirm(state) => render_confirm(frame, state),
-        OverlayView::TextPanel(state) => render_text_panel(frame, state),
+        OverlayView::Confirm(state) => render_confirm(frame, theme, state),
+        OverlayView::TextPanel(state) => render_text_panel(frame, theme, state),
         OverlayView::Changelog { markdown, scroll } => {
             render_changelog(frame, theme, markdown, *scroll)
         }
@@ -128,7 +128,7 @@ fn assert_overlay_uses_dialog_chrome(overlay: OverlayView<'_>, title: &str) {
 fn styled_key_contents(line: Line<'static>) -> Vec<String> {
     line.spans
         .iter()
-        .filter(|span| span.style.fg == Some(FG))
+        .filter(|span| span.style.fg == Some(Theme::dark().fg))
         .map(|span| span.content.to_string())
         .collect()
 }

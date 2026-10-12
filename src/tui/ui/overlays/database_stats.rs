@@ -31,12 +31,11 @@ pub(in crate::tui::ui) fn render_database_stats(
         .cloned()
         .collect::<Vec<_>>();
     let dialog = if let Some(title) = scroll_title(scroll, lines.len(), visible_rows) {
-        Dialog::new(DATABASE_STATS_TITLE, width, height).right_title(Line::from(Span::styled(
-            title,
-            Style::new().fg(theme.fg_muted),
-        )))
+        Dialog::new(theme, DATABASE_STATS_TITLE, width, height).right_title(Line::from(
+            Span::styled(title, Style::new().fg(theme.fg_muted)),
+        ))
     } else {
-        Dialog::new(DATABASE_STATS_TITLE, width, height)
+        Dialog::new(theme, DATABASE_STATS_TITLE, width, height)
     };
     let content = dialog.render_block(frame);
     let stats_area = Rect {
@@ -54,10 +53,10 @@ pub(in crate::tui::ui) fn render_database_stats(
         stats_area,
     );
     frame.render_widget(
-        Paragraph::new(dialog_hint_line(&[
-            ("j/k", "scroll"),
-            ("Enter/Esc", "close"),
-        ]))
+        Paragraph::new(dialog_hint_line(
+            theme,
+            &[("j/k", "scroll"), ("Enter/Esc", "close")],
+        ))
         .style(Style::new().fg(theme.fg).bg(theme.bg_raised)),
         hint_area,
     );

@@ -63,10 +63,22 @@ pub(crate) fn wrap_with_code(
     base: Style,
     width: usize,
 ) -> Vec<Line<'static>> {
-    let width = width.max(1);
     let code_style = theme.code();
+    wrap_rows(text, width)
+        .iter()
+        .map(|row| Line::from(spans(row, base, code_style)))
+        .collect()
+}
+
+/// Number of lines `wrap_with_code` produces, for layout without styling.
+pub(crate) fn wrapped_code_rows(text: &str, width: usize) -> usize {
+    wrap_rows(text, width).len()
+}
+
+fn wrap_rows(text: &str, width: usize) -> Vec<Vec<(char, bool)>> {
+    let width = width.max(1);
     let chars = classify(text);
-    let mut lines = Vec::new();
+    let mut rows = Vec::new();
     let mut current: Vec<(char, bool)> = Vec::new();
     let mut current_width = 0;
     let mut gap: Option<(char, bool)> = None;
@@ -87,11 +99,7 @@ pub(crate) fn wrap_with_code(
         let word_width = word.iter().map(|(ch, _)| char_cells(*ch)).sum::<usize>();
         index = end;
         if !current.is_empty() && current_width + 1 + word_width > width {
-            lines.push(Line::from(spans(
-                &std::mem::take(&mut current),
-                base,
-                code_style,
-            )));
+            rows.push(std::mem::take(&mut current));
             current_width = 0;
         }
         if let Some(space) = gap.take()
@@ -103,21 +111,17 @@ pub(crate) fn wrap_with_code(
         for &(ch, code) in word {
             let cells = char_cells(ch);
             if current_width + cells > width && !current.is_empty() {
-                lines.push(Line::from(spans(
-                    &std::mem::take(&mut current),
-                    base,
-                    code_style,
-                )));
+                rows.push(std::mem::take(&mut current));
                 current_width = 0;
             }
             current.push((ch, code));
             current_width += cells;
         }
     }
-    if !current.is_empty() || lines.is_empty() {
-        lines.push(Line::from(spans(&current, base, code_style)));
+    if !current.is_empty() || rows.is_empty() {
+        rows.push(current);
     }
-    lines
+    rows
 }
 
 #[cfg(test)]
@@ -162,6 +166,22 @@ mod tests {
         );
         assert_eq!(texts(&lines), ["run aven", "sync invite", "on it"]);
         assert_eq!(lines[1].spans[0].style, Theme::dark().code());
+    }
+
+    #[test]
+    fn wrapped_code_rows_matches_wrapped_lines() {
+        for (text, width) in [
+            ("run `aven sync invite` on it", 12),
+            ("backup restore or import", 10),
+            ("", 4),
+            ("한글입력 `code`", 3),
+        ] {
+            assert_eq!(
+                wrapped_code_rows(text, width),
+                wrap_with_code(&Theme::dark(), text, Style::new(), width).len(),
+                "{text:?} at {width}"
+            );
+        }
     }
 
     #[test]

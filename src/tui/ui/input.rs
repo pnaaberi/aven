@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Position;
-use ratatui::style::{Modifier, Style};
+use ratatui::style::Modifier;
 use ratatui::text::{Line, Span};
 
 use crate::tui::text::{
@@ -11,32 +11,36 @@ use crate::tui::text::{
 use crate::tui::theme::Theme;
 
 pub(in crate::tui::ui) fn input_line(
+    theme: &Theme,
     prefix: &'static str,
     input: &str,
     cursor: usize,
 ) -> Line<'static> {
     if prefix.is_empty() {
-        return Line::from(input_cursor_spans(input, cursor, InputWidth::Full));
+        return Line::from(input_cursor_spans(theme, input, cursor, InputWidth::Full));
     }
-    prefixed_input_line(Span::raw(prefix), input, cursor)
+    prefixed_input_line(theme, Span::raw(prefix), input, cursor)
 }
 
 pub(in crate::tui::ui) fn prefixed_input_line(
+    theme: &Theme,
     prefix: Span<'static>,
     input: &str,
     cursor: usize,
 ) -> Line<'static> {
     let mut spans = vec![prefix];
-    spans.extend(input_cursor_spans(input, cursor, InputWidth::Full));
+    spans.extend(input_cursor_spans(theme, input, cursor, InputWidth::Full));
     Line::from(spans)
 }
 
 pub(in crate::tui::ui) fn clipped_input_line(
+    theme: &Theme,
     input: &str,
     cursor: usize,
     width: usize,
 ) -> Line<'static> {
     Line::from(input_cursor_spans(
+        theme,
         input,
         cursor,
         InputWidth::Clipped(width),
@@ -54,6 +58,7 @@ pub(in crate::tui::ui) enum InputWidth {
 /// characters (CJK, emoji) neither overflow the field nor push the cursor out of
 /// view.
 pub(in crate::tui::ui) fn input_cursor_spans(
+    theme: &Theme,
     input: &str,
     cursor: usize,
     width: InputWidth,
@@ -67,7 +72,7 @@ pub(in crate::tui::ui) fn input_cursor_spans(
     };
     let Some(cursor_char) = cursor_char else {
         let before = take_trailing_cells(input, max_width.saturating_sub(1));
-        return vec![Span::raw(before.to_string()), cursor_cell(" ")];
+        return vec![Span::raw(before.to_string()), cursor_cell(theme, " ")];
     };
     let after_budget = max_width.saturating_sub(cursor_cells);
     let after = take_leading_cells(&input[cursor + cursor_char.len_utf8()..], after_budget);
@@ -77,16 +82,16 @@ pub(in crate::tui::ui) fn input_cursor_spans(
     );
     vec![
         Span::raw(before.to_string()),
-        cursor_cell(cursor_char.to_string()),
+        cursor_cell(theme, cursor_char.to_string()),
         Span::raw(after.to_string()),
     ]
 }
 
-// Alias of `Theme::dark().cursor()` kept while render code migrates to `&Theme`.
-pub(in crate::tui::ui) const CURSOR_STYLE: Style = Theme::dark().cursor();
-
-pub(in crate::tui::ui) fn cursor_cell(content: impl Into<Cow<'static, str>>) -> Span<'static> {
-    Span::styled(content, CURSOR_STYLE)
+pub(in crate::tui::ui) fn cursor_cell(
+    theme: &Theme,
+    content: impl Into<Cow<'static, str>>,
+) -> Span<'static> {
+    Span::styled(content, theme.cursor())
 }
 
 /// Finds the drawn cursor cell in a rendered frame so the caller can park the
@@ -116,50 +121,52 @@ pub(crate) fn text_cursor_position(buffer: &Buffer, theme: &Theme) -> Option<Pos
 mod tests {
     use super::*;
 
+    const THEME: &Theme = &Theme::dark();
+
     #[test]
     fn cursor_cell_has_correct_style() {
-        let span = cursor_cell("a");
+        let span = cursor_cell(THEME, "a");
         assert_eq!(span.content.as_ref(), "a");
-        assert_eq!(span.style.fg, Theme::dark().cursor().fg);
-        assert_eq!(span.style.bg, Theme::dark().cursor().bg);
+        assert_eq!(span.style.fg, THEME.cursor().fg);
+        assert_eq!(span.style.bg, THEME.cursor().bg);
     }
 
     #[test]
     fn input_line_draws_cursor_as_cell() {
-        let line = input_line("", "abc", 1);
+        let line = input_line(THEME, "", "abc", 1);
         assert_eq!(line.spans[0].content.as_ref(), "a");
         assert_eq!(line.spans[1].content.as_ref(), "b");
-        assert_eq!(line.spans[1].style.fg, Theme::dark().cursor().fg);
-        assert_eq!(line.spans[1].style.bg, Theme::dark().cursor().bg);
+        assert_eq!(line.spans[1].style.fg, THEME.cursor().fg);
+        assert_eq!(line.spans[1].style.bg, THEME.cursor().bg);
         assert_eq!(line.spans[2].content.as_ref(), "c");
     }
 
     #[test]
     fn input_cursor_spans_draws_end_cursor_as_blank_cell() {
-        let spans = input_cursor_spans("abc", 3, InputWidth::Full);
+        let spans = input_cursor_spans(THEME, "abc", 3, InputWidth::Full);
         assert_eq!(spans[0].content.as_ref(), "abc");
         assert_eq!(spans[1].content.as_ref(), " ");
-        assert_eq!(spans[1].style.bg, Theme::dark().cursor().bg);
+        assert_eq!(spans[1].style.bg, THEME.cursor().bg);
     }
 
     #[test]
     fn clipped_input_line_scrolls_to_cursor_cell() {
-        let line = clipped_input_line("abcdef", 5, 4);
+        let line = clipped_input_line(THEME, "abcdef", 5, 4);
         assert_eq!(line.spans[0].content.as_ref(), "cde");
         assert_eq!(line.spans[1].content.as_ref(), "f");
     }
 
     #[test]
     fn input_cursor_handles_byte_indexed_unicode_cursor() {
-        let line = input_line("", "aéz", 3);
+        let line = input_line(THEME, "", "aéz", 3);
         assert_eq!(line.spans[0].content.as_ref(), "aé");
         assert_eq!(line.spans[1].content.as_ref(), "z");
-        assert_eq!(line.spans[1].style.bg, Theme::dark().cursor().bg);
+        assert_eq!(line.spans[1].style.bg, THEME.cursor().bg);
     }
 
     #[test]
     fn clipped_input_line_budgets_wide_characters_by_cells() {
-        let line = clipped_input_line("한글입력", "한글입력".len(), 6);
+        let line = clipped_input_line(THEME, "한글입력", "한글입력".len(), 6);
         assert_eq!(line.spans[0].content.as_ref(), "입력");
         assert_eq!(line.spans[1].content.as_ref(), " ");
         assert!(line.width() <= 6);
@@ -167,7 +174,7 @@ mod tests {
 
     #[test]
     fn clipped_input_line_keeps_wide_cursor_visible() {
-        let line = clipped_input_line("한글입력", 3, 4);
+        let line = clipped_input_line(THEME, "한글입력", 3, 4);
         assert_eq!(line.spans[0].content.as_ref(), "");
         assert_eq!(line.spans[1].content.as_ref(), "글");
         assert_eq!(line.spans[2].content.as_ref(), "입");
@@ -176,7 +183,7 @@ mod tests {
 
     #[test]
     fn input_line_keeps_full_width_value_unclipped() {
-        let line = input_line("", "한글", 3);
+        let line = input_line(THEME, "", "한글", 3);
         assert_eq!(line.spans[0].content.as_ref(), "한");
         assert_eq!(line.spans[1].content.as_ref(), "글");
         assert_eq!(line.spans[2].content.as_ref(), "");
@@ -184,7 +191,7 @@ mod tests {
 
     #[test]
     fn prefixed_input_line_preserves_prefix() {
-        let line = prefixed_input_line(Span::raw("/"), "abc", 1);
+        let line = prefixed_input_line(THEME, Span::raw("/"), "abc", 1);
         assert_eq!(line.spans[0].content.as_ref(), "/");
         assert_eq!(line.spans[1].content.as_ref(), "a");
         assert_eq!(line.spans[2].content.as_ref(), "b");

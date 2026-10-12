@@ -11,7 +11,7 @@ use crate::query::TaskListItem;
 use crate::tui::app::{DetailSection, DetailTargetId};
 use crate::tui::text::truncate_width;
 use crate::tui::theme::Theme;
-use crate::tui::widgets::{priority_short, status_span};
+use crate::tui::widgets::{priority_short, status_span, status_text};
 
 #[derive(Debug, Clone, Copy)]
 pub(super) enum DependencyDirection {
@@ -305,7 +305,7 @@ pub(super) fn epic_child_tree_item_lines(
             Span::styled(" ", gap_style),
         ]);
     }
-    let mut reference = linked_task_ref_spans(&link.display_ref, &link.project_key);
+    let mut reference = linked_task_ref_spans(theme, &link.display_ref, &link.project_key);
     for span in &mut reference {
         if hovered {
             span.style = span.style.bg(theme.bg_panel).add_modifier(Modifier::BOLD);
@@ -404,7 +404,11 @@ pub(super) fn epic_child_dependency_lines(
             if index > 0 {
                 spans.push(Span::styled(", ", dependency_style));
             }
-            spans.extend(linked_task_ref_spans(&link.display_ref, &link.project_key));
+            spans.extend(linked_task_ref_spans(
+                theme,
+                &link.display_ref,
+                &link.project_key,
+            ));
         }
         let hidden = blockers.len() - visible_refs;
         if hidden > 0 {
@@ -550,10 +554,14 @@ pub(super) fn extend_related_section(
         let available = width.saturating_sub(glyph.width() + link.display_ref.width() + 4);
         let title = truncate_width(&link.title, available);
         let mut spans = vec![Span::styled(glyph, Style::new().fg(theme.border))];
-        spans.extend(linked_task_ref_spans(&link.display_ref, &link.project_key));
+        spans.extend(linked_task_ref_spans(
+            theme,
+            &link.display_ref,
+            &link.project_key,
+        ));
         spans.extend([
             Span::raw("  "),
-            status_span(link.status.as_str()),
+            status_span(theme, link.status.as_str()),
             Span::raw("  "),
             Span::styled(title, Style::new().fg(theme.fg)),
         ]);
@@ -615,7 +623,11 @@ pub(super) fn dependency_tree_item_lines(
         Span::styled(direction.marker(), Style::new().fg(theme.fg_dim)),
         Span::styled(" ", Style::new().fg(theme.fg_dim)),
     ];
-    prefix.extend(linked_task_ref_spans(&link.display_ref, &link.project_key));
+    prefix.extend(linked_task_ref_spans(
+        theme,
+        &link.display_ref,
+        &link.project_key,
+    ));
     prefix.push(Span::styled("  ", Style::new().fg(theme.fg_dim)));
     dependency_node_lines(
         theme,
@@ -662,7 +674,7 @@ pub(super) fn dependency_node_lines_with_title_style(
             title_style,
         ));
         spans.push(Span::styled("  ", Style::new().fg(theme.fg_dim)));
-        spans.push(status_span(status));
+        spans.push(status_span(theme, status));
         spans.push(Span::styled("  ", Style::new().fg(theme.fg_dim)));
         spans.push(Span::styled(
             priority_short(priority),
@@ -682,7 +694,7 @@ pub(super) fn dependency_node_lines_with_title_style(
     ]));
     lines.push(Line::from(vec![
         Span::styled(continuation_prefix.clone(), Style::new().fg(theme.border)),
-        status_span(status),
+        status_span(theme, status),
         Span::styled("  ", Style::new().fg(theme.fg_dim)),
         Span::styled(
             priority_short(priority),
@@ -703,6 +715,6 @@ fn dependency_title_width(
     width: usize,
 ) -> usize {
     let prefix_width: usize = prefix.iter().map(Span::width).sum();
-    let trailing_width = 4 + status_span(status).width() + priority_short(priority).width();
+    let trailing_width = 4 + status_text(status).width() + priority_short(priority).width();
     width.saturating_sub(prefix_width + trailing_width)
 }

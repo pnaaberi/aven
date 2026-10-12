@@ -91,7 +91,7 @@ use crate::tui::overlay::{
     TextInputView,
 };
 use crate::tui::store::{TaskOrder, TaskQuery, TuiStore};
-use crate::tui::theme::{ACCENT, BG, BG_ALT, BG_PANEL, FG, FG_DIM, GREEN, PINK, SELECTED, Theme};
+use crate::tui::theme::Theme;
 use crate::tui::toast::Toast;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -222,7 +222,7 @@ fn render_surface(
     view: &ViewState,
 ) {
     widgets.inline_image_placements.clear();
-    frame.render_widget(Block::new().style(Style::new().bg(BG)), frame.area());
+    frame.render_widget(Block::new().style(Style::new().bg(theme.bg)), frame.area());
 
     if view.surface == ViewSurface::AddTask {
         render_add_task_surface(frame, theme, view);
@@ -237,7 +237,7 @@ fn render_surface(
         frame.render_widget(
             Paragraph::new("terminal too small for aven tui")
                 .alignment(Alignment::Center)
-                .style(Style::new().fg(FG).bg(BG)),
+                .style(Style::new().fg(theme.fg).bg(theme.bg)),
             frame.area(),
         );
         return;
@@ -490,7 +490,7 @@ fn render_add_task_surface(frame: &mut Frame, theme: &Theme, view: &ViewState) {
         frame.render_widget(
             Paragraph::new("terminal too small for add task")
                 .alignment(Alignment::Center)
-                .style(Style::new().fg(FG).bg(BG)),
+                .style(Style::new().fg(theme.fg).bg(theme.bg)),
             frame.area(),
         );
         return;
@@ -553,11 +553,13 @@ fn render_add_task_multiline_full_frame(
         _ => return,
     };
     let hint_line = match state.kind {
-        MultilineInputKind::AddTaskDescription => self::overlays::add_task_description_hint_line(),
-        MultilineInputKind::AddTaskNatural => self::overlays::add_task_natural_hint_line(),
+        MultilineInputKind::AddTaskDescription => {
+            self::overlays::add_task_description_hint_line(theme)
+        }
+        MultilineInputKind::AddTaskNatural => self::overlays::add_task_natural_hint_line(theme),
         _ => return,
     };
-    let content = dialog::Dialog::new(&state.title, frame.area().width, frame.area().height)
+    let content = dialog::Dialog::new(theme, &state.title, frame.area().width, frame.area().height)
         .render_block_at(frame, frame.area());
     let visible_rows = content.height.saturating_sub(2).max(1) as usize;
     let start = self::overlays::tail_viewport_start(state.row, visible_rows);
@@ -586,7 +588,7 @@ fn render_add_task_multiline_full_frame(
     }
     lines.push(hint_line);
     frame.render_widget(
-        Paragraph::new(Text::from(lines)).style(Style::new().fg(FG).bg(crate::tui::theme::BG_ALT)),
+        Paragraph::new(Text::from(lines)).style(Style::new().fg(theme.fg).bg(theme.bg_raised)),
         content,
     );
 }
@@ -624,7 +626,7 @@ fn inline_detail_title_editor<'a>(view: &'a ViewState<'a>) -> Option<&'a TextInp
     edit_title_view(view)
 }
 
-fn render_header_menu(frame: &mut Frame, state: &HeaderMenuView<'_>) {
+fn render_header_menu(frame: &mut Frame, theme: &Theme, state: &HeaderMenuView<'_>) {
     use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph};
 
     let area = crate::tui::overlay::header_menu_area(
@@ -637,11 +639,11 @@ fn render_header_menu(frame: &mut Frame, state: &HeaderMenuView<'_>) {
     );
     frame.render_widget(Clear, area);
     let block = Block::new()
-        .title(menu_title(header_menu_title(state.kind)))
+        .title(menu_title(theme, header_menu_title(state.kind)))
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(Style::new().fg(ACCENT))
-        .style(Style::new().bg(BG_ALT));
+        .border_style(Style::new().fg(theme.accent))
+        .style(Style::new().bg(theme.bg_raised));
     let inner = block.inner(area);
     frame.render_widget(block, area);
     let prefix_width = if matches!(state.kind, HeaderMenuKind::Scope) {
@@ -662,6 +664,7 @@ fn render_header_menu(frame: &mut Frame, state: &HeaderMenuView<'_>) {
         .enumerate()
         .map(|(index, item)| {
             header_menu_line(
+                theme,
                 state.kind,
                 index == state.selected,
                 &item.key,
@@ -671,12 +674,12 @@ fn render_header_menu(frame: &mut Frame, state: &HeaderMenuView<'_>) {
         })
         .collect::<Vec<_>>();
     frame.render_widget(
-        Paragraph::new(Text::from(lines)).style(Style::new().fg(FG).bg(BG_ALT)),
+        Paragraph::new(Text::from(lines)).style(Style::new().fg(theme.fg).bg(theme.bg_raised)),
         inner,
     );
 }
 
-fn render_order_menu(frame: &mut Frame, state: &OrderMenuView) {
+fn render_order_menu(frame: &mut Frame, theme: &Theme, state: &OrderMenuView) {
     use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph};
 
     let menu_state = crate::tui::overlay::OrderMenuState {
@@ -687,32 +690,38 @@ fn render_order_menu(frame: &mut Frame, state: &OrderMenuView) {
     let area = menu_state.area(frame.area().width, frame.area().height);
     frame.render_widget(Clear, area);
     let block = Block::new()
-        .title(menu_title("order"))
+        .title(menu_title(theme, "order"))
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(Style::new().fg(ACCENT))
-        .style(Style::new().bg(BG_ALT));
+        .border_style(Style::new().fg(theme.accent))
+        .style(Style::new().bg(theme.bg_raised));
     let inner = block.inner(area);
     frame.render_widget(block, area);
     let mut lines = Vec::new();
     for (order, key, label) in order_menu_items() {
-        lines.push(order_menu_line(order, key, label, state.selected));
+        lines.push(order_menu_line(theme, order, key, label, state.selected));
     }
     lines.push(Line::from(vec![
-        Span::styled("Esc", Style::new().fg(FG).add_modifier(Modifier::BOLD)),
-        Span::styled(" close", Style::new().fg(FG_DIM)),
+        Span::styled(
+            "Esc",
+            Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(" close", Style::new().fg(theme.fg_dim)),
     ]));
     frame.render_widget(
-        Paragraph::new(Text::from(lines)).style(Style::new().fg(FG).bg(BG_ALT)),
+        Paragraph::new(Text::from(lines)).style(Style::new().fg(theme.fg).bg(theme.bg_raised)),
         inner,
     );
 }
 
-fn menu_title(title: &'static str) -> Line<'static> {
+fn menu_title(theme: &Theme, title: &'static str) -> Line<'static> {
     Line::from(vec![
-        Span::styled("─ ", Style::new().fg(ACCENT)),
-        Span::styled(title, Style::new().fg(FG).add_modifier(Modifier::BOLD)),
-        Span::styled(" ", Style::new().fg(ACCENT)),
+        Span::styled("─ ", Style::new().fg(theme.accent)),
+        Span::styled(
+            title,
+            Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(" ", Style::new().fg(theme.accent)),
     ])
 }
 
@@ -725,6 +734,7 @@ fn header_menu_title(kind: HeaderMenuKind) -> &'static str {
 }
 
 fn header_menu_line(
+    theme: &Theme,
     kind: HeaderMenuKind,
     selected: bool,
     key: &str,
@@ -732,9 +742,9 @@ fn header_menu_line(
     prefix_width: usize,
 ) -> Line<'static> {
     let row_style = if selected {
-        SELECTED
+        theme.selected()
     } else {
-        Style::new().fg(FG).bg(BG_PANEL)
+        Style::new().fg(theme.fg).bg(theme.bg_panel)
     };
     let marker = if selected { "▸" } else { " " };
     let mut spans = vec![
@@ -750,7 +760,7 @@ fn header_menu_line(
             Span::styled(
                 format!("{prefix}{}", " ".repeat(padding)),
                 row_style
-                    .fg(crate::tui::theme::project_color(name))
+                    .fg(theme.project(name))
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(" ", row_style),
@@ -759,24 +769,25 @@ fn header_menu_line(
     } else {
         spans.push(Span::styled(
             label.to_string(),
-            header_menu_label_style(kind, label, row_style, selected),
+            header_menu_label_style(theme, kind, label, row_style, selected),
         ));
     }
     Line::from(spans)
 }
 
 fn header_menu_label_style(
+    theme: &Theme,
     kind: HeaderMenuKind,
     label: &str,
     row_style: Style,
     selected: bool,
 ) -> Style {
     if matches!(kind, HeaderMenuKind::View) {
-        let bg = row_style.bg.unwrap_or(BG_PANEL);
+        let bg = row_style.bg.unwrap_or(theme.bg_panel);
         let style = match label {
-            "queue" => Style::new().fg(ACCENT).bg(bg),
-            "open" => Style::new().fg(GREEN).bg(bg),
-            "conflicts" => Style::new().fg(PINK).bg(bg),
+            "queue" => Style::new().fg(theme.accent).bg(bg),
+            "open" => Style::new().fg(theme.success).bg(bg),
+            "conflicts" => Style::new().fg(theme.conflict).bg(bg),
             _ => row_style,
         };
         if selected {
@@ -796,15 +807,16 @@ fn project_prefix_and_name(label: &str) -> Option<(&str, &str)> {
 }
 
 fn order_menu_line(
+    theme: &Theme,
     order: TaskOrder,
     key: &'static str,
     label: &'static str,
     selected: TaskOrder,
 ) -> Line<'static> {
     let row_style = if order == selected {
-        SELECTED
+        theme.selected()
     } else {
-        Style::new().fg(FG).bg(BG_PANEL)
+        Style::new().fg(theme.fg).bg(theme.bg_panel)
     };
     let marker = if order == selected { "▸" } else { " " };
     Line::from(vec![
@@ -924,10 +936,10 @@ fn render_overlay_content(
         OverlayView::MultilineInput(state) => render_multiline_input(frame, theme, state),
         OverlayView::Picker(state) => render_picker(frame, theme, state),
         OverlayView::TagCombobox(state) => render_tag_combobox(frame, theme, state),
-        OverlayView::HeaderMenu(state) => render_header_menu(frame, state),
-        OverlayView::OrderMenu(state) => render_order_menu(frame, state),
-        OverlayView::Confirm(state) => render_confirm(frame, state),
-        OverlayView::TextPanel(state) => render_text_panel(frame, state),
+        OverlayView::HeaderMenu(state) => render_header_menu(frame, theme, state),
+        OverlayView::OrderMenu(state) => render_order_menu(frame, theme, state),
+        OverlayView::Confirm(state) => render_confirm(frame, theme, state),
+        OverlayView::TextPanel(state) => render_text_panel(frame, theme, state),
         OverlayView::Changelog { markdown, scroll } => {
             self::overlays::render_changelog(frame, theme, markdown, *scroll)
         }

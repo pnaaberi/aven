@@ -291,7 +291,12 @@ pub(super) fn render_columns(
                 .filter(|_| selected)
                 .map(|editor| {
                     vec![
-                        super::input::clipped_input_line(&editor.input, editor.cursor, width),
+                        super::input::clipped_input_line(
+                            theme,
+                            &editor.input,
+                            editor.cursor,
+                            width,
+                        ),
                         Line::from(""),
                     ]
                 })

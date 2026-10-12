@@ -32,7 +32,7 @@ pub(in crate::tui::ui) fn render_text_input(
     }
 
     if let Some((project, priority)) = add_task_title_metadata(&state.title) {
-        let dialog = Dialog::new("Add task", 74, 5);
+        let dialog = Dialog::new(theme, "Add task", 74, 5);
         let width = dialog.area(frame).width;
         let dialog = dialog.right_title(add_task_metadata_title(
             theme,
@@ -62,13 +62,13 @@ pub(in crate::tui::ui) fn render_text_input(
     }
 
     if state.prompt.is_empty() {
-        let dialog = Dialog::new(&state.title, 54, 5);
+        let dialog = Dialog::new(theme, &state.title, 54, 5);
         let content = dialog.render_block(frame);
-        let input = clipped_input_line(&state.input, state.cursor, content.width as usize);
+        let input = clipped_input_line(theme, &state.input, state.cursor, content.width as usize);
         let text = Text::from(vec![
             input,
             Line::from(""),
-            dialog_hint_line(&[("Enter", "submit"), ("Esc", "cancel")]),
+            dialog_hint_line(theme, &[("Enter", "submit"), ("Esc", "cancel")]),
         ]);
         frame.render_widget(
             Paragraph::new(text).style(Style::new().fg(theme.fg).bg(theme.bg_raised)),
@@ -79,7 +79,7 @@ pub(in crate::tui::ui) fn render_text_input(
 
     let edit_date = state.kind == TextInputKind::EditDate;
     let dialog_width = if edit_date { 64 } else { 54 };
-    let input = input_line("", &state.input, state.cursor);
+    let input = input_line(theme, "", &state.input, state.cursor);
     let confirms_named_delete = matches!(
         state.kind,
         TextInputKind::ConfirmDeleteProject | TextInputKind::ConfirmDeleteLabel
@@ -99,7 +99,7 @@ pub(in crate::tui::ui) fn render_text_input(
             Line::from(""),
             input,
             Line::from(""),
-            dialog_hint_line(&[("Enter", "submit"), ("Esc", "cancel")]),
+            dialog_hint_line(theme, &[("Enter", "submit"), ("Esc", "cancel")]),
         ]);
         lines
     } else if edit_date {
@@ -122,14 +122,14 @@ pub(in crate::tui::ui) fn render_text_input(
         } else {
             &[("Enter", "submit"), ("Ctrl+D", "clear"), ("Esc", "cancel")][..]
         };
-        lines.extend([input, Line::from(""), dialog_hint_line(hints)]);
+        lines.extend([input, Line::from(""), dialog_hint_line(theme, hints)]);
         lines
     } else {
         vec![
             Line::from(Span::styled(&state.prompt, Style::new().fg(theme.fg_dim))),
             input,
             Line::from(""),
-            dialog_hint_line(&[("Enter", "submit"), ("Esc", "cancel")]),
+            dialog_hint_line(theme, &[("Enter", "submit"), ("Esc", "cancel")]),
         ]
     };
     let height = if confirms_named_delete {
@@ -139,18 +139,18 @@ pub(in crate::tui::ui) fn render_text_input(
     } else {
         6
     };
-    Dialog::new(&state.title, dialog_width, height).render_text(frame, Text::from(lines));
+    Dialog::new(theme, &state.title, dialog_width, height).render_text(frame, Text::from(lines));
 }
 
 fn render_project_path_input(frame: &mut Frame, theme: &Theme, state: &TextInputView) {
-    let dialog = Dialog::new(&state.title, 74, 6);
+    let dialog = Dialog::new(theme, &state.title, 74, 6);
     let content = dialog.render_block(frame);
     let input = project_path_input_line(theme, &state.input, state.cursor, content.width as usize);
     let text = Text::from(vec![
         Line::from(Span::styled(&state.prompt, Style::new().fg(theme.fg_dim))),
         input,
         Line::from(""),
-        dialog_hint_line(&[("Enter", "submit"), ("Esc", "cancel")]),
+        dialog_hint_line(theme, &[("Enter", "submit"), ("Esc", "cancel")]),
     ]);
     frame.render_widget(
         Paragraph::new(text).style(Style::new().fg(theme.fg).bg(theme.bg_raised)),
@@ -165,11 +165,11 @@ pub(in crate::tui::ui) fn project_path_input_line(
     width: usize,
 ) -> Line<'static> {
     if str_cells(input).saturating_add(1) <= width || width < 2 {
-        return clipped_input_line(input, cursor, width);
+        return clipped_input_line(theme, input, cursor, width);
     }
     let cursor = char_boundary_at_or_before(input, cursor);
     let cursor_cells = str_cells(&input[..cursor]);
-    let mut line = clipped_input_line(input, cursor, width.saturating_sub(1));
+    let mut line = clipped_input_line(theme, input, cursor, width.saturating_sub(1));
     let marker = Span::styled("…", Style::new().fg(theme.fg_dim));
     if cursor_cells >= width.saturating_sub(1) {
         line.spans.insert(0, marker);
@@ -207,7 +207,7 @@ fn render_placeholder_text_input(
     state: &TextInputView,
     placeholder: &'static str,
 ) {
-    let dialog = Dialog::new(&state.title, 54, 5);
+    let dialog = Dialog::new(theme, &state.title, 54, 5);
     let content = dialog.render_block(frame);
     let hints = if matches!(
         state.kind,
@@ -226,7 +226,7 @@ fn render_placeholder_text_input(
             placeholder,
         ),
         Line::from(""),
-        dialog_hint_line(hints),
+        dialog_hint_line(theme, hints),
     ]);
     frame.render_widget(
         Paragraph::new(text).style(Style::new().fg(theme.fg).bg(theme.bg_raised)),
@@ -243,11 +243,12 @@ pub(in crate::tui::ui) fn placeholder_text_input_line(
 ) -> Line<'static> {
     if input.is_empty() {
         return Line::from(vec![
-            super::super::input::cursor_cell(&placeholder[..1]),
+            super::super::input::cursor_cell(theme, &placeholder[..1]),
             Span::styled(&placeholder[1..], Style::new().fg(theme.fg_dim)),
         ]);
     }
     Line::from(input_cursor_spans(
+        theme,
         input,
         cursor,
         InputWidth::Clipped(width),

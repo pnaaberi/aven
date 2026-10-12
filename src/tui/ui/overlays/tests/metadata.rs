@@ -102,7 +102,7 @@ fn editor_footer_uses_shared_hotkey_styles_and_click_geometry() {
                 .map(|x| buffer[(x, area.y)].symbol())
                 .collect();
             assert!(text.contains(&format!("{key} {label}")), "{width}: {text}");
-            let expected = dialog_hint_line(&[(key, label)]);
+            let expected = dialog_hint_line(&Theme::dark(), &[(key, label)]);
             assert_eq!(
                 buffer[(area.x, area.y)].fg,
                 expected.spans[0].style.fg.unwrap()

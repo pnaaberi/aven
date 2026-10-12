@@ -25,6 +25,7 @@ pub(in crate::tui::ui) fn render_picker(frame: &mut Frame, theme: &Theme, state:
     let mut lines = Vec::new();
     if matches!(state.mode, PickerMode::Filter) {
         lines.push(picker_filter_line(
+            theme,
             Span::raw("/"),
             &state.filter,
             state.filter_cursor,
@@ -82,6 +83,7 @@ pub(in crate::tui::ui) fn render_picker(frame: &mut Frame, theme: &Theme, state:
     }
     lines.push(Line::from(""));
     lines.push(picker_hint_line_with_escape(
+        theme,
         state.mode,
         state.multi,
         priority_picker_submit_label(state.kind)
@@ -89,7 +91,7 @@ pub(in crate::tui::ui) fn render_picker(frame: &mut Frame, theme: &Theme, state:
             .unwrap_or("submit"),
         matches!(state.kind, PickerKind::SwitchWorkspace),
     ));
-    Dialog::new(&state.title, 0, 0).render_text_at(frame, layout.area, Text::from(lines));
+    Dialog::new(theme, &state.title, 0, 0).render_text_at(frame, layout.area, Text::from(lines));
 }
 
 fn picker_empty_label(kind: PickerKind) -> Option<&'static str> {
@@ -128,7 +130,7 @@ pub(in crate::tui::ui) fn blocker_picker_line(
         return Line::raw(format!("{marker}{}", item.label));
     };
     let mut spans = vec![Span::raw(marker)];
-    spans.extend(linked_task_ref_spans(display_ref, project_key));
+    spans.extend(linked_task_ref_spans(theme, display_ref, project_key));
     spans.push(Span::raw(format!(
         "{}  ",
         " ".repeat(reference_width.saturating_sub(display_ref.width()))
@@ -141,22 +143,25 @@ pub(in crate::tui::ui) fn blocker_picker_line(
 }
 
 pub(in crate::tui::ui) fn picker_filter_line(
+    theme: &Theme,
     prefix: Span<'static>,
     filter: &str,
     cursor: usize,
 ) -> Line<'static> {
-    prefixed_input_line(prefix, filter, cursor)
+    prefixed_input_line(theme, prefix, filter, cursor)
 }
 
 pub(in crate::tui::ui) fn picker_hint_line(
+    theme: &Theme,
     mode: PickerMode,
     multi: bool,
     submit_label: &str,
 ) -> Line<'static> {
-    picker_hint_line_with_escape(mode, multi, submit_label, false)
+    picker_hint_line_with_escape(theme, mode, multi, submit_label, false)
 }
 
 fn picker_hint_line_with_escape(
+    theme: &Theme,
     mode: PickerMode,
     multi: bool,
     submit_label: &str,
@@ -176,7 +181,7 @@ fn picker_hint_line_with_escape(
         items.push(("Esc", "cancel"));
     }
     items.push(("Enter", submit_label));
-    dialog_hint_line(&items)
+    dialog_hint_line(theme, &items)
 }
 
 fn render_label_picker(frame: &mut Frame, theme: &Theme, state: &PickerView) {
@@ -184,6 +189,7 @@ fn render_label_picker(frame: &mut Frame, theme: &Theme, state: &PickerView) {
     let mut lines = Vec::new();
     if matches!(state.mode, PickerMode::Filter) {
         lines.push(picker_filter_line(
+            theme,
             Span::styled(
                 "/",
                 Style::new().fg(theme.accent).add_modifier(Modifier::BOLD),
@@ -222,8 +228,8 @@ fn render_label_picker(frame: &mut Frame, theme: &Theme, state: &PickerView) {
         )));
     }
     lines.push(Line::from(""));
-    lines.push(picker_hint_line(state.mode, false, "choose"));
-    Dialog::new(&state.title, 0, 0).render_text_at(frame, layout.area, Text::from(lines));
+    lines.push(picker_hint_line(theme, state.mode, false, "choose"));
+    Dialog::new(theme, &state.title, 0, 0).render_text_at(frame, layout.area, Text::from(lines));
 }
 
 pub(in crate::tui::ui) fn label_picker_line(
@@ -272,6 +278,7 @@ fn render_project_picker(
     let mut lines = Vec::new();
     if matches!(state.mode, PickerMode::Filter) {
         lines.push(picker_filter_line(
+            theme,
             Span::styled(
                 "/",
                 Style::new().fg(theme.accent).add_modifier(Modifier::BOLD),
@@ -311,11 +318,12 @@ fn render_project_picker(
     }
     lines.push(Line::from(""));
     lines.push(project_picker_hint_line(
+        theme,
         state.mode,
         submit_label,
         state.kind == PickerKind::ScopeProject,
     ));
-    Dialog::new(&state.title, 0, 0).render_text_at(frame, layout.area, Text::from(lines));
+    Dialog::new(theme, &state.title, 0, 0).render_text_at(frame, layout.area, Text::from(lines));
 }
 
 pub(in crate::tui::ui) fn project_picker_submit_label(kind: PickerKind) -> Option<&'static str> {
@@ -376,9 +384,10 @@ pub(in crate::tui::ui) fn project_picker_line(
 }
 
 pub(in crate::tui::ui) fn project_picker_hint_line(
+    theme: &Theme,
     mode: PickerMode,
     submit_label: &'static str,
     filter_escape_cancels: bool,
 ) -> Line<'static> {
-    picker_hint_line_with_escape(mode, false, submit_label, filter_escape_cancels)
+    picker_hint_line_with_escape(theme, mode, false, submit_label, filter_escape_cancels)
 }

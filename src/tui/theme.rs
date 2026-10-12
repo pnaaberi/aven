@@ -218,39 +218,3 @@ impl Theme {
         self.project_palette[hash % self.project_palette.len()]
     }
 }
-
-// Aliases of `Theme::dark()` kept while render code migrates to `&Theme`.
-pub(crate) const INVERSE_FG: Color = Theme::dark().inverse_fg;
-pub(crate) const BG_ALT: Color = Theme::dark().bg_raised;
-pub(crate) const BG_PANEL: Color = Theme::dark().bg_panel;
-pub(crate) const BG_LANE: Color = Theme::dark().bg_lane;
-pub(crate) const BG_LANE_ACTIVE: Color = Theme::dark().bg_lane_active;
-pub(crate) const LANE_DIVIDER: Color = Theme::dark().lane_divider;
-pub(crate) const FG: Color = Theme::dark().fg;
-pub(crate) const FG_MUTED: Color = Theme::dark().fg_muted;
-pub(crate) const FG_DIM: Color = Theme::dark().fg_dim;
-pub(crate) const BORDER: Color = Theme::dark().border;
-pub(crate) const SELECTED_BG: Color = Theme::dark().bg_selected;
-pub(crate) const ACCENT: Color = Theme::dark().accent;
-pub(crate) const BLUE: Color = Theme::dark().info;
-pub(crate) const ORANGE: Color = Theme::dark().warning;
-pub(crate) const RED: Color = Theme::dark().danger;
-pub(crate) const PINK: Color = Theme::dark().conflict;
-pub(crate) const YELLOW: Color = Theme::dark().attention;
-pub(crate) const GREEN: Color = Theme::dark().success;
-pub(crate) const SELECTED: Style = Theme::dark().selected();
-pub(crate) const RELATED: Style = Theme::dark().related();
-pub(crate) const SELECTED_INACTIVE: Style = Theme::dark().selected_inactive();
-pub(crate) const BG: Color = Theme::dark().bg;
-
-pub(crate) fn priority_style(priority: &str) -> Style {
-    Theme::dark().priority(priority)
-}
-
-pub(crate) fn status_style(status: &str) -> Style {
-    Theme::dark().status(status)
-}
-
-pub(crate) fn project_color(key: &str) -> Color {
-    Theme::dark().project(key)
-}

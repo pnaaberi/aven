@@ -22,7 +22,7 @@ pub(in crate::tui::ui) fn render_multiline_input(
     state: &MultilineInputView,
 ) {
     if state.mode == MultilineInputMode::ConfirmDiscard {
-        render_multiline_discard_confirmation(frame, state.kind);
+        render_multiline_discard_confirmation(frame, theme, state.kind);
         return;
     }
     match state.kind {
@@ -38,7 +38,11 @@ pub(in crate::tui::ui) fn render_multiline_input(
     }
 }
 
-fn render_multiline_discard_confirmation(frame: &mut Frame, kind: MultilineInputKind) {
+fn render_multiline_discard_confirmation(
+    frame: &mut Frame,
+    theme: &Theme,
+    kind: MultilineInputKind,
+) {
     let (title, prompt) = match kind {
         MultilineInputKind::AddNote => ("Discard note draft?", "The note text will be lost."),
         MultilineInputKind::EditNote => ("Discard note changes?", "The note changes will be lost."),
@@ -59,6 +63,7 @@ fn render_multiline_discard_confirmation(frame: &mut Frame, kind: MultilineInput
     };
     render_confirm_with_hints(
         frame,
+        theme,
         &ConfirmView {
             title: title.to_string(),
             prompt: prompt.to_string(),
@@ -79,7 +84,7 @@ fn render_description_input(frame: &mut Frame, theme: &Theme, state: &MultilineI
     let max_editor_rows = max_height.saturating_sub(4).max(1) as usize;
     let editor_rows = description_visual_row_count(state, line_width).clamp(4, max_editor_rows);
     let height = editor_rows.saturating_add(4) as u16;
-    let dialog = Dialog::new(&state.title, width, height);
+    let dialog = Dialog::new(theme, &state.title, width, height);
     let content = dialog.render_block(frame);
     let editor_rows = content.height.saturating_sub(2).max(1) as usize;
     let line_width = content.width.max(1) as usize;
@@ -104,7 +109,7 @@ fn render_add_task_description_input(frame: &mut Frame, theme: &Theme, state: &M
         theme,
         state,
         "Optional details, links, or handoff context...",
-        add_task_description_hint_line(),
+        add_task_description_hint_line(theme),
     );
 }
 
@@ -114,7 +119,7 @@ fn render_add_task_natural_input(frame: &mut Frame, theme: &Theme, state: &Multi
         theme,
         state,
         "Describe the task in natural language...",
-        add_task_natural_hint_line(),
+        add_task_natural_hint_line(theme),
     );
 }
 
@@ -124,7 +129,7 @@ fn render_conflict_manual_input(frame: &mut Frame, theme: &Theme, state: &Multil
         theme,
         state,
         CONFLICT_MANUAL_BODY_PLACEHOLDER,
-        multiline_hint_line(),
+        multiline_hint_line(theme),
     );
 }
 
@@ -230,14 +235,14 @@ pub(in crate::tui::ui) fn description_input_line(
 ) -> Line<'static> {
     if show_placeholder && line.is_empty() && cursor == 0 {
         return Line::from(vec![
-            super::super::input::cursor_cell("E"),
+            super::super::input::cursor_cell(theme, "E"),
             Span::styled(
                 "nter task description here...",
                 Style::new().fg(theme.fg_dim),
             ),
         ]);
     }
-    input_line("", line, cursor)
+    input_line(theme, "", line, cursor)
 }
 
 pub(in crate::tui::ui) fn add_task_description_input_line(
@@ -265,36 +270,42 @@ pub(in crate::tui::ui) fn add_task_free_text_input_line(
     if show_placeholder {
         if cursor.is_some() {
             return Line::from(vec![
-                super::super::input::cursor_cell(&placeholder[..1]),
+                super::super::input::cursor_cell(theme, &placeholder[..1]),
                 Span::styled(&placeholder[1..], Style::new().fg(theme.fg_dim)),
             ]);
         }
         return Line::from(Span::styled(placeholder, Style::new().fg(theme.fg_dim)));
     }
     match cursor {
-        Some(cursor) => Line::from(input_cursor_spans(line, cursor, InputWidth::Full)),
+        Some(cursor) => Line::from(input_cursor_spans(theme, line, cursor, InputWidth::Full)),
         None => Line::from(line.to_string()),
     }
 }
 
 pub(in crate::tui::ui) const CONFLICT_MANUAL_BODY_PLACEHOLDER: &str = "Enter manual value here...";
 
-pub(in crate::tui::ui) fn add_task_description_hint_line() -> Line<'static> {
-    dialog_hint_line(&[
-        ("Ctrl-Enter / ^S", "create"),
-        ("Enter", "newline"),
-        ("^P", "project"),
-        ("^R", "priority"),
-        ("Esc", "cancel"),
-    ])
+pub(in crate::tui::ui) fn add_task_description_hint_line(theme: &Theme) -> Line<'static> {
+    dialog_hint_line(
+        theme,
+        &[
+            ("Ctrl-Enter / ^S", "create"),
+            ("Enter", "newline"),
+            ("^P", "project"),
+            ("^R", "priority"),
+            ("Esc", "cancel"),
+        ],
+    )
 }
 
-pub(in crate::tui::ui) fn add_task_natural_hint_line() -> Line<'static> {
-    dialog_hint_line(&[
-        ("Ctrl-Enter / ^S", "parse"),
-        ("Enter", "newline"),
-        ("Esc", "cancel"),
-    ])
+pub(in crate::tui::ui) fn add_task_natural_hint_line(theme: &Theme) -> Line<'static> {
+    dialog_hint_line(
+        theme,
+        &[
+            ("Ctrl-Enter / ^S", "parse"),
+            ("Enter", "newline"),
+            ("Esc", "cancel"),
+        ],
+    )
 }
 
 pub(in crate::tui::ui) fn render_add_note_input(
@@ -304,13 +315,16 @@ pub(in crate::tui::ui) fn render_add_note_input(
 ) {
     let show_placeholder = state.lines.len() == 1 && state.lines[0].is_empty();
     let hint_line = if state.kind == MultilineInputKind::EditNote {
-        dialog_hint_line(&[
-            ("Ctrl-Enter / ^S", "submit"),
-            ("Ctrl+X Ctrl+E", "editor"),
-            ("Esc", "cancel"),
-        ])
+        dialog_hint_line(
+            theme,
+            &[
+                ("Ctrl-Enter / ^S", "submit"),
+                ("Ctrl+X Ctrl+E", "editor"),
+                ("Esc", "cancel"),
+            ],
+        )
     } else {
-        multiline_hint_line()
+        multiline_hint_line(theme)
     };
     let width = if state.kind == MultilineInputKind::EditNote {
         80
@@ -362,7 +376,7 @@ fn render_tail_viewport_multiline(
 
     let visual_rows = lines.len().max(1);
     let height = (visual_rows.min(9) as u16).saturating_add(4);
-    let content = Dialog::new(&state.title, width, height).render_block(frame);
+    let content = Dialog::new(theme, &state.title, width, height).render_block(frame);
     let [editor, _, hints] = Layout::vertical([
         Constraint::Fill(1),
         Constraint::Length(1),
@@ -388,18 +402,18 @@ pub(in crate::tui::ui) fn add_note_input_line(
 ) -> Line<'static> {
     if show_placeholder && line.is_empty() && cursor.is_some() {
         return Line::from(vec![
-            super::super::input::cursor_cell("E"),
+            super::super::input::cursor_cell(theme, "E"),
             Span::styled("nter note body here...", Style::new().fg(theme.fg_dim)),
         ]);
     }
     match cursor {
-        Some(cursor) => Line::from(input_cursor_spans(line, cursor, InputWidth::Full)),
+        Some(cursor) => Line::from(input_cursor_spans(theme, line, cursor, InputWidth::Full)),
         None => Line::from(line.to_string()),
     }
 }
 
-pub(in crate::tui::ui) fn multiline_hint_line() -> Line<'static> {
-    dialog_hint_line(&[("Ctrl-Enter / ^S", "submit"), ("Esc", "cancel")])
+pub(in crate::tui::ui) fn multiline_hint_line(theme: &Theme) -> Line<'static> {
+    dialog_hint_line(theme, &[("Ctrl-Enter / ^S", "submit"), ("Esc", "cancel")])
 }
 
 pub(in crate::tui::ui) fn description_hint_line(
@@ -411,11 +425,14 @@ pub(in crate::tui::ui) fn description_hint_line(
         state.row.saturating_add(1),
         state.lines.len().max(1)
     );
-    let mut line = dialog_hint_line(&[
-        ("Ctrl-Enter / ^S", "submit"),
-        ("Ctrl+X Ctrl+E", "editor"),
-        ("Esc", "cancel"),
-    ]);
+    let mut line = dialog_hint_line(
+        theme,
+        &[
+            ("Ctrl-Enter / ^S", "submit"),
+            ("Ctrl+X Ctrl+E", "editor"),
+            ("Esc", "cancel"),
+        ],
+    );
     line.spans
         .push(Span::styled(position, Style::new().fg(theme.fg_muted)));
     line

@@ -45,7 +45,7 @@ pub(super) fn task_preview_fields_line(theme: &Theme, item: &TaskListItem) -> Li
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled("  status ", Style::new().fg(theme.fg_dim)),
-        status_span(item.task.status.as_str()),
+        status_span(theme, item.task.status.as_str()),
         Span::styled("  priority ", Style::new().fg(theme.fg_dim)),
         Span::styled(
             priority_short(item.task.priority.as_str()),
@@ -355,7 +355,11 @@ pub(super) fn task_preview_lines(
                 format!("  {branch} "),
                 Style::new().fg(theme.fg_dim),
             )];
-            spans.extend(linked_task_ref_spans(&link.display_ref, &link.project_key));
+            spans.extend(linked_task_ref_spans(
+                theme,
+                &link.display_ref,
+                &link.project_key,
+            ));
             spans.extend([
                 Span::raw(" "),
                 Span::styled(link.title.clone(), Style::new().fg(theme.fg_muted)),

@@ -4,8 +4,8 @@ use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
-use super::super::dialog::{Dialog, dialog_hint_line};
-use super::super::inline_code::wrap_with_code;
+use super::super::dialog::{Dialog, dialog_hint_line, dialog_hint_width};
+use super::super::inline_code::{wrap_with_code, wrapped_code_rows};
 use crate::pairing::{PairingPresentation, PairingQr};
 use crate::tui::overlay::{PairingOverlay, dialog_area, dialog_inner_area};
 use crate::tui::theme::Theme;
@@ -148,9 +148,7 @@ fn status_rows(pairing: &PairingOverlay, width: u16) -> usize {
     let inner = usize::from(width.saturating_sub(DIALOG_CHROME_COLUMNS));
     match pairing {
         PairingOverlay::Creating { .. } => 1,
-        PairingOverlay::Failed(message) => {
-            1 + wrap_with_code(&Theme::dark(), message, Style::new(), inner).len()
-        }
+        PairingOverlay::Failed(message) => 1 + wrapped_code_rows(message, inner),
         PairingOverlay::Ready(_) => 0,
     }
 }
@@ -168,7 +166,8 @@ fn render_status(frame: &mut Frame, theme: &Theme, pairing: &PairingOverlay) {
     let width = FALLBACK_WIDTH.min(frame.area().width.saturating_sub(2));
     let lines = status_lines(theme, pairing, width);
     let (area, body) = status_layout(frame.area(), lines.len());
-    let inner = Dialog::new(PAIRING_TITLE, area.width, area.height).render_block_at(frame, area);
+    let inner =
+        Dialog::new(theme, PAIRING_TITLE, area.width, area.height).render_block_at(frame, area);
     frame.render_widget(
         Paragraph::new(lines).style(Style::new().bg(theme.bg_raised)),
         Rect::new(inner.x, inner.y, inner.width, body.min(inner.height)),
@@ -182,7 +181,7 @@ fn render_status(frame: &mut Frame, theme: &Theme, pairing: &PairingOverlay) {
 
 fn render_presentation(frame: &mut Frame, theme: &Theme, presentation: &PairingPresentation) {
     let layout = pairing_layout(frame.area(), presentation);
-    let inner = Dialog::new(PAIRING_TITLE, layout.area.width, layout.area.height)
+    let inner = Dialog::new(theme, PAIRING_TITLE, layout.area.width, layout.area.height)
         .render_block_at(frame, layout.area);
     debug_assert_eq!(inner, layout.inner);
 
@@ -292,13 +291,13 @@ fn render_hints(frame: &mut Frame, theme: &Theme, area: Rect, hints: &[(&str, &s
         return;
     }
     frame.render_widget(
-        Paragraph::new(dialog_hint_line(hints)).style(Style::new().bg(theme.bg_raised)),
+        Paragraph::new(dialog_hint_line(theme, hints)).style(Style::new().bg(theme.bg_raised)),
         area,
     );
 }
 
 fn hint_width(hints: &[(&str, &str)]) -> u16 {
-    u16::try_from(dialog_hint_line(hints).width()).unwrap_or(u16::MAX)
+    u16::try_from(dialog_hint_width(hints)).unwrap_or(u16::MAX)
 }
 
 fn render_text(frame: &mut Frame, theme: &Theme, area: Rect, text: &str, color: Color) {
@@ -327,8 +326,13 @@ fn footer_rect(inner: Rect) -> Rect {
     )
 }
 
+/// Number of lines `wrap_text` produces.
 fn wrapped_height(text: &str, width: u16) -> u16 {
-    u16::try_from(wrap_text(&Theme::dark(), text, width, Style::new()).len()).unwrap_or(u16::MAX)
+    let rows = text
+        .split('\n')
+        .map(|paragraph| wrapped_code_rows(paragraph, usize::from(width)))
+        .sum::<usize>();
+    u16::try_from(rows).unwrap_or(u16::MAX)
 }
 
 fn wrap_text(theme: &Theme, text: &str, width: u16, style: Style) -> Vec<Line<'static>> {

@@ -57,7 +57,7 @@ pub(in crate::tui::ui) fn render_search(
         (result_rows * 2 + 6).min(frame.area().height.saturating_sub(2))
     };
     let title = intent.title();
-    let mut dialog = Dialog::new(&title, width, height);
+    let mut dialog = Dialog::new(theme, &title, width, height);
     if let Some(summary) = search_summary_line(
         theme,
         input,
@@ -187,11 +187,11 @@ fn search_input_line(
         let mut chars = intent.placeholder().chars();
         let first = chars.next().unwrap_or_default().to_string();
         return Line::from(vec![
-            cursor_cell(first),
+            cursor_cell(theme, first),
             Span::styled(chars.collect::<String>(), Style::new().fg(theme.fg_dim)),
         ]);
     }
-    input_line("", input, cursor)
+    input_line(theme, "", input, cursor)
 }
 
 fn render_result_list(
@@ -408,7 +408,7 @@ fn result_meta_line(
     let priority_label = format!("{} {priority}", priority_icon(priority));
     let mut spans = vec![
         Span::styled("  ", muted),
-        apply_bg(status_span(&result.status), bg),
+        apply_bg(status_span(theme, &result.status), bg),
         Span::styled(" · ", muted),
         Span::styled(
             priority_label,

@@ -70,10 +70,8 @@ impl TableState {
     }
 }
 
-struct MarkdownRenderer<'a> {
-    theme: &'a Theme,
+struct MarkdownRenderer {
     max_width: usize,
-    blocks: Vec<MarkdownBlock>,
     lines: Vec<LayoutLine>,
     current_line: Vec<Run>,
     current_width: usize,
@@ -93,17 +91,10 @@ struct MarkdownRenderer<'a> {
     table_state: Option<TableState>,
 }
 
-impl<'a> MarkdownRenderer<'a> {
-    fn new(
-        max_width: usize,
-        context: MarkdownRenderContext<'a>,
-        show_link_urls: bool,
-        reflow_soft_breaks: bool,
-    ) -> Self {
+impl MarkdownRenderer {
+    fn new(max_width: usize, show_link_urls: bool, reflow_soft_breaks: bool) -> Self {
         Self {
-            theme: context.theme,
             max_width,
-            blocks: Vec::new(),
             lines: Vec::new(),
             current_line: Vec::new(),
             current_width: 0,
@@ -229,15 +220,6 @@ impl<'a> MarkdownRenderer<'a> {
         if self.lines.last().is_some_and(|line| !line.runs.is_empty()) {
             self.lines.push(LayoutLine { runs: vec![] });
         }
-    }
-
-    fn flush_lines_to_blocks(&mut self) {
-        let lines = std::mem::take(&mut self.lines);
-        self.blocks.extend(
-            layout_lines_to_ratatui(self.theme, lines)
-                .into_iter()
-                .map(MarkdownBlock::Text),
-        );
     }
 
     fn start_tag(&mut self, tag: Tag) {
@@ -612,16 +594,15 @@ impl<'a> MarkdownRenderer<'a> {
         self.flush_line();
     }
 
-    fn finish(mut self) -> Vec<MarkdownBlock> {
+    fn finish(mut self) -> Vec<LayoutLine> {
         self.flush_line();
         while self.lines.last().is_some_and(|line| line.runs.is_empty()) {
             self.lines.pop();
         }
-        if self.lines.is_empty() && self.blocks.is_empty() {
-            return vec![MarkdownBlock::Text(Line::from(""))];
+        if self.lines.is_empty() {
+            return vec![LayoutLine { runs: vec![] }];
         }
-        self.flush_lines_to_blocks();
-        self.blocks
+        self.lines
     }
 }
 
@@ -638,13 +619,9 @@ pub(crate) fn render_markdown_without_link_urls(
     input: &str,
     max_width: usize,
 ) -> Vec<Line<'static>> {
-    flatten_markdown_blocks(render_markdown_internal(
-        input,
-        max_width,
-        MarkdownRenderContext { theme },
-        false,
-        false,
-    ))
+    layout_lines_to_ratatui(layout_markdown(input, max_width, false, false), |attrs| {
+        attrs_to_style(theme, attrs)
+    })
 }
 
 pub(crate) fn render_markdown_reflowed_without_link_urls(
@@ -652,13 +629,22 @@ pub(crate) fn render_markdown_reflowed_without_link_urls(
     input: &str,
     max_width: usize,
 ) -> Vec<Line<'static>> {
-    flatten_markdown_blocks(render_markdown_internal(
-        input,
-        max_width,
-        MarkdownRenderContext { theme },
-        false,
-        true,
-    ))
+    layout_lines_to_ratatui(layout_markdown(input, max_width, false, true), |attrs| {
+        attrs_to_style(theme, attrs)
+    })
+}
+
+/// The rows of `render_markdown_reflowed_without_link_urls` with text
+/// modifiers but no colors, for layout and hit testing. Links keep their
+/// underline.
+pub(crate) fn markdown_reflowed_rows_without_link_urls(
+    input: &str,
+    max_width: usize,
+) -> Vec<Line<'static>> {
+    layout_lines_to_ratatui(
+        layout_markdown(input, max_width, false, true),
+        attrs_modifiers,
+    )
 }
 
 pub(crate) fn render_markdown_with_context(
@@ -666,7 +652,7 @@ pub(crate) fn render_markdown_with_context(
     max_width: usize,
     context: MarkdownRenderContext<'_>,
 ) -> Vec<MarkdownBlock> {
-    render_markdown_internal(input, max_width, context, true, false)
+    render_markdown_blocks(input, max_width, context, true)
 }
 
 pub(crate) fn render_markdown_with_context_without_link_urls(
@@ -674,27 +660,36 @@ pub(crate) fn render_markdown_with_context_without_link_urls(
     max_width: usize,
     context: MarkdownRenderContext<'_>,
 ) -> Vec<MarkdownBlock> {
-    render_markdown_internal(input, max_width, context, false, false)
+    render_markdown_blocks(input, max_width, context, false)
 }
 
-fn render_markdown_internal(
+fn render_markdown_blocks(
     input: &str,
     max_width: usize,
     context: MarkdownRenderContext<'_>,
     show_link_urls: bool,
-    reflow_soft_breaks: bool,
 ) -> Vec<MarkdownBlock> {
+    layout_lines_to_ratatui(
+        layout_markdown(input, max_width, show_link_urls, false),
+        |attrs| attrs_to_style(context.theme, attrs),
+    )
+    .into_iter()
+    .map(MarkdownBlock::Text)
+    .collect()
+}
+
+fn layout_markdown(
+    input: &str,
+    max_width: usize,
+    show_link_urls: bool,
+    reflow_soft_breaks: bool,
+) -> Vec<LayoutLine> {
     let mut options = Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
     options.insert(Options::ENABLE_TABLES);
 
     let parser = Parser::new_ext(input, options);
-    let mut renderer = MarkdownRenderer::new(
-        max_width.max(1),
-        context,
-        show_link_urls,
-        reflow_soft_breaks,
-    );
+    let mut renderer = MarkdownRenderer::new(max_width.max(1), show_link_urls, reflow_soft_breaks);
     for event in parser {
         renderer.handle_event(event);
     }
@@ -757,7 +752,10 @@ pub(crate) fn flatten_markdown_blocks(blocks: Vec<MarkdownBlock>) -> Vec<Line<'s
         .collect()
 }
 
-fn layout_lines_to_ratatui(theme: &Theme, lines: Vec<LayoutLine>) -> Vec<Line<'static>> {
+fn layout_lines_to_ratatui(
+    lines: Vec<LayoutLine>,
+    style: impl Fn(&Attrs) -> Style,
+) -> Vec<Line<'static>> {
     lines
         .into_iter()
         .filter(|line| line.runs.is_empty() || line.runs.iter().any(|run| !run.attrs.code_fence))
@@ -766,7 +764,7 @@ fn layout_lines_to_ratatui(theme: &Theme, lines: Vec<LayoutLine>) -> Vec<Line<'s
                 .runs
                 .into_iter()
                 .filter(|run| !run.attrs.heading_marker && !run.attrs.code_fence)
-                .map(|run| Span::styled(run.text, attrs_to_style(theme, &run.attrs)))
+                .map(|run| Span::styled(run.text, style(&run.attrs)))
                 .collect();
             if spans.is_empty() {
                 Line::from("")
@@ -778,6 +776,24 @@ fn layout_lines_to_ratatui(theme: &Theme, lines: Vec<LayoutLine>) -> Vec<Line<'s
 }
 
 fn attrs_to_style(theme: &Theme, attrs: &Attrs) -> Style {
+    let mut style = attrs_modifiers(attrs);
+    if attrs.dimmed {
+        style = style.fg(theme.fg_dim);
+    }
+    if is_code(attrs) {
+        style = style.patch(theme.code());
+    } else if attrs.quote {
+        style = style.fg(theme.quote);
+    } else if attrs.link {
+        style = style.fg(theme.link);
+    } else if attrs.heading {
+        style = style.fg(theme.accent);
+    }
+    style
+}
+
+/// The colorless part of `attrs_to_style`.
+fn attrs_modifiers(attrs: &Attrs) -> Style {
     let mut style = Style::new();
     if attrs.bold || attrs.heading {
         style = style.add_modifier(Modifier::BOLD);
@@ -788,19 +804,14 @@ fn attrs_to_style(theme: &Theme, attrs: &Attrs) -> Style {
     if attrs.strikethrough {
         style = style.add_modifier(Modifier::CROSSED_OUT);
     }
-    if attrs.dimmed {
-        style = style.fg(theme.fg_dim);
-    }
-    if attrs.code || attrs.code_block_lang.is_some() {
-        style = style.patch(theme.code());
-    } else if attrs.quote {
-        style = style.fg(theme.quote);
-    } else if attrs.link {
-        style = style.fg(theme.link).add_modifier(Modifier::UNDERLINED);
-    } else if attrs.heading {
-        style = style.fg(theme.accent).add_modifier(Modifier::BOLD);
+    if attrs.link && !is_code(attrs) && !attrs.quote {
+        style = style.add_modifier(Modifier::UNDERLINED);
     }
     style
+}
+
+fn is_code(attrs: &Attrs) -> bool {
+    attrs.code || attrs.code_block_lang.is_some()
 }
 
 fn expand_tabs(input: &str, start_col: usize, tab_width: usize) -> String {

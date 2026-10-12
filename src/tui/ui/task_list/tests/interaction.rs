@@ -203,7 +203,7 @@ fn recurring_rows_and_preview_show_series_context() {
         },
     });
 
-    let row_text = title_cell(&item, 80).to_string();
+    let row_text = title_cell(THEME, &item, 80).to_string();
     assert!(row_text.contains("↻"));
     assert!(row_text.contains("2026-07-20"));
     assert!(row_text.contains("RCR-A1"));

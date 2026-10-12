@@ -247,7 +247,7 @@ impl HelpLayout {
     fn render(self, frame: &mut Frame, theme: &Theme, title: &str, scroll: u16) {
         let rows = self.rows();
         let scroll = scroll.min(self.cap());
-        let mut dialog = Dialog::new(title, self.area.width, self.area.height);
+        let mut dialog = Dialog::new(theme, title, self.area.width, self.area.height);
         if let Some(position) = detail_help_scroll_title(scroll, self.content.height, rows) {
             dialog = dialog.right_title(Line::from(Span::styled(
                 position,
@@ -998,7 +998,7 @@ pub(super) fn render_command(
     } else {
         format!("Command · {}", marked_task_label(marked_task_count))
     };
-    let mut dialog = Dialog::new(&title, 0, 0);
+    let mut dialog = Dialog::new(theme, &title, 0, 0);
     if match_count > 0 {
         let position = highlighted.map_or_else(
             || format!("{match_count} commands"),
@@ -1014,7 +1014,7 @@ pub(super) fn render_command(
     let line_width =
         (content.width as usize).saturating_sub(usize::from(match_count > layout.visible.len()));
 
-    let mut lines = vec![input_line(":", input, cursor)];
+    let mut lines = vec![input_line(theme, ":", input, cursor)];
     for (row, (command, unavailable_reason)) in matches
         .into_iter()
         .enumerate()
@@ -1299,7 +1299,8 @@ pub(super) fn render_prefix_hints(frame: &mut Frame, theme: &Theme, view: &ViewS
     } else {
         format!("{} …", view.pending_shortcut.join(" "))
     };
-    let content = Dialog::new(&title, 72, visible_rows.saturating_add(2)).render_block(frame);
+    let content =
+        Dialog::new(theme, &title, 72, visible_rows.saturating_add(2)).render_block(frame);
     render_scrollable_help_lines(frame, theme, content, lines, view.pending_shortcut_scroll);
 }
 

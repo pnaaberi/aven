@@ -17,8 +17,8 @@ pub(in crate::tui::ui) fn render_tag_combobox(
     state: &TagComboboxView,
 ) {
     let layout = tag_combobox_layout(state, frame.area().as_size());
-    let content =
-        Dialog::new(&state.title, TAG_COMBOBOX_WIDTH, layout.area.height).render_block(frame);
+    let content = Dialog::new(theme, &state.title, TAG_COMBOBOX_WIDTH, layout.area.height)
+        .render_block(frame);
     let lines = tag_combobox_lines(theme, state);
     frame.render_widget(
         Paragraph::new(Text::from(lines))
@@ -60,7 +60,7 @@ pub(in crate::tui::ui) fn tag_combobox_lines_with_viewport(
             ("~", "on some"),
         ]
     };
-    lines.push(dialog_hint_line(&hints));
+    lines.push(dialog_hint_line(theme, &hints));
     lines
 }
 
@@ -87,7 +87,7 @@ fn tag_combobox_input_line(theme: &Theme, state: &TagComboboxView) -> Line<'stat
 
     let normalized = normalize_label(&state.input);
     if state.selected.is_empty() && normalized.is_empty() {
-        spans.push(cursor_cell("E"));
+        spans.push(cursor_cell(theme, "E"));
         spans.push(Span::styled(
             "nter labels here...",
             Style::new().fg(theme.fg_dim),
@@ -99,7 +99,7 @@ fn tag_combobox_input_line(theme: &Theme, state: &TagComboboxView) -> Line<'stat
         let completion = state.completion.as_deref().unwrap_or_default();
         let mut chars = completion.chars();
         if let Some(cursor) = chars.next() {
-            spans.push(cursor_cell(cursor.to_string()));
+            spans.push(cursor_cell(theme, cursor.to_string()));
             let rest = chars.collect::<String>();
             if !rest.is_empty() {
                 spans.push(Span::styled(rest, Style::new().fg(theme.fg_dim)));
@@ -107,6 +107,7 @@ fn tag_combobox_input_line(theme: &Theme, state: &TagComboboxView) -> Line<'stat
         }
     } else {
         spans.extend(input_cursor_spans(
+            theme,
             &normalized,
             normalized.len().min(state.input_cursor),
             InputWidth::Full,

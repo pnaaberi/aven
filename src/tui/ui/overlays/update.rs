@@ -17,7 +17,7 @@ pub(in crate::tui::ui) fn render_update(
 ) {
     let terminal_size = Size::new(frame.area().width, frame.area().height);
     let (width, height) = update_dialog_size(terminal_size);
-    let content = Dialog::new(update_title(state), width, height).render_block(frame);
+    let content = Dialog::new(theme, update_title(state), width, height).render_block(frame);
     if let UpdateOverlayState::Available {
         plan,
         notes,
@@ -289,8 +289,11 @@ fn render_available_update(
         ..footer
     };
     frame.render_widget(
-        Paragraph::new(dialog_hint_line(&[("j/k", "scroll"), ("Tab", "action")]))
-            .style(Style::new().fg(theme.fg_muted).bg(theme.bg_raised)),
+        Paragraph::new(dialog_hint_line(
+            theme,
+            &[("j/k", "scroll"), ("Tab", "action")],
+        ))
+        .style(Style::new().fg(theme.fg_muted).bg(theme.bg_raised)),
         hints_area,
     );
     frame.render_widget(
@@ -362,7 +365,7 @@ fn update_lines(theme: &Theme, state: &UpdateOverlayState) -> Vec<Line<'static>>
                 theme.accent,
             ),
             Line::from(""),
-            dialog_hint_line(&[("Esc", "cancel")]),
+            dialog_hint_line(theme, &[("Esc", "cancel")]),
         ],
         UpdateOverlayState::Progress {
             version,
@@ -392,7 +395,7 @@ fn update_lines(theme: &Theme, state: &UpdateOverlayState) -> Vec<Line<'static>>
                 Line::from(""),
             ];
             lines.push(if phase.cancellable() {
-                dialog_hint_line(&[("Esc", "cancel")])
+                dialog_hint_line(theme, &[("Esc", "cancel")])
             } else {
                 Line::from(Span::styled(
                     "Finishing the installation. Keep aven open.",
@@ -412,7 +415,7 @@ fn update_lines(theme: &Theme, state: &UpdateOverlayState) -> Vec<Line<'static>>
                 lines.push(cached_line(theme, true));
             }
             lines.push(Line::from(""));
-            lines.push(dialog_hint_line(&[("Esc", "close")]));
+            lines.push(dialog_hint_line(theme, &[("Esc", "close")]));
             lines
         }
         UpdateOverlayState::Success { version } => vec![
@@ -426,7 +429,7 @@ fn update_lines(theme: &Theme, state: &UpdateOverlayState) -> Vec<Line<'static>>
             Line::from("Restart aven to use the installed version."),
             Line::from("Your tasks and current database are unchanged."),
             Line::from(""),
-            dialog_hint_line(&[("q", "quit"), ("Esc", "continue")]),
+            dialog_hint_line(theme, &[("q", "quit"), ("Esc", "continue")]),
         ],
         UpdateOverlayState::Failed { message } => vec![
             status_line(theme, "×", message, theme.danger),
@@ -436,14 +439,14 @@ fn update_lines(theme: &Theme, state: &UpdateOverlayState) -> Vec<Line<'static>>
                 Style::new().fg(theme.fg_dim),
             )),
             Line::from(""),
-            dialog_hint_line(&[("Enter", "retry"), ("Esc", "close")]),
+            dialog_hint_line(theme, &[("Enter", "retry"), ("Esc", "close")]),
         ],
         UpdateOverlayState::Cancelled => vec![
             status_line(theme, "○", "The update was cancelled", theme.warning),
             Line::from(""),
             Line::from("The existing aven executable is unchanged."),
             Line::from(""),
-            dialog_hint_line(&[("Enter", "try again"), ("Esc", "close")]),
+            dialog_hint_line(theme, &[("Enter", "try again"), ("Esc", "close")]),
         ],
     }
 }
