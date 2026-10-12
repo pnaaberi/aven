@@ -502,7 +502,8 @@ async fn mouse_wheel_scrolls_help_overlay() {
 #[tokio::test]
 async fn mouse_wheel_clamps_help_overlay() {
     let mut app = test_app().await;
-    let expected = crate::tui::ui::help_scroll_cap((80, 24).into(), &app.undo_description());
+    let expected =
+        crate::tui::ui::help_scroll_cap(&app.theme, (80, 24).into(), &app.undo_description());
     app.overlay = Some(OverlayState::Help { scroll: 0 });
 
     for _ in 0..200 {
@@ -877,12 +878,13 @@ async fn wrapped_help_keyboard_and_mouse_reach_matching_endpoints_after_resize()
         ] {
             let cap = if detail {
                 crate::tui::ui::detail_help_scroll_cap(
+                    &app.theme,
                     size,
                     app.help_detail_focus(),
                     &app.undo_description(),
                 )
             } else {
-                crate::tui::ui::help_scroll_cap(size, &app.undo_description())
+                crate::tui::ui::help_scroll_cap(&app.theme, size, &app.undo_description())
             };
             app.overlay = Some(if detail {
                 OverlayState::DetailHelp { scroll: u16::MAX }

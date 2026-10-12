@@ -346,7 +346,12 @@ pub(super) fn render_columns(
             layout.board.height.saturating_sub(HEADER_HEIGHT),
         );
         let state = super::empty_state::column_board_empty_state(store);
-        super::empty_state::render_empty_state(frame, body, state);
+        super::empty_state::render_empty_state(
+            frame,
+            &crate::tui::theme::Theme::dark(),
+            body,
+            state,
+        );
     }
     if layout.preview.height > 0 {
         render_task_preview(frame, store, table_state.selected(), layout.preview);

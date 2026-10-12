@@ -109,9 +109,10 @@ impl App {
         ) {
             match self.overlay.as_ref() {
                 Some(OverlayState::Help { .. }) => {
-                    help_scroll_cap(terminal_size, &self.undo_description())
+                    help_scroll_cap(&self.theme, terminal_size, &self.undo_description())
                 }
                 Some(OverlayState::DetailHelp { .. }) => detail_help_scroll_cap(
+                    &self.theme,
                     terminal_size,
                     self.help_detail_focus(),
                     &self.undo_description(),
@@ -276,6 +277,7 @@ impl App {
                 )
             }
             OverlayState::DetailHelp { .. } => detail_help_scroll_cap(
+                &self.theme,
                 terminal_size,
                 self.help_detail_focus(),
                 &self.undo_description(),
@@ -284,7 +286,7 @@ impl App {
             OverlayState::Changelog(state) => {
                 crate::tui::changelog::changelog_scroll_cap(&state.markdown, terminal_size)
             }
-            _ => help_scroll_cap(terminal_size, &self.undo_description()),
+            _ => help_scroll_cap(&self.theme, terminal_size, &self.undo_description()),
         };
         let was_detail_help = matches!(overlay, OverlayState::DetailHelp { .. });
         let was_add_task_description_editor = matches!(

@@ -275,6 +275,7 @@ fn render_surface(
     if body.width < 100 {
         render_main_surface(
             frame,
+            theme,
             store,
             widgets,
             list,
@@ -308,6 +309,7 @@ fn render_surface(
             );
             render_main_surface(
                 frame,
+                theme,
                 store,
                 widgets,
                 list,
@@ -318,6 +320,7 @@ fn render_surface(
         } else {
             render_main_surface(
                 frame,
+                theme,
                 store,
                 widgets,
                 list,
@@ -375,7 +378,7 @@ fn render_surface(
     if view.detail_underlay {
         if store.view_state.query == TaskQuery::Recurring {
             if let Some(detail) = store.recurrence_detail.as_ref() {
-                render_recurrence_detail(frame, detail, detail_underlay_scroll(view));
+                render_recurrence_detail(frame, theme, detail, detail_underlay_scroll(view));
             }
         } else {
             render_detail_underlay(
@@ -418,7 +421,7 @@ fn render_surface(
         );
     }
     if !view.pending_shortcut.is_empty() && !add_task_dialog_prefix_active(view) {
-        render_prefix_hints(frame, view);
+        render_prefix_hints(frame, theme, view);
     }
     if let Some(toast) = &view.notification {
         render_toast(frame, theme, toast);
@@ -440,6 +443,7 @@ pub(crate) fn main_list_page_rows(store: &TuiStore, area: ratatui::layout::Rect)
 
 fn render_main_surface(
     frame: &mut Frame,
+    theme: &Theme,
     store: &TuiStore,
     _widgets: &mut WidgetState,
     list: &mut ListSurface,
@@ -448,9 +452,9 @@ fn render_main_surface(
     inline_title_editor: Option<&TextInputView>,
 ) {
     if store.view_state.query == TaskQuery::RecentActions {
-        render_recent_actions(frame, store, list, focus, area);
+        render_recent_actions(frame, theme, store, list, focus, area);
     } else if store.view_state.query == TaskQuery::Recurring {
-        render_recurrence_series(frame, store, list, focus, area);
+        render_recurrence_series(frame, theme, store, list, focus, area);
     } else if store.view_state.is_columns() {
         let marked_task_ids = list.marked_task_ids().clone();
         let column_drag = list.column_drag().cloned();
@@ -491,17 +495,22 @@ fn render_add_task_surface(frame: &mut Frame, theme: &Theme, view: &ViewState) {
     }
 
     if let Some(overlay) = &view.overlay {
-        render_add_task_surface_overlay(frame, view, overlay);
+        render_add_task_surface_overlay(frame, theme, view, overlay);
     }
     if !view.pending_shortcut.is_empty() && !add_task_dialog_prefix_active(view) {
-        render_prefix_hints(frame, view);
+        render_prefix_hints(frame, theme, view);
     }
     if let Some(toast) = &view.notification {
         render_toast(frame, theme, toast);
     }
 }
 
-fn render_add_task_surface_overlay(frame: &mut Frame, view: &ViewState, overlay: &OverlayView) {
+fn render_add_task_surface_overlay(
+    frame: &mut Frame,
+    theme: &Theme,
+    view: &ViewState,
+    overlay: &OverlayView,
+) {
     match overlay {
         OverlayView::AddTask(state) => self::overlays::render_add_task_full_frame(frame, state),
         OverlayView::MultilineInput(state)
@@ -518,6 +527,7 @@ fn render_add_task_surface_overlay(frame: &mut Frame, view: &ViewState, overlay:
             }
             render_overlay_content(
                 frame,
+                theme,
                 overlay,
                 false,
                 &view.command_catalog,
@@ -842,6 +852,7 @@ fn overlay_dims_underlay(overlay: &OverlayView, inline_title_editor: bool) -> bo
 
 fn render_overlay_content(
     frame: &mut Frame,
+    theme: &Theme,
     overlay: &OverlayView,
     inline_title_editor: bool,
     _command_catalog: &crate::tui::event::CommandCatalog,
@@ -850,9 +861,9 @@ fn render_overlay_content(
 ) {
     match overlay {
         OverlayView::Onboarding { .. } => render_onboarding(frame),
-        OverlayView::Help { scroll } => render_help(frame, *scroll, undo_description),
+        OverlayView::Help { scroll } => render_help(frame, theme, *scroll, undo_description),
         OverlayView::DetailHelp { scroll } => {
-            render_detail_help(frame, *scroll, None, undo_description)
+            render_detail_help(frame, theme, *scroll, None, undo_description)
         }
         OverlayView::Search {
             input,
@@ -891,6 +902,7 @@ fn render_overlay_content(
             *cursor,
             *highlighted,
             CommandRenderContext {
+                theme,
                 session,
                 catalog,
                 candidates,
@@ -975,11 +987,18 @@ fn render_overlay(
         dialog::dim_rendered_background(frame);
     }
     if let OverlayView::DetailHelp { scroll } = overlay {
-        render_detail_help(frame, *scroll, focused_detail_target, undo_description);
+        render_detail_help(
+            frame,
+            theme,
+            *scroll,
+            focused_detail_target,
+            undo_description,
+        );
         return;
     }
     render_overlay_content(
         frame,
+        theme,
         overlay,
         inline_title_editor,
         command_catalog,

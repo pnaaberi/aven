@@ -11,7 +11,7 @@ use crate::tui::store::{
     ClosedTaskVisibility, RefreshHealth, TaskProjectionOrigin, TaskQuery, TaskScope, TaskViewState,
     TuiStore,
 };
-use crate::tui::theme::{ACCENT, BG, BG_ALT, FG, FG_DIM, FG_MUTED, RED};
+use crate::tui::theme::Theme;
 
 use crate::tui::text::truncate_width;
 
@@ -428,11 +428,11 @@ pub(crate) fn column_board_empty_state_for(context: &EmptyStateContext<'_>) -> E
     }
 }
 
-pub(crate) fn render_empty_state(frame: &mut Frame, area: Rect, state: EmptyState) {
+pub(crate) fn render_empty_state(frame: &mut Frame, theme: &Theme, area: Rect, state: EmptyState) {
     if area.width == 0 || area.height == 0 {
         return;
     }
-    frame.render_widget(Block::new().style(Style::new().bg(BG)), area);
+    frame.render_widget(Block::new().style(Style::new().bg(theme.bg)), area);
 
     let compact = area.width < 28;
     let max_width = usize::from(area.width.saturating_sub(4).max(1));
@@ -446,7 +446,10 @@ pub(crate) fn render_empty_state(frame: &mut Frame, area: Rect, state: EmptyStat
             Line::from(vec![
                 Span::styled(
                     format!(" {key} "),
-                    Style::new().fg(FG).bg(BG_ALT).add_modifier(Modifier::BOLD),
+                    Style::new()
+                        .fg(theme.fg)
+                        .bg(theme.bg_raised)
+                        .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
                     format!(
@@ -456,7 +459,7 @@ pub(crate) fn render_empty_state(frame: &mut Frame, area: Rect, state: EmptyStat
                             max_width.saturating_sub(UnicodeWidthStr::width(key) + 4),
                         )
                     ),
-                    Style::new().fg(FG_MUTED),
+                    Style::new().fg(theme.fg_muted),
                 ),
             ])
         })
@@ -469,17 +472,17 @@ pub(crate) fn render_empty_state(frame: &mut Frame, area: Rect, state: EmptyStat
             title,
             Style::new()
                 .fg(if state.reason == EmptyStateReason::LoadFailed {
-                    RED
+                    theme.danger
                 } else {
-                    FG
+                    theme.fg
                 })
                 .add_modifier(Modifier::BOLD),
         ))
     } else {
         let (marker, accent) = if state.reason == EmptyStateReason::LoadFailed {
-            ("!  ", RED)
+            ("!  ", theme.danger)
         } else {
-            ("◆  ", ACCENT)
+            ("◆  ", theme.accent)
         };
         Line::from(vec![
             Span::styled(marker, Style::new().fg(accent).add_modifier(Modifier::BOLD)),
@@ -487,9 +490,9 @@ pub(crate) fn render_empty_state(frame: &mut Frame, area: Rect, state: EmptyStat
                 title,
                 Style::new()
                     .fg(if state.reason == EmptyStateReason::LoadFailed {
-                        RED
+                        theme.danger
                     } else {
-                        FG
+                        theme.fg
                     })
                     .add_modifier(Modifier::BOLD),
             ),
@@ -506,7 +509,7 @@ pub(crate) fn render_empty_state(frame: &mut Frame, area: Rect, state: EmptyStat
     } else {
         vec![
             title_line.clone(),
-            Line::from(Span::styled(detail, Style::new().fg(FG_DIM))),
+            Line::from(Span::styled(detail, Style::new().fg(theme.fg_dim))),
         ]
     };
     if area.height >= 5 && action_line.is_some() {
@@ -529,7 +532,7 @@ pub(crate) fn render_empty_state(frame: &mut Frame, area: Rect, state: EmptyStat
     frame.render_widget(
         Paragraph::new(Text::from(lines))
             .alignment(Alignment::Center)
-            .style(Style::new().bg(BG)),
+            .style(Style::new().bg(theme.bg)),
         content,
     );
 }
@@ -593,7 +596,7 @@ mod tests {
         let backend = TestBackend::new(width, height);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|frame| render_empty_state(frame, frame.area(), state))
+            .draw(|frame| render_empty_state(frame, &Theme::dark(), frame.area(), state))
             .unwrap();
         terminal.backend().buffer().clone()
     }
@@ -658,6 +661,6 @@ mod tests {
             .unwrap();
 
         assert!(text.contains("Could not load this view"));
-        assert_eq!(marker.style().fg, Some(RED));
+        assert_eq!(marker.style().fg, Some(Theme::dark().danger));
     }
 }

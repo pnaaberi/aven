@@ -14,10 +14,7 @@ use crate::tui::app::Focus;
 use crate::tui::list_surface::ListSurface;
 use crate::tui::store::TuiStore;
 use crate::tui::text::truncate_width;
-use crate::tui::theme::{
-    self, ACCENT, BG, BG_ALT, BLUE, BORDER, FG, FG_DIM, FG_MUTED, GREEN, PINK, RED, SELECTED,
-    SELECTED_INACTIVE, YELLOW,
-};
+use crate::tui::theme::Theme;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct RecentActionHit {
@@ -64,12 +61,13 @@ pub(crate) fn recent_action_at_position(
 
 pub(super) fn render_recent_actions(
     frame: &mut Frame,
+    theme: &Theme,
     store: &TuiStore,
     list: &mut ListSurface,
     focus: Focus,
     area: Rect,
 ) {
-    frame.render_widget(Block::new().style(Style::new().bg(BG)), area);
+    frame.render_widget(Block::new().style(Style::new().bg(theme.bg)), area);
     if area.height == 0 || area.width == 0 {
         return;
     }
@@ -79,9 +77,16 @@ pub(super) fn render_recent_actions(
     } else {
         recent_action_areas(area)
     };
-    render_action_list(frame, store, list.table_state_mut(), focus, list_area);
+    render_action_list(
+        frame,
+        theme,
+        store,
+        list.table_state_mut(),
+        focus,
+        list_area,
+    );
     if detail_area.height > 0 {
-        render_action_detail(frame, store, list.selected_task(), detail_area);
+        render_action_detail(frame, theme, store, list.selected_task(), detail_area);
     }
 }
 
@@ -95,6 +100,7 @@ fn recent_action_areas(area: Rect) -> [Rect; 2] {
 
 fn render_action_list(
     frame: &mut Frame,
+    theme: &Theme,
     store: &TuiStore,
     table_state: &mut TableState,
     focus: Focus,
@@ -104,7 +110,7 @@ fn render_action_list(
     if rows.is_empty() {
         return;
     }
-    render_header(frame, rows[0]);
+    render_header(frame, theme, rows[0]);
     if store.recent_actions.is_empty() {
         let body = Rect {
             y: area.y.saturating_add(1),
@@ -113,6 +119,7 @@ fn render_action_list(
         };
         super::empty_state::render_empty_state(
             frame,
+            theme,
             body,
             super::empty_state::recent_actions_empty_state(store),
         );
@@ -146,6 +153,7 @@ fn render_action_list(
         let row_area = rows[viewport_index - scroll + 1];
         render_action_row(
             frame,
+            theme,
             action,
             now,
             row_area,
@@ -155,6 +163,7 @@ fn render_action_list(
     }
     render_scrollbar(
         frame,
+        theme,
         scroll,
         store.recent_actions.len(),
         viewport_rows,
@@ -162,10 +171,10 @@ fn render_action_list(
     );
 }
 
-fn render_header(frame: &mut Frame, area: Rect) {
+fn render_header(frame: &mut Frame, theme: &Theme, area: Rect) {
     let style = Style::new()
-        .fg(FG_DIM)
-        .bg(BG_ALT)
+        .fg(theme.fg_dim)
+        .bg(theme.bg_raised)
         .add_modifier(Modifier::BOLD);
     let columns = action_columns(area.width);
     let cells = Layout::horizontal(columns).areas::<5>(area);
@@ -180,6 +189,7 @@ fn render_header(frame: &mut Frame, area: Rect) {
 
 fn render_action_row(
     frame: &mut Frame,
+    theme: &Theme,
     action: &RecentActionItem,
     now: i64,
     area: Rect,
@@ -187,20 +197,25 @@ fn render_action_row(
     focused: bool,
 ) {
     let style = if selected {
-        if focused { SELECTED } else { SELECTED_INACTIVE }
+        if focused {
+            theme.selected()
+        } else {
+            theme.selected_inactive()
+        }
     } else {
-        Style::new().bg(BG)
+        Style::new().bg(theme.bg)
     };
     frame.render_widget(Block::new().style(style), area);
     let columns = action_columns(area.width);
     let cells = Layout::horizontal(columns).areas::<5>(area);
     let row_style = style;
     let when = compact_age_since(&action.created_at, now).unwrap_or_else(|| "?".to_string());
-    let ref_cell = action_ref_cell(action, row_style.bg.unwrap_or(BG));
+    let ref_cell = action_ref_cell(theme, action, row_style.bg.unwrap_or(theme.bg));
     let project = action_project_cell(
+        theme,
         action.target.project_key.as_deref(),
         cells[3].width as usize,
-        row_style.bg.unwrap_or(BG),
+        row_style.bg.unwrap_or(theme.bg),
     );
     let sync_marker = if action.synced { "✓" } else { "•" };
     let summary = truncate_width(
@@ -210,29 +225,33 @@ fn render_action_row(
     let values = [
         Line::from(vec![Span::styled(
             format!(" {when}"),
-            Style::new().fg(FG_MUTED).bg(row_style.bg.unwrap_or(BG)),
+            Style::new()
+                .fg(theme.fg_muted)
+                .bg(row_style.bg.unwrap_or(theme.bg)),
         )]),
         Line::from(vec![
             Span::styled(" ", row_style),
             Span::styled(
                 action_icon(action),
-                action_style(action)
-                    .bg(row_style.bg.unwrap_or(BG))
+                action_style(theme, action)
+                    .bg(row_style.bg.unwrap_or(theme.bg))
                     .remove_modifier(Modifier::BOLD),
             ),
             Span::styled(" ", row_style),
             Span::styled(
                 truncate_width(&action.verb, cells[1].width.saturating_sub(4) as usize),
-                row_style.fg(FG),
+                row_style.fg(theme.fg),
             ),
         ]),
         ref_cell,
         project,
         Line::from(vec![
-            Span::styled(summary, row_style.fg(FG)),
+            Span::styled(summary, row_style.fg(theme.fg)),
             Span::styled(
                 format!(" {sync_marker}"),
-                Style::new().fg(FG_DIM).bg(row_style.bg.unwrap_or(BG)),
+                Style::new()
+                    .fg(theme.fg_dim)
+                    .bg(row_style.bg.unwrap_or(theme.bg)),
             ),
         ]),
     ];
@@ -241,17 +260,21 @@ fn render_action_row(
     }
 }
 
-fn action_ref_cell(action: &RecentActionItem, bg: ratatui::style::Color) -> Line<'static> {
+fn action_ref_cell(
+    theme: &Theme,
+    action: &RecentActionItem,
+    bg: ratatui::style::Color,
+) -> Line<'static> {
     let Some(display_ref) = &action.target.display_ref else {
         return Line::from(Span::styled(
             format!(" {}", short_id(&action.entity_id)),
-            Style::new().fg(FG_MUTED).bg(bg),
+            Style::new().fg(theme.fg_muted).bg(bg),
         ));
     };
     let Some((project, suffix)) = display_ref.split_once('-') else {
         return Line::from(Span::styled(
             format!(" {display_ref}"),
-            Style::new().fg(FG_MUTED).bg(bg),
+            Style::new().fg(theme.fg_muted).bg(bg),
         ));
     };
     let project_key = action.target.project_key.as_deref().unwrap_or(project);
@@ -259,14 +282,15 @@ fn action_ref_cell(action: &RecentActionItem, bg: ratatui::style::Color) -> Line
         Span::styled(" ", Style::new().bg(bg)),
         Span::styled(
             project.to_string(),
-            Style::new().fg(theme::project_color(project_key)).bg(bg),
+            Style::new().fg(theme.project(project_key)).bg(bg),
         ),
-        Span::styled("-", Style::new().fg(FG_DIM).bg(bg)),
-        Span::styled(suffix.to_string(), Style::new().fg(FG_MUTED).bg(bg)),
+        Span::styled("-", Style::new().fg(theme.fg_dim).bg(bg)),
+        Span::styled(suffix.to_string(), Style::new().fg(theme.fg_muted).bg(bg)),
     ])
 }
 
 fn action_project_cell(
+    theme: &Theme,
     project_key: Option<&str>,
     max_width: usize,
     bg: ratatui::style::Color,
@@ -276,12 +300,18 @@ fn action_project_cell(
     };
     let project = truncate_width(project_key, max_width.saturating_sub(1));
     Line::from(vec![
-        Span::styled(project, Style::new().fg(FG_MUTED).bg(bg)),
+        Span::styled(project, Style::new().fg(theme.fg_muted).bg(bg)),
         Span::styled(" ", Style::new().bg(bg)),
     ])
 }
 
-fn render_action_detail(frame: &mut Frame, store: &TuiStore, selected: Option<usize>, area: Rect) {
+fn render_action_detail(
+    frame: &mut Frame,
+    theme: &Theme,
+    store: &TuiStore,
+    selected: Option<usize>,
+    area: Rect,
+) {
     let Some(action) = store.selected_recent_action(selected) else {
         return;
     };
@@ -289,60 +319,63 @@ fn render_action_detail(frame: &mut Frame, store: &TuiStore, selected: Option<us
         Line::from(vec![
             Span::styled(
                 action_icon(action),
-                action_style(action).add_modifier(Modifier::BOLD),
+                action_style(theme, action).add_modifier(Modifier::BOLD),
             ),
             Span::raw(" "),
             Span::styled(
                 crate::tui::time::action_summary_display(action),
-                Style::new().fg(FG).add_modifier(Modifier::BOLD),
+                Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
             ),
         ]),
         Line::from(vec![
-            Span::styled("at ", Style::new().fg(FG_DIM)),
+            Span::styled("at ", Style::new().fg(theme.fg_dim)),
             Span::styled(
                 local_timestamp_display(&action.created_at),
-                Style::new().fg(FG_MUTED),
+                Style::new().fg(theme.fg_muted),
             ),
-            Span::styled("  kind ", Style::new().fg(FG_DIM)),
-            Span::styled(action.entity_type.clone(), Style::new().fg(FG_MUTED)),
-            Span::styled("  id ", Style::new().fg(FG_DIM)),
-            Span::styled(short_id(&action.change_id), Style::new().fg(FG_MUTED)),
+            Span::styled("  kind ", Style::new().fg(theme.fg_dim)),
+            Span::styled(action.entity_type.clone(), Style::new().fg(theme.fg_muted)),
+            Span::styled("  id ", Style::new().fg(theme.fg_dim)),
+            Span::styled(short_id(&action.change_id), Style::new().fg(theme.fg_muted)),
         ]),
     ];
     lines.push(Line::from(vec![
-        Span::styled("op ", Style::new().fg(FG_DIM)),
-        Span::styled(action.op_type.clone(), Style::new().fg(FG_MUTED)),
+        Span::styled("op ", Style::new().fg(theme.fg_dim)),
+        Span::styled(action.op_type.clone(), Style::new().fg(theme.fg_muted)),
     ]));
     if let Some(display_ref) = &action.target.display_ref {
         lines.push(Line::from(vec![
-            Span::styled("task ", Style::new().fg(FG_DIM)),
+            Span::styled("task ", Style::new().fg(theme.fg_dim)),
             Span::styled(
                 display_ref.clone(),
-                Style::new().fg(ACCENT).add_modifier(Modifier::BOLD),
+                Style::new().fg(theme.accent).add_modifier(Modifier::BOLD),
             ),
-            Span::styled("  title ", Style::new().fg(FG_DIM)),
+            Span::styled("  title ", Style::new().fg(theme.fg_dim)),
             Span::styled(
                 action.target.title.clone().unwrap_or_default(),
-                Style::new().fg(FG_MUTED),
+                Style::new().fg(theme.fg_muted),
             ),
         ]));
         lines.push(Line::from(vec![
-            Span::styled("status ", Style::new().fg(FG_DIM)),
+            Span::styled("status ", Style::new().fg(theme.fg_dim)),
             Span::styled(
                 action.target.status.clone().unwrap_or_default(),
-                Style::new().fg(FG_MUTED),
+                Style::new().fg(theme.fg_muted),
             ),
         ]));
     }
     if let Some(field) = &action.field {
         lines.push(Line::from(vec![
-            Span::styled("field ", Style::new().fg(FG_DIM)),
-            Span::styled(field.clone(), Style::new().fg(FG_MUTED)),
+            Span::styled("field ", Style::new().fg(theme.fg_dim)),
+            Span::styled(field.clone(), Style::new().fg(theme.fg_muted)),
         ]));
     }
     if let Some(detail) = crate::tui::time::action_detail_display(action) {
         lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled(detail, Style::new().fg(FG_MUTED))));
+        lines.push(Line::from(Span::styled(
+            detail,
+            Style::new().fg(theme.fg_muted),
+        )));
     }
     let title = if action.target.deleted {
         " ACTION DETAIL × "
@@ -355,10 +388,10 @@ fn render_action_detail(frame: &mut Frame, store: &TuiStore, selected: Option<us
                 Block::new()
                     .title(title)
                     .borders(Borders::TOP)
-                    .border_style(Style::new().fg(BORDER)),
+                    .border_style(Style::new().fg(theme.border)),
             )
             .wrap(Wrap { trim: false })
-            .style(Style::new().fg(FG).bg(BG)),
+            .style(Style::new().fg(theme.fg).bg(theme.bg)),
         area,
     );
 }
@@ -429,14 +462,14 @@ fn fallback_action_icon(action: &RecentActionItem) -> &'static str {
     }
 }
 
-pub(super) fn action_style(action: &RecentActionItem) -> Style {
+pub(super) fn action_style(theme: &Theme, action: &RecentActionItem) -> Style {
     let color = match action.accent.as_str() {
-        "green" => GREEN,
-        "blue" => BLUE,
-        "yellow" => YELLOW,
-        "pink" => PINK,
-        "red" => RED,
-        _ => FG_DIM,
+        "green" => theme.success,
+        "blue" => theme.info,
+        "yellow" => theme.attention,
+        "pink" => theme.conflict,
+        "red" => theme.danger,
+        _ => theme.fg_dim,
     };
     Style::new().fg(color)
 }
@@ -456,6 +489,7 @@ fn scroll_offset(current: usize, selected: usize, row_count: usize, viewport_row
 
 fn render_scrollbar(
     frame: &mut Frame,
+    theme: &Theme,
     scroll: usize,
     row_count: usize,
     viewport_rows: usize,
@@ -469,8 +503,8 @@ fn render_scrollbar(
         .end_symbol(None)
         .thumb_symbol("┃")
         .track_symbol(Some("│"))
-        .thumb_style(Style::new().fg(ACCENT).bg(BG))
-        .track_style(Style::new().fg(BORDER).bg(BG));
+        .thumb_style(Style::new().fg(theme.accent).bg(theme.bg))
+        .track_style(Style::new().fg(theme.scrollbar_track).bg(theme.bg));
     let mut state = ScrollbarState::new(row_count)
         .position(scroll)
         .viewport_content_length(viewport_rows);
@@ -550,7 +584,15 @@ mod tests {
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
             .draw(|frame| {
-                render_action_row(frame, action, 0, frame.area(), selected, selected);
+                render_action_row(
+                    frame,
+                    &Theme::dark(),
+                    action,
+                    0,
+                    frame.area(),
+                    selected,
+                    selected,
+                );
             })
             .unwrap();
         terminal.backend().buffer().clone()
@@ -621,11 +663,11 @@ mod tests {
         let verb = &buffer[(11, 0)];
 
         assert_eq!(icon.symbol(), "×");
-        assert_eq!(icon.style().fg, Some(RED));
-        assert_eq!(icon.style().bg, SELECTED.bg);
+        assert_eq!(icon.style().fg, Some(Theme::dark().danger));
+        assert_eq!(icon.style().bg, Theme::dark().selected().bg);
         assert!(!icon.style().add_modifier.contains(Modifier::BOLD));
         assert_eq!(verb.symbol(), "d");
-        assert_eq!(verb.style().bg, SELECTED.bg);
+        assert_eq!(verb.style().bg, Theme::dark().selected().bg);
         assert!(verb.style().add_modifier.contains(Modifier::BOLD));
     }
 
@@ -638,12 +680,12 @@ mod tests {
         assert_eq!(buffer[(22, 0)].symbol(), "A");
         assert_eq!(
             buffer[(22, 0)].style().fg,
-            Some(theme::project_color("app"))
+            Some(Theme::dark().project("app"))
         );
         assert_eq!(buffer[(25, 0)].symbol(), "-");
-        assert_eq!(buffer[(25, 0)].style().fg, Some(FG_DIM));
+        assert_eq!(buffer[(25, 0)].style().fg, Some(Theme::dark().fg_dim));
         assert_eq!(buffer[(26, 0)].symbol(), "1");
-        assert_eq!(buffer[(26, 0)].style().fg, Some(FG_MUTED));
+        assert_eq!(buffer[(26, 0)].style().fg, Some(Theme::dark().fg_muted));
     }
 
     #[test]
@@ -658,6 +700,10 @@ mod tests {
 
     #[test]
     fn action_project_cell_keeps_trailing_summary_spacing() {
-        assert_eq!(action_project_cell(Some("app"), 12, BG).to_string(), "app ");
+        let theme = Theme::dark();
+        assert_eq!(
+            action_project_cell(&theme, Some("app"), 12, theme.bg).to_string(),
+            "app "
+        );
     }
 }

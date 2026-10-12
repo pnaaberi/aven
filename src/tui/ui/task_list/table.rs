@@ -95,6 +95,7 @@ pub(super) fn render_task_list(
         );
         super::super::empty_state::render_empty_state(
             frame,
+            &crate::tui::theme::Theme::dark(),
             body,
             crate::tui::ui::empty_state::task_empty_state_for(&source.empty_state),
         );

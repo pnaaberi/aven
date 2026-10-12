@@ -492,6 +492,7 @@ impl App {
             return false;
         }
         let cap = prefix_hint_scroll_cap(
+            &self.theme,
             terminal_size.height,
             self.current_routing_domain(),
             &self.pending_shortcut.labels(),
