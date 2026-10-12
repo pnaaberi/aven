@@ -465,10 +465,7 @@ pub(super) fn extend_activity_section(
             Span::raw("  "),
             Span::styled(timestamp, Style::new().fg(theme.fg_dim)),
             Span::raw("  "),
-            Span::styled(
-                icon,
-                recent_actions::action_style(&crate::tui::theme::Theme::dark(), action),
-            ),
+            Span::styled(icon, recent_actions::action_style(theme, action)),
             Span::raw(" "),
             Span::styled(summary.clone(), Style::new().fg(theme.fg)),
         ];
