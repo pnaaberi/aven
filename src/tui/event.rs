@@ -53,7 +53,8 @@ fn implemented_action_is_handled(action: Action) -> bool {
             | Action::ToggleSidebar
             | Action::ToggleDetail
             | Action::ToggleColumnsPreview
-            | Action::ToggleBackground
+            | Action::ChooseAppearance
+            | Action::SetAppearance(_)
             | Action::GoBack
             | Action::GoForward
             | Action::GoToBlocker

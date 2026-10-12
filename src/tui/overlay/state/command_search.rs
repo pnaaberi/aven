@@ -113,7 +113,7 @@ pub(crate) struct CommandState {
     pub(crate) catalog: std::sync::Arc<crate::tui::event::CommandCatalog>,
     pub(crate) candidates: Vec<crate::tui::event::CommandCandidate>,
     pub(crate) cycle_input: Option<String>,
-    pub(crate) cycle_candidates: Vec<usize>,
+    pub(crate) cycle_candidates: Vec<crate::tui::event::CommandCandidate>,
     pub(crate) cycle_index: usize,
     pub(crate) highlighted: Option<usize>,
     pub(crate) unavailable: Vec<CommandAvailabilityOverride>,
@@ -154,6 +154,12 @@ impl CommandState {
         self.highlighted = self
             .highlighted
             .filter(|index| *index < self.candidates.len());
+    }
+
+    pub(crate) fn begin_arguments(&mut self, name: &str) {
+        self.input = LineEdit::new(format!("{name} "));
+        self.reset_cycle();
+        self.refresh_candidates();
     }
 
     pub(crate) fn reset_cycle(&mut self) {

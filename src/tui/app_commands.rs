@@ -671,14 +671,30 @@ impl App {
         Ok(())
     }
 
-    pub(super) async fn accept_command_input(&mut self, state: &CommandState) -> Result<bool> {
-        let input = state.input.as_str();
+    pub(super) async fn accept_command_input(&mut self, state: &mut CommandState) -> Result<bool> {
+        let input = state.input.text.clone();
         if input.trim().trim_start_matches(':').is_empty() {
             self.set_info("empty command");
             return Ok(false);
         }
+        let choice_command = state.catalog.choice_command(&input);
+        if let Some((_, spec, argument)) = choice_command {
+            if argument.is_empty() && state.highlighted.is_none() {
+                self.set_info(format!("choose a value: {}", spec.usage()));
+                return Ok(false);
+            }
+            if state.candidates.is_empty() {
+                self.set_warning(format!(
+                    "invalid argument: {argument} · usage: {}",
+                    spec.usage()
+                ));
+                return Ok(false);
+            }
+        }
         let candidate = if let Some(highlighted) = state.highlighted {
             state.candidates.get(highlighted)
+        } else if choice_command.is_some() {
+            state.candidates.first()
         } else {
             let normalized = input.trim().trim_start_matches(':');
             let mut ranked = state.candidates.iter().filter_map(|candidate| {
@@ -723,7 +739,17 @@ impl App {
             }
             CommandHandler::BuiltIn(_) => {
                 let built_in = command.built_in().expect("built-in command");
-                let resolved = match self
+                let mut action = built_in.action;
+                if !built_in.choices.is_empty() {
+                    if let Some(choice) = candidate.choice {
+                        action = built_in.choices[choice].action;
+                    } else {
+                        state.begin_arguments(built_in.name);
+                        self.set_info(format!("choose a value: {}", built_in.usage()));
+                        return Ok(false);
+                    }
+                }
+                let mut resolved = match self
                     .resolve_builtin_command(&state.session, built_in)
                     .await?
                 {
@@ -733,6 +759,7 @@ impl App {
                         return Ok(true);
                     }
                 };
+                resolved.action = action;
                 self.execute_resolved_builtin(resolved, &state.session)
                     .await?;
             }
@@ -758,14 +785,10 @@ impl App {
         let highlighted = state
             .highlighted
             .and_then(|row| state.candidates.get(row))
-            .map(|candidate| candidate.index);
+            .cloned();
         if state.cycle_input.is_none() {
             state.cycle_input = Some(state.input.text.clone());
-            state.cycle_candidates = state
-                .candidates
-                .iter()
-                .map(|candidate| candidate.index)
-                .collect();
+            state.cycle_candidates = state.candidates.iter().cloned().collect();
             state.cycle_index = match state.highlighted {
                 Some(row) => row,
                 None if reverse => state.cycle_candidates.len().saturating_sub(1),
@@ -788,7 +811,7 @@ impl App {
                 (state.cycle_index + 1) % state.cycle_candidates.len()
             };
         }
-        let Some(index) = state.cycle_candidates.get(state.cycle_index).copied() else {
+        let Some(index) = state.cycle_candidates.get(state.cycle_index).cloned() else {
             if state
                 .input
                 .as_str()
@@ -806,16 +829,42 @@ impl App {
             state.reset_cycle();
             return;
         };
-        let Some(command) = state.catalog.command(index) else {
+        let Some(command) = state.catalog.command(index.index) else {
             state.reset_cycle();
             return;
         };
-        state.input.text = command.name().to_string();
+        let name_query = state
+            .cycle_input
+            .as_deref()
+            .unwrap_or("")
+            .trim()
+            .trim_start_matches(':');
+        let unique_name = command.name().starts_with(name_query)
+            && state
+                .cycle_candidates
+                .iter()
+                .filter(|candidate| {
+                    state
+                        .catalog
+                        .command(candidate.index)
+                        .is_some_and(|command| command.name().starts_with(name_query))
+                })
+                .count()
+                == 1;
+        if index.choice.is_none()
+            && (state.cycle_candidates.len() == 1 || unique_name)
+            && command
+                .built_in()
+                .is_some_and(|spec| !spec.choices.is_empty())
+        {
+            state.begin_arguments(command.built_in().expect("command with choices").name);
+            return;
+        }
+        state.input.text = index.input(&state.catalog);
         state.input.cursor = state.input.text.len();
         state.refresh_candidates();
-        state.highlighted = state
-            .candidates
-            .iter()
-            .position(|candidate| candidate.index == index);
+        state.highlighted = state.candidates.iter().position(|candidate| {
+            candidate.index == index.index && candidate.choice == index.choice
+        });
     }
 }

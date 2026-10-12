@@ -50,7 +50,23 @@ impl CommandAvailability {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CommandCandidate {
     pub(crate) index: usize,
+    pub(crate) choice: Option<usize>,
     pub(crate) availability: CommandAvailability,
+}
+
+impl CommandCandidate {
+    pub(crate) fn input(&self, catalog: &CommandCatalog) -> String {
+        let Some(command) = catalog.command(self.index) else {
+            return String::new();
+        };
+        match self
+            .choice
+            .and_then(|index| command.built_in()?.choices.get(index))
+        {
+            Some(choice) => format!("{} {}", command.name(), choice.value),
+            None => command.name().to_string(),
+        }
+    }
 }
 
 pub(crate) struct CommandQuery<'a> {
@@ -60,7 +76,46 @@ pub(crate) struct CommandQuery<'a> {
 }
 
 impl CommandCatalog {
+    pub(crate) fn choice_command<'a>(
+        &self,
+        input: &'a str,
+    ) -> Option<(usize, &'static super::BuiltInCommand, &'a str)> {
+        let input = input
+            .trim_start()
+            .strip_prefix(':')
+            .unwrap_or(input.trim_start());
+        let (head, rest) = input.split_once(char::is_whitespace)?;
+        self.all_commands()
+            .enumerate()
+            .find_map(|(index, command)| {
+                let spec = command.built_in()?;
+                (spec.name == head && !spec.choices.is_empty()).then_some((
+                    index,
+                    spec,
+                    rest.trim(),
+                ))
+            })
+    }
+
     pub(crate) fn query(&self, query: CommandQuery<'_>) -> Vec<CommandCandidate> {
+        if let Some((index, spec, argument)) = self.choice_command(query.input) {
+            let command = CatalogCommand::BuiltIn(spec);
+            if !panel_applicable(command, &query.snapshot.situation()) {
+                return Vec::new();
+            }
+            let availability = command_availability(command, query.snapshot, query.unavailable);
+            return spec
+                .choices
+                .iter()
+                .enumerate()
+                .filter(|(_, choice)| choice.value.starts_with(argument))
+                .map(|(choice, _)| CommandCandidate {
+                    index,
+                    choice: Some(choice),
+                    availability: availability.clone(),
+                })
+                .collect();
+        }
         let input = normalize_query(query.input);
         let situation = query.snapshot.situation();
         let mut candidates = self
@@ -95,6 +150,7 @@ impl CommandCatalog {
             .into_iter()
             .map(|(_, _, _, _, index, availability)| CommandCandidate {
                 index,
+                choice: None,
                 availability,
             })
             .collect()

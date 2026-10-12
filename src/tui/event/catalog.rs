@@ -21,6 +21,13 @@ pub(crate) enum DetailFocusPolicy {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub(crate) struct CommandChoice {
+    pub(crate) value: &'static str,
+    pub(crate) description: &'static str,
+    pub(crate) action: Action,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct BuiltInCommand {
     pub(crate) name: &'static str,
     pub(crate) aliases: &'static [&'static str],
@@ -30,9 +37,24 @@ pub(crate) struct BuiltInCommand {
     detail_keys: &'static [KeySequence],
     detail_focus: DetailFocusPolicy,
     pub(crate) action: Action,
+    pub(crate) choices: &'static [CommandChoice],
 }
 
 impl BuiltInCommand {
+    pub(crate) fn usage(self) -> String {
+        let values = self
+            .choices
+            .iter()
+            .map(|choice| choice.value)
+            .collect::<Vec<_>>();
+        format!(":{} <{}>", self.name, values.join("|"))
+    }
+
+    pub(crate) const fn with_choices(mut self, choices: &'static [CommandChoice]) -> Self {
+        self.choices = choices;
+        self
+    }
+
     pub(crate) const fn bulk_support(self) -> BulkSupport {
         self.action.bulk_support()
     }
@@ -76,6 +98,7 @@ impl BuiltInCommand {
             detail_keys: &[],
             detail_focus: detail_focus_policy(action),
             action,
+            choices: &[],
         }
     }
 
@@ -167,6 +190,7 @@ impl BuiltInCommand {
             detail_keys,
             detail_focus,
             action,
+            choices: &[],
         }
     }
 
@@ -323,12 +347,29 @@ pub(crate) const COMMANDS: &[BuiltInCommand] = &[
         Action::Refresh,
     ),
     BuiltInCommand::implemented_global_in_detail(
-        "toggle-background",
-        "cycle through dark, light, and terminal themes",
+        "theme",
+        "set the color theme: dark, light, or terminal",
         "General",
         &[],
-        Action::ToggleBackground,
-    ),
+        Action::ChooseAppearance,
+    )
+    .with_choices(&[
+        CommandChoice {
+            value: "dark",
+            description: "curated colors for a dark terminal background",
+            action: Action::SetAppearance(crate::tui::theme::Appearance::Dark),
+        },
+        CommandChoice {
+            value: "light",
+            description: "curated colors for a light terminal background",
+            action: Action::SetAppearance(crate::tui::theme::Appearance::Light),
+        },
+        CommandChoice {
+            value: "terminal",
+            description: "use the terminal's own colors",
+            action: Action::SetAppearance(crate::tui::theme::Appearance::Terminal),
+        },
+    ]),
     BuiltInCommand::implemented_with_aliases(
         "sync",
         &["config-status"],

@@ -869,3 +869,203 @@ async fn command_overlay_tab_completes_highlighted_row() {
                 && state.highlighted_name() == Some("status-inbox")
     ));
 }
+
+fn command_input_and_choices(app: &App) -> (String, Vec<String>) {
+    let Some(OverlayState::Command { state }) = &app.overlay else {
+        panic!("command overlay");
+    };
+    (
+        state.input.text.clone(),
+        state
+            .candidates
+            .iter()
+            .map(|candidate| candidate.input(&state.catalog))
+            .collect(),
+    )
+}
+
+#[tokio::test]
+async fn theme_missing_argument_prepares_choices_and_highlighted_enter_preserves_value() {
+    let mut app = test_app().await;
+    app.begin_command().await;
+    type_chars(&mut app, "the").await;
+    app.handle_overlay_key(key(KeyCode::Down)).await.unwrap();
+    app.handle_overlay_key(key(KeyCode::Enter)).await.unwrap();
+    assert_eq!(
+        command_input_and_choices(&app),
+        (
+            "theme ".to_string(),
+            vec![
+                "theme dark".to_string(),
+                "theme light".to_string(),
+                "theme terminal".to_string()
+            ],
+        )
+    );
+    assert_eq!(app.appearance, crate::tui::theme::Appearance::Dark);
+    assert_eq!(
+        toast_message(&app).as_deref(),
+        Some("choose a value: :theme <dark|light|terminal>")
+    );
+    let rendered = render_app_text(&mut app, 100, 30);
+    for label in [":theme dark", ":theme light", ":theme terminal"] {
+        assert!(rendered.contains(label));
+    }
+    app.handle_overlay_key(key(KeyCode::Down)).await.unwrap();
+    app.handle_overlay_key(key(KeyCode::Down)).await.unwrap();
+    app.handle_overlay_key(key(KeyCode::Enter)).await.unwrap();
+    assert!(app.overlay.is_none());
+    assert_eq!(app.appearance, crate::tui::theme::Appearance::Light);
+}
+
+#[tokio::test]
+async fn theme_errors_keep_input_and_theme_while_retired_command_is_unknown() {
+    let mut app = test_app().await;
+    app.set_appearance(crate::tui::theme::Appearance::Terminal);
+    for input in [
+        "theme",
+        "theme ",
+        "theme sepia",
+        "theme auto",
+        "theme dark light",
+        "theme DARK",
+    ] {
+        app.begin_command().await;
+        type_chars(&mut app, input).await;
+        app.handle_overlay_key(key(KeyCode::Enter)).await.unwrap();
+        assert_eq!(app.appearance, crate::tui::theme::Appearance::Terminal);
+        let (text, choices) = command_input_and_choices(&app);
+        if input.trim() == "theme" {
+            assert_eq!(text, "theme ");
+            assert_eq!(choices.len(), 3);
+        } else {
+            assert_eq!(text, input);
+            assert!(choices.is_empty());
+        }
+        assert!(
+            toast_message(&app)
+                .unwrap()
+                .contains(":theme <dark|light|terminal>")
+        );
+        app.handle_overlay_key(key(KeyCode::Esc)).await.unwrap();
+    }
+    app.begin_command().await;
+    type_chars(&mut app, "toggle-background").await;
+    app.handle_overlay_key(key(KeyCode::Enter)).await.unwrap();
+    assert_eq!(
+        toast_message(&app).as_deref(),
+        Some("unknown command: toggle-background")
+    );
+    assert_eq!(app.appearance, crate::tui::theme::Appearance::Terminal);
+}
+
+#[tokio::test]
+async fn tab_completes_command_then_cycles_arguments_and_resets_on_edit() {
+    let mut app = test_app().await;
+    app.begin_command().await;
+    type_chars(&mut app, "the").await;
+    app.handle_overlay_key(key(KeyCode::Tab)).await.unwrap();
+    assert_eq!(command_input_and_choices(&app).0, "theme ");
+    for (code, expected) in [
+        (KeyCode::Tab, "theme dark"),
+        (KeyCode::Tab, "theme light"),
+        (KeyCode::Tab, "theme terminal"),
+        (KeyCode::Tab, "theme dark"),
+        (KeyCode::BackTab, "theme terminal"),
+    ] {
+        app.handle_overlay_key(key(code)).await.unwrap();
+        assert_eq!(command_input_and_choices(&app).0, expected);
+    }
+    for _ in 0..8 {
+        app.handle_overlay_key(key(KeyCode::Backspace))
+            .await
+            .unwrap();
+    }
+    type_chars(&mut app, "l").await;
+    app.handle_overlay_key(key(KeyCode::Tab)).await.unwrap();
+    assert_eq!(command_input_and_choices(&app).0, "theme light");
+    app.handle_overlay_key(key(KeyCode::Enter)).await.unwrap();
+    assert_eq!(app.appearance, crate::tui::theme::Appearance::Light);
+    assert!(app.overlay.is_none());
+}
+
+#[tokio::test]
+async fn tab_name_cycle_continues_past_theme_when_multiple_commands_match() {
+    let mut app = test_app().await;
+    app.begin_command().await;
+    let Some(OverlayState::Command { state }) = &app.overlay else {
+        panic!("command overlay")
+    };
+    let names = state
+        .candidates
+        .iter()
+        .map(|candidate| candidate.input(&state.catalog))
+        .collect::<Vec<_>>();
+    assert!(names.iter().any(|name| name == "theme"));
+    for expected in &names {
+        app.handle_overlay_key(key(KeyCode::Tab)).await.unwrap();
+        assert_eq!(&command_input_and_choices(&app).0, expected);
+    }
+    app.handle_overlay_key(key(KeyCode::Tab)).await.unwrap();
+    assert_eq!(command_input_and_choices(&app).0, names[0]);
+}
+
+#[tokio::test]
+async fn pasted_theme_arguments_refresh_choices_and_accept_whitespace() {
+    let mut app = test_app().await;
+    app.begin_command().await;
+    app.dispatch_paste("  :theme   light  ").await.unwrap();
+    assert_eq!(command_input_and_choices(&app).1, vec!["theme light"]);
+    app.handle_overlay_key(key(KeyCode::Enter)).await.unwrap();
+    assert_eq!(app.appearance, crate::tui::theme::Appearance::Light);
+    assert!(app.overlay.is_none());
+}
+
+#[tokio::test]
+async fn theme_is_global_in_detail_and_preserves_task_and_config() {
+    let mut app = test_app().await;
+    create_and_select_task(&mut app, test_task_draft("Theme target")).await;
+    app.show_detail(0);
+    let task_id = app.store.tasks[0].task.id.clone();
+    let config_appearance = app.store.config().tui.appearance;
+    app.begin_command().await;
+    type_chars(&mut app, "theme terminal").await;
+    app.handle_overlay_key(key(KeyCode::Enter)).await.unwrap();
+    assert!(app.detail.is_active());
+    assert!(app.overlay.is_none());
+    assert_eq!(app.store.tasks[0].task.id, task_id);
+    assert_eq!(app.appearance, crate::tui::theme::Appearance::Terminal);
+    assert_eq!(app.store.config().tui.appearance, config_appearance);
+}
+
+#[test]
+fn choice_query_preserves_whitespace_boundary_and_description_search() {
+    for input in ["theme ", ":theme   ", "  :theme  "] {
+        let state = CommandState::test_with_input(input);
+        assert_eq!(state.candidates.len(), 3);
+        assert!(
+            state
+                .candidates
+                .iter()
+                .all(|candidate| candidate.choice.is_some())
+        );
+    }
+    let state = CommandState::test_with_input("theme");
+    assert!(
+        state
+            .candidates
+            .iter()
+            .all(|candidate| candidate.choice.is_none())
+    );
+    let state = CommandState::test_with_input("set status");
+    assert!(!state.candidates.is_empty());
+    assert!(state.candidates.iter().all(|candidate| {
+        state
+            .catalog
+            .command(candidate.index)
+            .unwrap()
+            .name()
+            .starts_with("status-")
+            && candidate.choice.is_none()
+    }));
+}

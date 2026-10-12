@@ -274,8 +274,10 @@ focused selection uses reverse video, inactive selection uses underlining, and
 muted text uses the terminal's dim attribute.
 
 All themes keep the terminal's own background on the main surface. The
-`:toggle-background` command cycles through `dark`, `light`, and `terminal`
-(in that order) for the current session without changing your config.
+`:theme dark`, `:theme light`, and `:theme terminal` commands select a theme
+for the current session without changing your config. Type `:theme ` to see the
+choices; use Tab to complete a value or arrow keys and Enter to select it.
+`:toggle-background` is no longer available; use `:theme` instead.
 Edit the local config file and restart the TUI to apply changes.
 
 ## TUI sidebar views

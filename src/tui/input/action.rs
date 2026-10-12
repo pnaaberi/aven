@@ -80,7 +80,15 @@ impl App {
                     self.store.columns_preview_visible = !self.store.columns_preview_visible;
                 }
             }
-            Action::ToggleBackground => self.toggle_appearance(),
+            Action::ChooseAppearance => {
+                self.begin_command().await;
+                if let Some(crate::tui::overlay::OverlayState::Command { state }) =
+                    &mut self.overlay
+                {
+                    state.begin_arguments("theme");
+                }
+            }
+            Action::SetAppearance(appearance) => self.set_appearance(appearance),
             Action::GoBack => self.go_back().await?,
             Action::GoForward => self.go_forward().await?,
             Action::GoToBlocker => self.go_to_blocker().await?,

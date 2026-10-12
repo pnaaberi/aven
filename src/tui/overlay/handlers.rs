@@ -42,6 +42,7 @@ pub(crate) fn handle_generic_overlay_paste(text: &str, overlay: OverlayState) ->
         OverlayState::Command { mut state } => {
             state.input.insert_paste(text);
             state.reset_cycle();
+            state.refresh_candidates();
             OverlayState::Command { state }
         }
         OverlayState::AddTask(mut state) => {

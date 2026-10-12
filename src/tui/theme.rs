@@ -104,14 +104,6 @@ impl Appearance {
             Self::Terminal => Theme::terminal(),
         }
     }
-
-    pub(crate) const fn toggled(self) -> Self {
-        match self {
-            Self::Dark => Self::Light,
-            Self::Light => Self::Terminal,
-            Self::Terminal => Self::Dark,
-        }
-    }
 }
 
 impl Theme {

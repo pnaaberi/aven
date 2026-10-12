@@ -407,10 +407,6 @@ impl App {
         self.theme = appearance.theme();
     }
 
-    pub(crate) fn toggle_appearance(&mut self) {
-        self.set_appearance(self.appearance.toggled());
-    }
-
     fn highlighted_sidebar_command_target(
         &self,
     ) -> Option<crate::tui::event::SidebarCommandTarget> {

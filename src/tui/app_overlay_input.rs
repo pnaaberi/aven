@@ -60,15 +60,13 @@ impl App {
             OverlayState::Command { mut state } => match key.code {
                 KeyCode::Esc => {}
                 KeyCode::Enter => {
-                    if let Some(command) = state
-                        .highlighted
-                        .and_then(|row| state.candidates.get(row))
-                        .and_then(|candidate| state.catalog.command(candidate.index))
+                    if let Some(candidate) =
+                        state.highlighted.and_then(|row| state.candidates.get(row))
                     {
-                        state.input.text = command.name().to_string();
+                        state.input.text = candidate.input(&state.catalog);
                         state.input.cursor = state.input.text.len();
                     }
-                    if !self.accept_command_input(&state).await? {
+                    if !self.accept_command_input(&mut state).await? {
                         self.overlay = Some(OverlayState::Command { state });
                     }
                 }

@@ -55,19 +55,23 @@ async fn popover_menu_keeps_main_surface_underlay_bright() {
 }
 
 #[tokio::test]
-async fn toggle_background_switches_theme_and_keeps_terminal_background() {
+async fn theme_commands_select_explicitly_and_keep_terminal_background() {
     let mut app = test_app().await;
-
-    app.toggle_appearance();
-    let buf = render_app_buffer(&mut app, 120, 30);
-
-    assert_eq!(app.theme, crate::tui::theme::Theme::light());
-    assert_eq!(buf[(119, 10)].bg, Color::Reset);
-
-    app.toggle_appearance();
-    assert_eq!(app.theme, crate::tui::theme::Theme::terminal());
-    app.toggle_appearance();
-    assert_eq!(app.theme, crate::tui::theme::Theme::dark());
+    for (value, appearance) in [
+        ("light", crate::tui::theme::Appearance::Light),
+        ("terminal", crate::tui::theme::Appearance::Terminal),
+        ("dark", crate::tui::theme::Appearance::Dark),
+        ("dark", crate::tui::theme::Appearance::Dark),
+    ] {
+        app.begin_command().await;
+        type_chars(&mut app, &format!("theme {value}")).await;
+        app.handle_overlay_key(key(KeyCode::Enter)).await.unwrap();
+        assert!(app.overlay.is_none());
+        assert_eq!(app.appearance, appearance);
+        assert_eq!(app.theme, appearance.theme());
+        let buf = render_app_buffer(&mut app, 120, 30);
+        assert_eq!(buf[(119, 10)].bg, Color::Reset);
+    }
 }
 
 #[tokio::test]

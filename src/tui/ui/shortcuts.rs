@@ -746,12 +746,10 @@ fn command_label(name: &str) -> String {
     format!(":{name}")
 }
 
-fn catalog_command_name_width(commands: &[CatalogCommand<'_>]) -> usize {
-    commands
-        .iter()
-        .map(|command| {
-            unicode_width::UnicodeWidthStr::width(command_label(command.name()).as_str())
-        })
+fn command_name_width<S: AsRef<str>>(names: impl IntoIterator<Item = S>) -> usize {
+    names
+        .into_iter()
+        .map(|name| unicode_width::UnicodeWidthStr::width(command_label(name.as_ref()).as_str()))
         .max()
         .unwrap_or(19)
         .max(19)
@@ -808,6 +806,7 @@ struct CommandPaletteOptions<'a> {
     annotation: Option<String>,
     unavailable_reason: Option<&'a str>,
     description_override: Option<&'a str>,
+    name: &'a str,
 }
 
 fn command_palette_line(
@@ -823,6 +822,7 @@ fn command_palette_line(
         annotation,
         unavailable_reason,
         description_override,
+        name,
     } = options;
     let keys = command
         .keys(context)
@@ -832,7 +832,7 @@ fn command_palette_line(
     let mut spans = vec![
         Span::styled(format!("{keys:<10}"), theme.muted()),
         Span::styled(
-            format!("{:<command_name_width$}", command_label(command.name())),
+            format!("{:<command_name_width$}", command_label(name)),
             if command.is_custom() {
                 Style::new()
                     .fg(theme.custom_command_name)
@@ -932,26 +932,16 @@ pub(super) fn render_command(
     };
     let has_primary_task = session.primary_task_id().is_some();
     let command_context = session.routing_domain().command_context();
-    let matches = candidates
-        .iter()
-        .map(|candidate| {
-            (
-                catalog.command(candidate.index),
-                candidate.availability.reason(),
-            )
-        })
-        .collect::<Vec<_>>();
-    let match_count = matches.len();
+    let match_count = candidates.len();
     let selected = highlighted.unwrap_or(0).min(match_count.saturating_sub(1));
     let layout =
         crate::tui::overlay::command_layout(frame.area().as_size(), match_count, highlighted);
     let offset = layout.visible.start;
     let visible_end = layout.visible.end;
-    let command_name_width = catalog_command_name_width(
-        &matches[offset..visible_end]
+    let command_name_width = command_name_width(
+        candidates[offset..visible_end]
             .iter()
-            .filter_map(|(command, _)| *command)
-            .collect::<Vec<_>>(),
+            .map(|candidate| candidate.input(catalog)),
     );
     let title = if marked_task_count == 0 {
         "Command".to_string()
@@ -972,16 +962,17 @@ pub(super) fn render_command(
         (content.width as usize).saturating_sub(usize::from(match_count > layout.visible.len()));
 
     let mut lines = vec![input_line(theme, ":", input, cursor)];
-    for (row, (command, unavailable_reason)) in matches
-        .into_iter()
+    for (row, candidate) in candidates
+        .iter()
         .enumerate()
         .skip(offset)
         .take(layout.visible.len())
     {
-        let Some(command) = command else {
+        let Some(command) = catalog.command(candidate.index) else {
             lines.push(Line::default());
             continue;
         };
+        let unavailable_reason = candidate.availability.reason();
         let marked_annotation = |count| {
             let noun = if count == 1 { "task" } else { "tasks" };
             format!("{count} {noun} · ")
@@ -1006,10 +997,16 @@ pub(super) fn render_command(
                 _ => None,
             },
         };
-        let description_override = command
-            .built_in()
-            .is_some_and(|built_in| built_in.action == Action::Undo)
-            .then_some(undo_description);
+        let name = candidate.input(catalog);
+        let choice = candidate
+            .choice
+            .and_then(|index| command.built_in()?.choices.get(index));
+        let description_override = choice.map(|choice| choice.description).or_else(|| {
+            command
+                .built_in()
+                .is_some_and(|built_in| built_in.action == Action::Undo)
+                .then_some(undo_description)
+        });
         lines.push(command_palette_line(
             theme,
             command,
@@ -1021,6 +1018,7 @@ pub(super) fn render_command(
                 annotation,
                 unavailable_reason,
                 description_override,
+                name: &name,
             },
         ));
     }
@@ -1134,12 +1132,7 @@ fn prefix_hint_lines_for_catalog_in_domain(
         has_primary_task,
     } = availability;
     let matches = catalog.prefix_hints_in_domain(domain, pending);
-    let command_name_width = catalog_command_name_width(
-        &matches
-            .iter()
-            .map(|(command, _)| *command)
-            .collect::<Vec<_>>(),
-    );
+    let command_name_width = command_name_width(matches.iter().map(|(command, _)| command.name()));
     matches
         .into_iter()
         .map(|(command, key_hint)| {
@@ -2022,7 +2015,7 @@ mod tests {
         use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
         for (width, height) in [(72, 30), (120, 30), (40, 7)] {
-            for input in ["", "stat", "no-such-command-xyz"] {
+            for input in ["", "stat", "theme ", "theme l", "no-such-command-xyz"] {
                 let mut state = CommandState::test_with_input(input);
                 state.highlighted = state.candidates.len().checked_sub(1);
                 let size = ratatui::layout::Size::new(width, height);
@@ -2048,8 +2041,8 @@ mod tests {
                 for (offset, position) in layout.visible.clone().enumerate() {
                     let row = layout.list.y + offset as u16;
                     let candidate = &state.candidates[position];
-                    let name = state.catalog.command(candidate.index).unwrap().name();
-                    assert!(buffer_row(terminal.backend().buffer(), row).contains(name));
+                    let name = candidate.input(&state.catalog);
+                    assert!(buffer_row(terminal.backend().buffer(), row).contains(&name));
                     let outcome = dispatch_overlay_mouse(
                         OverlayState::Command {
                             state: state.clone(),
@@ -2072,7 +2065,7 @@ mod tests {
                         panic!("expected retained command panel");
                     };
                     assert_eq!(clicked.highlighted, Some(position));
-                    assert_eq!(clicked.candidates[position].index, candidate.index);
+                    assert_eq!(clicked.candidates[position], *candidate);
                     assert_eq!(clicked.session, state.session);
                 }
                 assert_eq!(
@@ -2570,6 +2563,7 @@ mod tests {
                 annotation: None,
                 unavailable_reason: None,
                 description_override: None,
+                name: command.name(),
             },
         );
         let name = line
