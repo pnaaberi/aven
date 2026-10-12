@@ -242,6 +242,22 @@ pub fn triage_reason(task: &Task, meta: &QueueMeta, now_seconds: i64) -> Option<
     }
 }
 
+/// Whether a triage review mark still covers a stale task: keeping a task
+/// quiets it for one more stale window of its status. Inbox tasks always need
+/// a destination, so marks never hide them.
+pub fn triage_review_current(
+    reason: TriageReason,
+    reviewed_at: Option<i64>,
+    now_seconds: i64,
+) -> bool {
+    let window_days = match reason {
+        TriageReason::Inbox => return false,
+        TriageReason::StaleActive => STALE_ACTIVE_DAYS,
+        TriageReason::StaleTodo => STALE_TODO_DAYS,
+    };
+    reviewed_at.is_some_and(|at| now_seconds - at < window_days * 86_400)
+}
+
 /// Whether nothing has touched the task's queue activity since creation.
 pub fn untouched_since_creation(task: &Task) -> bool {
     creation_seeded_queue_activity(task)
@@ -651,5 +667,29 @@ mod tests {
     #[test]
     fn unix_seconds_parses_utc_timestamp() {
         assert_eq!(unix_seconds("1970-01-02T01:02:03Z"), Some(90_123));
+    }
+
+    #[test]
+    fn triage_review_quiets_stale_tasks_for_one_window() {
+        let day = 86_400;
+        let now = 100 * day;
+        let reviewed = Some(now - 5 * day);
+        assert!(triage_review_current(
+            TriageReason::StaleActive,
+            reviewed,
+            now
+        ));
+        assert!(!triage_review_current(
+            TriageReason::StaleActive,
+            Some(now - 7 * day),
+            now
+        ));
+        assert!(triage_review_current(
+            TriageReason::StaleTodo,
+            Some(now - 29 * day),
+            now
+        ));
+        assert!(!triage_review_current(TriageReason::Inbox, reviewed, now));
+        assert!(!triage_review_current(TriageReason::StaleTodo, None, now));
     }
 }

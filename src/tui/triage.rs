@@ -10,7 +10,10 @@ use anyhow::Result;
 use aven_core::query::{
     SortDirection, TaskAvailabilityFilter, TaskFilters, TaskListItem, TaskQueryMode, TaskSort,
 };
-use aven_core::queue::{QueueDateKind, TriageReason, now_seconds, triage_reason, unix_seconds};
+use aven_core::queue::{
+    QueueDateKind, STALE_ACTIVE_DAYS, STALE_TODO_DAYS, TriageReason, now_seconds, triage_reason,
+    triage_review_current, unix_seconds,
+};
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use crate::choices::{TaskPriority, TaskStatus};
@@ -97,8 +100,19 @@ struct PendingCommand {
 #[derive(Debug, Clone)]
 struct TriageChange {
     index: usize,
-    entry_id: String,
+    undo: ChangeUndo,
     previous: Option<TriageOutcome>,
+}
+
+#[derive(Debug, Clone)]
+enum ChangeUndo {
+    /// A task mutation, reverted through the store's undo entry.
+    Store(String),
+    /// A local review mark, reverted by restoring the mark it replaced.
+    Review {
+        task_id: TaskId,
+        previous: Option<i64>,
+    },
 }
 
 #[derive(Debug, Clone, Default)]
@@ -266,6 +280,7 @@ async fn load_candidates(store: &TuiStore, exclude: &BTreeSet<TaskId>) -> Result
             SortDirection::Asc,
         )
         .await?;
+    let reviews = store.database().triage_reviews().await?;
     let now = now_seconds();
     let mut project_counts = BTreeMap::<String, ProjectCounts>::new();
     let mut entries = Vec::new();
@@ -281,7 +296,9 @@ async fn load_candidates(store: &TuiStore, exclude: &BTreeSet<TaskId>) -> Result
         if exclude.contains(&item.task.id) {
             continue;
         }
-        if let Some(reason) = triage_reason(&item.task, &item.queue, now) {
+        if let Some(reason) = triage_reason(&item.task, &item.queue, now)
+            && !triage_review_current(reason, reviews.get(item.task.id.as_str()).copied(), now)
+        {
             entries.push(TriageEntry::new(item, reason));
         }
     }
@@ -599,13 +616,34 @@ impl App {
             // Choosing the current status accepts the task as it stands without
             // writing anything. A promoted inbox task already left the inbox; a
             // stale task stays stale and returns in a later session.
+            let display_ref = entry.item.display_ref.clone();
             let outcome = if entry.reason == TriageReason::Inbox {
+                self.set_info(format!("{display_ref} stays {status}"));
                 TriageOutcome::Status(status)
             } else {
+                // The local review mark keeps a kept task out of triage for one
+                // more stale window without touching the task itself.
+                let task_id = entry.item.task.id.clone();
+                let window = match entry.reason {
+                    TriageReason::StaleActive => STALE_ACTIVE_DAYS,
+                    _ => STALE_TODO_DAYS,
+                };
+                let previous = self
+                    .store
+                    .database()
+                    .set_triage_review(task_id.as_str(), Some(now_seconds()), now_seconds())
+                    .await?;
+                let session = self.triage.as_mut().expect("triage session");
+                session.changes.push(TriageChange {
+                    index,
+                    undo: ChangeUndo::Review { task_id, previous },
+                    previous: session.entries[index].outcome,
+                });
+                self.set_info(format!(
+                    "{display_ref} stays {status} · back in triage in {window}d"
+                ));
                 TriageOutcome::Kept(status)
             };
-            let display_ref = entry.item.display_ref.clone();
-            self.set_info(format!("{display_ref} stays {status}"));
             let unchanged = self.latest_undo_id();
             return self
                 .record_triage_change(index, unchanged, Some(outcome), key)
@@ -710,7 +748,7 @@ impl App {
         if let Some(entry_id) = latest.filter(|latest| Some(latest) != undo_before.as_ref()) {
             session.changes.push(TriageChange {
                 index,
-                entry_id,
+                undo: ChangeUndo::Store(entry_id),
                 previous: session.entries[index].outcome,
             });
         }
@@ -729,14 +767,36 @@ impl App {
     /// Undoes the latest change and, when it came from a triage card, returns
     /// to that card with its earlier state.
     async fn undo_triage_change(&mut self) -> Result<()> {
+        let session = self.triage.as_mut().expect("triage session");
+        if let Some(TriageChange {
+            undo: ChangeUndo::Review { .. },
+            ..
+        }) = session.changes.last()
+        {
+            let change = session.changes.pop().expect("triage change");
+            let ChangeUndo::Review { task_id, previous } = change.undo else {
+                unreachable!("review change");
+            };
+            session.entries[change.index].outcome = change.previous;
+            session.cursor = change.index;
+            self.store
+                .database()
+                .set_triage_review(task_id.as_str(), previous, now_seconds())
+                .await?;
+            self.set_info("undid keep");
+            return self.reload_triage_card().await;
+        }
         let latest = self.latest_undo_id();
         self.undo_last().await?;
         let after = self.latest_undo_id();
         let session = self.triage.as_mut().expect("triage session");
         session.synced_undo = after;
         if latest.is_some()
-            && let Some(change) = session.changes.last()
-            && Some(&change.entry_id) == latest.as_ref()
+            && let Some(TriageChange {
+                undo: ChangeUndo::Store(entry_id),
+                ..
+            }) = session.changes.last()
+            && Some(entry_id) == latest.as_ref()
         {
             let change = session.changes.pop().expect("triage change");
             session.entries[change.index].outcome = change.previous;

@@ -117,6 +117,42 @@ async fn triage_current_status_on_stale_todo_keeps_it_without_writing() {
     assert_eq!(item.task.status, TaskStatus::Todo);
     assert_eq!(item.task.queue_activity_at, "2000-01-01T00:00:00Z");
     assert!(item.notes.is_empty());
+
+    press(&mut app, &[KeyCode::Esc]).await;
+    app.open_triage().await.unwrap();
+    assert!(app.triage.is_none(), "a kept task stays out of triage");
+}
+
+#[tokio::test]
+async fn triage_undo_of_keep_clears_the_review_mark() {
+    let (_dir, pool, mut app) = test_app_with_pool().await;
+    let mut draft = test_task_draft("Stale active");
+    draft.status = "active".to_string();
+    let selected = create_and_select_task(&mut app, draft).await;
+    let task_id = app.store.tasks[selected].task.id.clone();
+    sqlx::query("UPDATE tasks SET queue_activity_at = ? WHERE id = ?")
+        .bind("2000-01-01T00:00:00Z")
+        .bind(&task_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    app.open_triage().await.unwrap();
+
+    press(&mut app, &[KeyCode::Char('t'), KeyCode::Char('a')]).await;
+    assert!(app.triage.as_ref().unwrap().at_end());
+    press(&mut app, &[KeyCode::Char('u')]).await;
+
+    let session = app.triage.as_ref().unwrap();
+    assert_eq!(session.cursor, 0);
+    assert_eq!(session.entries[0].outcome, None);
+    assert!(
+        app.store
+            .database()
+            .triage_reviews()
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[tokio::test]
