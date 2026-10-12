@@ -8,16 +8,16 @@ use super::super::input::prefixed_input_line;
 use super::super::task_display::linked_task_ref_spans;
 use crate::tui::overlay::{PickerItem, PickerKind, PickerMode, PickerView, picker_layout};
 use crate::tui::text::truncate_width;
-use crate::tui::theme::{self, ACCENT, BG_ALT, BG_PANEL, FG, FG_DIM, FG_MUTED, SELECTED};
+use crate::tui::theme::Theme;
 use crate::tui::widgets::priority_icon;
 
-pub(in crate::tui::ui) fn render_picker(frame: &mut Frame, state: &PickerView) {
+pub(in crate::tui::ui) fn render_picker(frame: &mut Frame, theme: &Theme, state: &PickerView) {
     if state.kind == PickerKind::LabelAdministration {
-        render_label_picker(frame, state);
+        render_label_picker(frame, theme, state);
         return;
     }
     if let Some(submit_label) = project_picker_submit_label(state.kind) {
-        render_project_picker(frame, state, submit_label);
+        render_project_picker(frame, theme, state, submit_label);
         return;
     }
 
@@ -60,9 +60,10 @@ pub(in crate::tui::ui) fn render_picker(frame: &mut Frame, state: &PickerView) {
             ""
         };
         if priority_picker_submit_label(state.kind).is_some() {
-            lines.push(priority_picker_line(item, *index == state.selected));
+            lines.push(priority_picker_line(theme, item, *index == state.selected));
         } else if state.kind == PickerKind::GoToBlocker {
             lines.push(blocker_picker_line(
+                theme,
                 item,
                 *index == state.selected,
                 blocker_ref_width,
@@ -74,7 +75,10 @@ pub(in crate::tui::ui) fn render_picker(frame: &mut Frame, state: &PickerView) {
     if state.visible_indices.is_empty()
         && let Some(label) = picker_empty_label(state.kind)
     {
-        lines.push(Line::from(Span::styled(label, Style::new().fg(FG_DIM))));
+        lines.push(Line::from(Span::styled(
+            label,
+            Style::new().fg(theme.fg_dim),
+        )));
     }
     lines.push(Line::from(""));
     lines.push(picker_hint_line_with_escape(
@@ -92,15 +96,19 @@ fn picker_empty_label(kind: PickerKind) -> Option<&'static str> {
     matches!(kind, PickerKind::SwitchWorkspace).then_some("  no matching workspaces")
 }
 
-pub(in crate::tui::ui) fn priority_picker_line(item: &PickerItem, selected: bool) -> Line<'static> {
+pub(in crate::tui::ui) fn priority_picker_line(
+    theme: &Theme,
+    item: &PickerItem,
+    selected: bool,
+) -> Line<'static> {
     let marker = if selected { "▸ " } else { "  " };
     Line::from(vec![
         Span::raw(marker),
         Span::styled(
             format!("{} ", priority_icon(&item.value)),
-            theme::priority_style(&item.value).add_modifier(Modifier::BOLD),
+            theme.priority(&item.value).add_modifier(Modifier::BOLD),
         ),
-        Span::styled(item.label.clone(), theme::priority_style(&item.value)),
+        Span::styled(item.label.clone(), theme.priority(&item.value)),
     ])
 }
 
@@ -110,6 +118,7 @@ fn blocker_picker_columns(item: &PickerItem) -> Option<(&str, &str, &str)> {
 }
 
 pub(in crate::tui::ui) fn blocker_picker_line(
+    theme: &Theme,
     item: &PickerItem,
     selected: bool,
     reference_width: usize,
@@ -126,7 +135,7 @@ pub(in crate::tui::ui) fn blocker_picker_line(
     )));
     spans.push(Span::styled(
         title.to_string(),
-        Style::new().fg(if selected { FG } else { FG_MUTED }),
+        Style::new().fg(if selected { theme.fg } else { theme.fg_muted }),
     ));
     Line::from(spans)
 }
@@ -170,12 +179,15 @@ fn picker_hint_line_with_escape(
     dialog_hint_line(&items)
 }
 
-fn render_label_picker(frame: &mut Frame, state: &PickerView) {
+fn render_label_picker(frame: &mut Frame, theme: &Theme, state: &PickerView) {
     let layout = picker_layout(state, frame.area().as_size());
     let mut lines = Vec::new();
     if matches!(state.mode, PickerMode::Filter) {
         lines.push(picker_filter_line(
-            Span::styled("/", Style::new().fg(ACCENT).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "/",
+                Style::new().fg(theme.accent).add_modifier(Modifier::BOLD),
+            ),
             &state.filter,
             state.filter_cursor,
         ));
@@ -183,10 +195,13 @@ fn render_label_picker(frame: &mut Frame, state: &PickerView) {
     lines.push(Line::from(vec![
         Span::styled(
             "  LABEL                         ",
-            Style::new().fg(FG_DIM).bg(BG_PANEL),
+            Style::new().fg(theme.fg_dim).bg(theme.bg_panel),
         ),
-        Span::styled("   TASKS", Style::new().fg(FG_DIM).bg(BG_PANEL)),
-        Span::styled("  RECURRING SERIES", Style::new().fg(FG_DIM).bg(BG_PANEL)),
+        Span::styled("   TASKS", Style::new().fg(theme.fg_dim).bg(theme.bg_panel)),
+        Span::styled(
+            "  RECURRING SERIES",
+            Style::new().fg(theme.fg_dim).bg(theme.bg_panel),
+        ),
     ]));
     for index in state
         .visible_indices
@@ -195,6 +210,7 @@ fn render_label_picker(frame: &mut Frame, state: &PickerView) {
         .take(layout.visible_end - layout.visible_start)
     {
         lines.push(label_picker_line(
+            theme,
             &state.items[*index],
             *index == state.selected,
         ));
@@ -202,7 +218,7 @@ fn render_label_picker(frame: &mut Frame, state: &PickerView) {
     if state.visible_indices.is_empty() {
         lines.push(Line::from(Span::styled(
             "  no matching labels",
-            Style::new().fg(FG_DIM),
+            Style::new().fg(theme.fg_dim),
         )));
     }
     lines.push(Line::from(""));
@@ -210,7 +226,11 @@ fn render_label_picker(frame: &mut Frame, state: &PickerView) {
     Dialog::new(&state.title, 0, 0).render_text_at(frame, layout.area, Text::from(lines));
 }
 
-pub(in crate::tui::ui) fn label_picker_line(item: &PickerItem, selected: bool) -> Line<'static> {
+pub(in crate::tui::ui) fn label_picker_line(
+    theme: &Theme,
+    item: &PickerItem,
+    selected: bool,
+) -> Line<'static> {
     let mut columns = item.label.splitn(3, "  ");
     let label = columns.next().unwrap_or(item.value.as_str());
     let task_count = columns
@@ -223,14 +243,14 @@ pub(in crate::tui::ui) fn label_picker_line(item: &PickerItem, selected: bool) -
         .unwrap_or("0");
     let marker = if selected { "▸" } else { " " };
     let row_style = if selected {
-        SELECTED
+        theme.selected()
     } else {
-        Style::new().bg(BG_ALT)
+        Style::new().bg(theme.bg_raised)
     };
     let label_style = if selected {
         row_style.add_modifier(Modifier::BOLD)
     } else {
-        Style::new().fg(FG).bg(BG_ALT)
+        Style::new().fg(theme.fg).bg(theme.bg_raised)
     };
     let label = truncate_width(label, 30);
     let label_padding = 30usize.saturating_sub(label.width());
@@ -242,19 +262,30 @@ pub(in crate::tui::ui) fn label_picker_line(item: &PickerItem, selected: bool) -
     ])
 }
 
-fn render_project_picker(frame: &mut Frame, state: &PickerView, submit_label: &'static str) {
+fn render_project_picker(
+    frame: &mut Frame,
+    theme: &Theme,
+    state: &PickerView,
+    submit_label: &'static str,
+) {
     let layout = picker_layout(state, frame.area().as_size());
     let mut lines = Vec::new();
     if matches!(state.mode, PickerMode::Filter) {
         lines.push(picker_filter_line(
-            Span::styled("/", Style::new().fg(ACCENT).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "/",
+                Style::new().fg(theme.accent).add_modifier(Modifier::BOLD),
+            ),
             &state.filter,
             state.filter_cursor,
         ));
     }
     lines.push(Line::from(vec![
-        Span::styled("  PREFIX ", Style::new().fg(FG_DIM).bg(BG_PANEL)),
-        Span::styled("PROJECT", Style::new().fg(FG_DIM).bg(BG_PANEL)),
+        Span::styled(
+            "  PREFIX ",
+            Style::new().fg(theme.fg_dim).bg(theme.bg_panel),
+        ),
+        Span::styled("PROJECT", Style::new().fg(theme.fg_dim).bg(theme.bg_panel)),
     ]));
     let list_start = lines.len();
     for index in state
@@ -264,6 +295,7 @@ fn render_project_picker(frame: &mut Frame, state: &PickerView, submit_label: &'
         .take(layout.visible_end - layout.visible_start)
     {
         lines.push(project_picker_line(
+            theme,
             &state.items[*index],
             *index == state.selected,
         ));
@@ -271,7 +303,7 @@ fn render_project_picker(frame: &mut Frame, state: &PickerView, submit_label: &'
     if state.visible_indices.is_empty() {
         lines.push(Line::from(Span::styled(
             "  no matching projects",
-            Style::new().fg(FG_DIM),
+            Style::new().fg(theme.fg_dim),
         )));
     }
     while lines.len().saturating_sub(list_start) < layout.list_rows {
@@ -305,16 +337,20 @@ fn priority_picker_submit_label(kind: PickerKind) -> Option<&'static str> {
     matches!(kind, PickerKind::AddTaskPriority).then_some("submit")
 }
 
-pub(in crate::tui::ui) fn project_picker_line(item: &PickerItem, selected: bool) -> Line<'static> {
+pub(in crate::tui::ui) fn project_picker_line(
+    theme: &Theme,
+    item: &PickerItem,
+    selected: bool,
+) -> Line<'static> {
     let (prefix, name) = item
         .label
         .split_once(' ')
         .unwrap_or((item.label.as_str(), item.value.as_str()));
     let marker = if selected { "▸" } else { " " };
     let row_style = if selected {
-        SELECTED
+        theme.selected()
     } else {
-        Style::new().bg(BG_ALT)
+        Style::new().bg(theme.bg_raised)
     };
     let project_color_key = if item
         .value
@@ -325,12 +361,12 @@ pub(in crate::tui::ui) fn project_picker_line(item: &PickerItem, selected: bool)
         item.value.as_str()
     };
     let project_style = Style::new()
-        .fg(theme::project_color(project_color_key))
+        .fg(theme.project(project_color_key))
         .add_modifier(Modifier::BOLD)
-        .bg(row_style.bg.unwrap_or(BG_ALT));
+        .bg(row_style.bg.unwrap_or(theme.bg_raised));
     let name_style = Style::new()
-        .fg(if selected { FG } else { FG_DIM })
-        .bg(row_style.bg.unwrap_or(BG_ALT));
+        .fg(if selected { theme.fg } else { theme.fg_dim })
+        .bg(row_style.bg.unwrap_or(theme.bg_raised));
     Line::from(vec![
         Span::styled(format!("{marker} "), row_style),
         Span::styled(format!("{prefix:<7}"), project_style),

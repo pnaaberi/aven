@@ -22,8 +22,9 @@ fn rendered_buffer(
 ) -> ratatui::buffer::Buffer {
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
+    let pairing = PairingOverlay::Ready(presentation.clone());
     terminal
-        .draw(|frame| render_pairing(frame, &PairingOverlay::Ready(presentation.clone())))
+        .draw(|frame| render_pairing(frame, &Theme::dark(), &pairing))
         .unwrap();
     terminal.backend().buffer().clone()
 }
@@ -122,7 +123,7 @@ fn constrained_overlay_renders_complete_actionable_fallback_without_secrets() {
         buffer
             .content
             .iter()
-            .any(|cell| cell.symbol() == "v" && cell.fg == crate::tui::theme::BLUE)
+            .any(|cell| cell.symbol() == "v" && cell.fg == Theme::dark().code)
     );
     assert!(text.contains(NETWORK_REQUIREMENT));
     assert!(!text.contains("AVEN:"));

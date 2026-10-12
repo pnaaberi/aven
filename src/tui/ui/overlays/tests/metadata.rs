@@ -2,7 +2,6 @@ use super::*;
 use crate::tui::overlay::metadata::{MetadataEditor, MetadataEntry};
 use crate::tui::overlay::metadata::{MetadataFocus, MetadataView, metadata_layout};
 use crate::tui::overlay::{LineEdit, TextBuffer};
-use crate::tui::theme::{FG_MUTED, SELECTED};
 use crate::tui::ui::dialog::dialog_hint_line;
 use ratatui::layout::Size;
 use ratatui::{Terminal, backend::TestBackend};
@@ -49,11 +48,18 @@ fn fields_align_values_and_show_unset_fields() {
             .map(|x| buffer[(x, y)].symbol())
             .collect();
         assert_eq!(actual, text);
-        assert_eq!(buffer[(x, y)].fg, if row == 2 { FG_DIM } else { FG });
+        assert_eq!(
+            buffer[(x, y)].fg,
+            if row == 2 {
+                Theme::dark().fg_dim
+            } else {
+                Theme::dark().fg
+            }
+        );
     }
     assert_eq!(
         buffer[(layout.body.right() - 1, layout.body.y)].bg,
-        SELECTED.bg.unwrap()
+        Theme::dark().bg_selected
     );
 }
 
@@ -102,8 +108,11 @@ fn editor_footer_uses_shared_hotkey_styles_and_click_geometry() {
                 expected.spans[0].style.fg.unwrap()
             );
             assert!(buffer[(area.x, area.y)].modifier.contains(Modifier::BOLD));
-            assert_eq!(buffer[(area.x + key.len() as u16 + 1, area.y)].fg, FG_MUTED);
-            assert_eq!(buffer[(area.x, area.y)].bg, BG_ALT);
+            assert_eq!(
+                buffer[(area.x + key.len() as u16 + 1, area.y)].fg,
+                Theme::dark().fg_muted
+            );
+            assert_eq!(buffer[(area.x, area.y)].bg, Theme::dark().bg_raised);
         }
     }
 }
@@ -169,7 +178,7 @@ fn blank_editor_disables_save_without_empty_string_instructions() {
         let buffer = terminal.backend().buffer();
         assert_eq!(
             buffer[(layout.actions[0].area.x, layout.actions[0].area.y)].fg,
-            FG
+            Theme::dark().fg
         );
         assert!(
             buffer[(layout.actions[0].area.x, layout.actions[0].area.y)]
@@ -178,7 +187,7 @@ fn blank_editor_disables_save_without_empty_string_instructions() {
         );
         assert_eq!(
             buffer[(layout.actions[0].area.x, layout.actions[0].area.y)].bg,
-            BG_ALT
+            Theme::dark().bg_raised
         );
         let text = buffer_text(terminal.backend());
         assert!(text.contains("remove field"));
@@ -217,11 +226,14 @@ fn editor_sizes_to_content_and_keeps_error_and_actions_visible() {
             assert!(layout.body.bottom() <= layout.error.y);
             let buffer = terminal.backend().buffer();
             if layout.error.height > 0 {
-                assert_eq!(buffer[(layout.error.x, layout.error.y)].fg, RED);
+                assert_eq!(
+                    buffer[(layout.error.x, layout.error.y)].fg,
+                    Theme::dark().danger
+                );
             }
             assert_eq!(
                 buffer[(layout.actions[0].area.x, layout.actions[0].area.y)].bg,
-                BG_ALT
+                Theme::dark().bg_raised
             );
             assert!(layout.actions[3].area.right() < width);
         }

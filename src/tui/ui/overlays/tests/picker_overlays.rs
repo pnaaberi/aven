@@ -77,20 +77,20 @@ fn blocker_picker_styles_task_reference_and_title() {
         selected: false,
     };
 
-    let line = super::picker::blocker_picker_line(&item, false, 8);
+    let line = super::picker::blocker_picker_line(&Theme::dark(), &item, false, 8);
 
     assert_eq!(line.spans[1].content, "DCS");
-    assert_eq!(line.spans[1].style.fg, Some(theme::project_color("docs")));
+    assert_eq!(line.spans[1].style.fg, Some(Theme::dark().project("docs")));
     assert_eq!(line.spans[2].content, "-");
-    assert_eq!(line.spans[2].style.fg, Some(FG_DIM));
+    assert_eq!(line.spans[2].style.fg, Some(Theme::dark().fg_dim));
     assert_eq!(line.spans[3].content, "5283");
-    assert_eq!(line.spans[3].style.fg, Some(FG_DIM));
+    assert_eq!(line.spans[3].style.fg, Some(Theme::dark().fg_dim));
     assert_eq!(line.spans[5].content, "BNV Multi Blocker Alpha");
-    assert_eq!(line.spans[5].style.fg, Some(crate::tui::theme::FG_MUTED));
+    assert_eq!(line.spans[5].style.fg, Some(Theme::dark().fg_muted));
 
-    let selected = super::picker::blocker_picker_line(&item, true, 8);
+    let selected = super::picker::blocker_picker_line(&Theme::dark(), &item, true, 8);
     assert_eq!(selected.spans[0].content, "▸ ");
-    assert_eq!(selected.spans[5].style.fg, Some(FG));
+    assert_eq!(selected.spans[5].style.fg, Some(Theme::dark().fg));
 }
 
 #[test]
@@ -106,8 +106,8 @@ fn blocker_picker_aligns_titles_after_different_ref_widths() {
         selected: false,
     };
 
-    let docs_line = super::picker::blocker_picker_line(&docs, false, 8);
-    let mobile_line = super::picker::blocker_picker_line(&mobile, false, 8);
+    let docs_line = super::picker::blocker_picker_line(&Theme::dark(), &docs, false, 8);
+    let mobile_line = super::picker::blocker_picker_line(&Theme::dark(), &mobile, false, 8);
     let title_column = |line: &Line<'_>| {
         line.spans[..line.spans.len() - 1]
             .iter()
@@ -166,7 +166,7 @@ fn label_picker_aligns_wide_labels_by_cells() {
         selected: false,
     };
 
-    let line = super::picker::label_picker_line(&item, false);
+    let line = super::picker::label_picker_line(&Theme::dark(), &item, false);
 
     assert_eq!(line.spans[1].width(), 30);
     assert_eq!(line.width(), 58);
@@ -184,15 +184,14 @@ fn project_creation_suggestion_keeps_stable_prefix_color() {
         selected: false,
     };
 
-    let first = super::picker::project_picker_line(&suggestion("M"), false);
-    let second = super::picker::project_picker_line(&suggestion("Mobile App"), false);
+    let first = super::picker::project_picker_line(&Theme::dark(), &suggestion("M"), false);
+    let second =
+        super::picker::project_picker_line(&Theme::dark(), &suggestion("Mobile App"), false);
 
     assert_eq!(first.spans[1].style.fg, second.spans[1].style.fg);
     assert_eq!(
         first.spans[1].style.fg,
-        Some(theme::project_color(
-            crate::tui::store::CREATE_PROJECT_PICKER_VALUE_PREFIX
-        ))
+        Some(Theme::dark().project(crate::tui::store::CREATE_PROJECT_PICKER_VALUE_PREFIX))
     );
 }
 
@@ -351,7 +350,9 @@ fn picker_rendered_rows_are_mouse_targets() {
                 };
                 let view = PickerView::from_state(&state);
                 let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
-                terminal.draw(|frame| render_picker(frame, &view)).unwrap();
+                terminal
+                    .draw(|frame| render_picker(frame, &Theme::dark(), &view))
+                    .unwrap();
                 let size = ratatui::layout::Size::new(width, height);
                 let layout = picker_layout(&view, size);
                 let click = |column, row| MouseEvent {

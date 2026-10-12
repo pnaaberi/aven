@@ -14,7 +14,7 @@ use crate::query::SearchMatchedField;
 use crate::queue::{now_seconds, unix_seconds};
 use crate::tui::overlay::{SearchKind, SearchResultItem};
 use crate::tui::text::truncate_width;
-use crate::tui::theme::{self, ACCENT, BG, FG, FG_DIM, FG_MUTED, SELECTED};
+use crate::tui::theme::Theme;
 use crate::tui::widgets::{priority_icon, status_span};
 
 const RESULT_ROWS: usize = 8;
@@ -35,7 +35,11 @@ pub(in crate::tui::ui) struct SearchRenderView<'a> {
     pub(in crate::tui::ui) intent: &'a SearchKind,
 }
 
-pub(in crate::tui::ui) fn render_search(frame: &mut Frame, view: SearchRenderView<'_>) {
+pub(in crate::tui::ui) fn render_search(
+    frame: &mut Frame,
+    theme: &Theme,
+    view: SearchRenderView<'_>,
+) {
     let SearchRenderView {
         input,
         cursor,
@@ -55,6 +59,7 @@ pub(in crate::tui::ui) fn render_search(frame: &mut Frame, view: SearchRenderVie
     let title = intent.title();
     let mut dialog = Dialog::new(&title, width, height);
     if let Some(summary) = search_summary_line(
+        theme,
         input,
         results.len(),
         total_matches,
@@ -73,11 +78,14 @@ pub(in crate::tui::ui) fn render_search(frame: &mut Frame, view: SearchRenderVie
         ])
         .areas(area);
         frame.render_widget(
-            Paragraph::new(search_input_line(input, cursor, intent)),
+            Paragraph::new(search_input_line(theme, input, cursor, intent)),
             input_area,
         );
         frame.render_widget(Paragraph::new(""), input_spacer_area);
-        frame.render_widget(Paragraph::new(search_hint_line(intent, None)), hint_area);
+        frame.render_widget(
+            Paragraph::new(search_hint_line(theme, intent, None)),
+            hint_area,
+        );
         return;
     }
 
@@ -96,21 +104,30 @@ pub(in crate::tui::ui) fn render_search(frame: &mut Frame, view: SearchRenderVie
     ])
     .areas(area);
     frame.render_widget(
-        Paragraph::new(search_input_line(input, cursor, intent)),
+        Paragraph::new(search_input_line(theme, input, cursor, intent)),
         input_area,
     );
     frame.render_widget(Paragraph::new(""), input_spacer_area);
 
-    render_result_list(frame, body_area, input, results, selected, status.stale);
+    render_result_list(
+        frame,
+        theme,
+        body_area,
+        input,
+        results,
+        selected,
+        status.stale,
+    );
 
     frame.render_widget(Paragraph::new(""), hint_spacer_area);
     frame.render_widget(
-        Paragraph::new(search_hint_line(intent, results.get(selected))),
+        Paragraph::new(search_hint_line(theme, intent, results.get(selected))),
         hint_area,
     );
 }
 
 fn search_summary_line(
+    theme: &Theme,
     input: &str,
     shown: usize,
     total: usize,
@@ -126,8 +143,8 @@ fn search_summary_line(
         format!("{} of {}", format_count(shown), format_count(total))
     };
     Some(Line::from(vec![
-        Span::styled(" ", Style::new().fg(FG_DIM)),
-        Span::styled(label, Style::new().fg(FG_DIM)),
+        Span::styled(" ", Style::new().fg(theme.fg_dim)),
+        Span::styled(label, Style::new().fg(theme.fg_dim)),
     ]))
 }
 
@@ -160,13 +177,18 @@ fn search_dialog_area(frame: Rect, width: u16, height: u16) -> Rect {
     }
 }
 
-fn search_input_line(input: &str, cursor: usize, intent: &SearchKind) -> Line<'static> {
+fn search_input_line(
+    theme: &Theme,
+    input: &str,
+    cursor: usize,
+    intent: &SearchKind,
+) -> Line<'static> {
     if input.is_empty() {
         let mut chars = intent.placeholder().chars();
         let first = chars.next().unwrap_or_default().to_string();
         return Line::from(vec![
             cursor_cell(first),
-            Span::styled(chars.collect::<String>(), Style::new().fg(FG_DIM)),
+            Span::styled(chars.collect::<String>(), Style::new().fg(theme.fg_dim)),
         ]);
     }
     input_line("", input, cursor)
@@ -174,6 +196,7 @@ fn search_input_line(input: &str, cursor: usize, intent: &SearchKind) -> Line<'s
 
 fn render_result_list(
     frame: &mut Frame,
+    theme: &Theme,
     area: Rect,
     input: &str,
     results: &[SearchResultItem],
@@ -186,32 +209,46 @@ fn render_result_list(
         .take(RESULT_ROWS)
         .flat_map(|(index, result)| {
             [
-                result_line(result, index == selected, input, area.width as usize, stale),
-                result_meta_line(result, index == selected, area.width as usize, stale),
+                result_line(
+                    theme,
+                    result,
+                    index == selected,
+                    input,
+                    area.width as usize,
+                    stale,
+                ),
+                result_meta_line(theme, result, index == selected, area.width as usize, stale),
             ]
         })
         .collect::<Vec<_>>();
     frame.render_widget(
-        Paragraph::new(Text::from(lines)).style(Style::new().fg(FG).bg(BG)),
+        Paragraph::new(Text::from(lines)).style(Style::new().fg(theme.fg).bg(theme.bg)),
         area,
     );
 }
 
 fn result_line(
+    theme: &Theme,
     result: &SearchResultItem,
     selected: bool,
     input: &str,
     width: usize,
     stale: bool,
 ) -> Line<'static> {
-    let style = row_style(selected, stale);
+    let style = row_style(theme, selected, stale);
     let marker = if selected { "▸" } else { " " };
     if result.create_new {
         let title_width = width.saturating_sub(2).max(8);
         let title = truncate_width(&result.title, title_width);
         let used_width = 2 + title.width();
         let mut spans = vec![Span::styled(format!("{marker} "), style)];
-        spans.extend(title_spans(&title, input, result.matched_field, style));
+        spans.extend(title_spans(
+            theme,
+            &title,
+            input,
+            result.matched_field,
+            style,
+        ));
         spans.push(Span::styled(
             " ".repeat(width.saturating_sub(used_width)),
             style,
@@ -226,14 +263,20 @@ fn result_line(
     let title = truncate_width(&result.title, title_width);
     let used_width = 2 + ref_width + 1 + title.width() + epic_marker_width;
     let mut spans = vec![Span::styled(format!("{marker} "), style)];
-    spans.extend(result_ref_spans(result, ref_width, style));
+    spans.extend(result_ref_spans(theme, result, ref_width, style));
     spans.push(Span::styled(" ", style));
-    spans.extend(title_spans(&title, input, result.matched_field, style));
+    spans.extend(title_spans(
+        theme,
+        &title,
+        input,
+        result.matched_field,
+        style,
+    ));
     if result.is_epic {
         spans.push(Span::styled(" ", style));
         spans.push(Span::styled(
             EPIC_MARKER,
-            style.fg(theme::YELLOW).remove_modifier(Modifier::BOLD),
+            style.fg(theme.attention).remove_modifier(Modifier::BOLD),
         ));
     }
     spans.push(Span::styled(
@@ -243,21 +286,26 @@ fn result_line(
     Line::from(spans)
 }
 
-fn result_ref_spans(result: &SearchResultItem, width: usize, style: Style) -> Vec<Span<'static>> {
+fn result_ref_spans(
+    theme: &Theme,
+    result: &SearchResultItem,
+    width: usize,
+    style: Style,
+) -> Vec<Span<'static>> {
     let display_ref = truncate_width(&result.display_ref, width);
-    let bg = style.bg.unwrap_or(BG);
+    let bg = style.bg.unwrap_or(theme.bg);
     if let Some((project, suffix)) = display_ref.split_once('-') {
         let used_width = project.width() + 1 + suffix.width();
         return vec![
             Span::styled(
                 project.to_string(),
                 Style::new()
-                    .fg(theme::project_color(&result.project_key))
+                    .fg(theme.project(&result.project_key))
                     .bg(bg)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled("-", Style::new().fg(FG_DIM).bg(bg)),
-            Span::styled(suffix.to_string(), style.fg(FG_MUTED)),
+            Span::styled("-", Style::new().fg(theme.fg_dim).bg(bg)),
+            Span::styled(suffix.to_string(), style.fg(theme.fg_muted)),
             Span::styled(" ".repeat(width.saturating_sub(used_width)), style),
         ];
     }
@@ -265,6 +313,7 @@ fn result_ref_spans(result: &SearchResultItem, width: usize, style: Style) -> Ve
 }
 
 fn title_spans(
+    theme: &Theme,
     title: &str,
     input: &str,
     matched_field: SearchMatchedField,
@@ -284,7 +333,7 @@ fn title_spans(
         }
         spans.push(Span::styled(
             title[range.clone()].to_string(),
-            style.fg(ACCENT).add_modifier(Modifier::BOLD),
+            style.fg(theme.accent).add_modifier(Modifier::BOLD),
         ));
         cursor = range.end;
     }
@@ -333,16 +382,20 @@ fn merge_ranges(ranges: Vec<std::ops::Range<usize>>) -> Vec<std::ops::Range<usiz
 }
 
 fn result_meta_line(
+    theme: &Theme,
     result: &SearchResultItem,
     selected: bool,
     width: usize,
     stale: bool,
 ) -> Line<'static> {
-    let bg = row_bg(selected);
+    let bg = row_bg(theme, selected);
     let muted = if stale && !selected {
-        Style::new().fg(FG_DIM).bg(bg).add_modifier(Modifier::DIM)
+        Style::new()
+            .fg(theme.fg_dim)
+            .bg(bg)
+            .add_modifier(Modifier::DIM)
     } else {
-        Style::new().fg(FG_DIM).bg(bg)
+        Style::new().fg(theme.fg_dim).bg(bg)
     };
     if result.create_new {
         return padded_meta_line("  Open task authoring", muted, width);
@@ -359,9 +412,7 @@ fn result_meta_line(
         Span::styled(" · ", muted),
         Span::styled(
             priority_label,
-            theme::priority_style(priority)
-                .bg(bg)
-                .add_modifier(Modifier::BOLD),
+            theme.priority(priority).bg(bg).add_modifier(Modifier::BOLD),
         ),
         Span::styled(" · ", muted),
         Span::styled(labels, muted),
@@ -398,21 +449,24 @@ fn spans_width(spans: &[Span<'static>]) -> usize {
     spans.iter().map(|span| span.content.as_ref().width()).sum()
 }
 
-fn row_style(selected: bool, stale: bool) -> Style {
+fn row_style(theme: &Theme, selected: bool, stale: bool) -> Style {
     if selected {
-        SELECTED
+        theme.selected()
     } else if stale {
-        Style::new().fg(FG_DIM).bg(BG).add_modifier(Modifier::DIM)
+        Style::new()
+            .fg(theme.fg_dim)
+            .bg(theme.bg)
+            .add_modifier(Modifier::DIM)
     } else {
-        Style::new().fg(FG).bg(BG)
+        Style::new().fg(theme.fg).bg(theme.bg)
     }
 }
 
-fn row_bg(selected: bool) -> Color {
+fn row_bg(theme: &Theme, selected: bool) -> Color {
     if selected {
-        SELECTED.bg.unwrap_or(BG)
+        theme.selected().bg.unwrap_or(theme.bg)
     } else {
-        BG
+        theme.bg
     }
 }
 
@@ -442,7 +496,11 @@ fn compact_age(age_seconds: i64) -> String {
     format!("{}mo", days / 30)
 }
 
-fn search_hint_line(intent: &SearchKind, selected: Option<&SearchResultItem>) -> Line<'static> {
+fn search_hint_line(
+    theme: &Theme,
+    intent: &SearchKind,
+    selected: Option<&SearchResultItem>,
+) -> Line<'static> {
     let enter_hint = if selected.is_some_and(|result| result.create_new) {
         "create child"
     } else {
@@ -457,21 +515,30 @@ fn search_hint_line(intent: &SearchKind, selected: Option<&SearchResultItem>) ->
     let mut spans = vec![
         Span::styled(
             select_keys,
-            Style::new().fg(FG).add_modifier(Modifier::BOLD),
+            Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
         ),
-        Span::styled(" select", Style::new().fg(FG_DIM)),
-        Span::styled("  Enter", Style::new().fg(FG).add_modifier(Modifier::BOLD)),
-        Span::styled(format!(" {enter_hint}"), Style::new().fg(FG_DIM)),
+        Span::styled(" select", Style::new().fg(theme.fg_dim)),
+        Span::styled(
+            "  Enter",
+            Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(format!(" {enter_hint}"), Style::new().fg(theme.fg_dim)),
     ];
     if let Some(tab_hint) = intent.tab_hint() {
         spans.extend([
-            Span::styled("  Tab", Style::new().fg(FG).add_modifier(Modifier::BOLD)),
-            Span::styled(format!(" {tab_hint}"), Style::new().fg(FG_DIM)),
+            Span::styled(
+                "  Tab",
+                Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(format!(" {tab_hint}"), Style::new().fg(theme.fg_dim)),
         ]);
     }
     spans.extend([
-        Span::styled("  Esc", Style::new().fg(FG).add_modifier(Modifier::BOLD)),
-        Span::styled(" close", Style::new().fg(FG_DIM)),
+        Span::styled(
+            "  Esc",
+            Style::new().fg(theme.fg).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(" close", Style::new().fg(theme.fg_dim)),
     ]);
     Line::from(spans)
 }

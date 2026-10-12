@@ -282,7 +282,9 @@ impl App {
                 self.help_detail_focus(),
                 &self.undo_description(),
             ),
-            OverlayState::DatabaseStats { .. } => database_stats_scroll_cap(terminal_size.height),
+            OverlayState::DatabaseStats { .. } => {
+                database_stats_scroll_cap(terminal_size.height, &self.theme)
+            }
             OverlayState::Changelog(state) => {
                 crate::tui::changelog::changelog_scroll_cap(&state.markdown, terminal_size)
             }

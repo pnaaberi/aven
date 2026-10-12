@@ -226,10 +226,10 @@ fn search_overlay_colors_project_prefix() {
     let prefix_cell = buffer
         .content
         .iter()
-        .find(|cell| cell.symbol() == "A" && cell.fg == theme::project_color("aven"))
+        .find(|cell| cell.symbol() == "A" && cell.fg == Theme::dark().project("aven"))
         .unwrap();
 
-    assert_eq!(prefix_cell.fg, theme::project_color("aven"));
+    assert_eq!(prefix_cell.fg, Theme::dark().project("aven"));
 }
 
 #[test]

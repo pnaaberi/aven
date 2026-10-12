@@ -6,7 +6,7 @@ use ratatui::text::{Line, Text};
 
 use super::super::dialog::{Dialog, dialog_hint_line};
 use crate::tui::overlay::RecurrenceHistoryView;
-use crate::tui::theme::{FG, FG_MUTED, SELECTED_BG};
+use crate::tui::theme::Theme;
 
 const HISTORY_WIDTH: u16 = 112;
 
@@ -92,6 +92,7 @@ pub(crate) fn recurrence_history_entry_at(
 
 pub(in crate::tui::ui) fn render_recurrence_history(
     frame: &mut Frame,
+    theme: &Theme,
     state: &RecurrenceHistoryView,
 ) {
     let range = if state.page.items.is_empty() {
@@ -115,13 +116,18 @@ pub(in crate::tui::ui) fn render_recurrence_history(
         .skip(layout.first_visible)
         .take(layout.visible_entries)
         .flat_map(|(index, entry)| {
-            history_lines(entry, state.selected == Some(index), layout.entry_height)
+            history_lines(
+                theme,
+                entry,
+                state.selected == Some(index),
+                layout.entry_height,
+            )
         })
         .collect::<Vec<_>>();
     if lines.is_empty() {
         lines.push(Line::styled(
             "No recurrence history",
-            Style::new().fg(FG_MUTED),
+            Style::new().fg(theme.fg_muted),
         ));
     }
     lines.push(Line::default());
@@ -136,10 +142,11 @@ pub(in crate::tui::ui) fn render_recurrence_history(
 }
 
 fn history_lines(
+    theme: &Theme,
     entry: &RecurrenceHistoryEntry,
     is_selected: bool,
     entry_height: u16,
-) -> Vec<Line<'_>> {
+) -> Vec<Line<'static>> {
     let identity = match entry.kind {
         RecurrenceHistoryKind::Paused => format!(
             "{} to {}",
@@ -170,11 +177,11 @@ fn history_lines(
     .join(",");
     let style = if is_selected {
         Style::new()
-            .fg(FG)
-            .bg(SELECTED_BG)
+            .fg(theme.fg)
+            .bg(theme.bg_selected)
             .add_modifier(Modifier::BOLD)
     } else {
-        Style::new().fg(FG)
+        Style::new().fg(theme.fg)
     };
     let prefix = if is_selected { "> " } else { "  " };
     if entry_height == 2 {
@@ -228,11 +235,11 @@ mod tests {
         };
 
         assert!(
-            history_lines(&missed, false, 2)
+            history_lines(&Theme::dark(), &missed, false, 2)
                 .iter()
                 .any(|line| line.to_string().contains("missed"))
         );
-        let pause = history_lines(&pause, false, 2)
+        let pause = history_lines(&Theme::dark(), &pause, false, 2)
             .into_iter()
             .map(|line| line.to_string())
             .collect::<String>();
@@ -270,7 +277,7 @@ mod tests {
         for width in [60, 80, 112] {
             let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
             terminal
-                .draw(|frame| render_recurrence_history(frame, &view))
+                .draw(|frame| render_recurrence_history(frame, &Theme::dark(), &view))
                 .unwrap();
             let rendered = terminal
                 .backend()
@@ -335,7 +342,7 @@ mod tests {
 
         let mut terminal = Terminal::new(TestBackend::new(120, 24)).unwrap();
         terminal
-            .draw(|frame| render_recurrence_history(frame, &view))
+            .draw(|frame| render_recurrence_history(frame, &Theme::dark(), &view))
             .unwrap();
         let rendered = terminal
             .backend()

@@ -8,7 +8,7 @@ use super::super::dialog::{Dialog, dialog_hint_line};
 use super::super::inline_code::wrap_with_code;
 use crate::pairing::{PairingPresentation, PairingQr};
 use crate::tui::overlay::{PairingOverlay, dialog_area, dialog_inner_area};
-use crate::tui::theme::{ACCENT, BG_ALT, FG, FG_MUTED, RED};
+use crate::tui::theme::Theme;
 
 pub(crate) const NETWORK_REQUIREMENT: &str = "Anyone with this code can access all synced data.";
 const PAIRING_TITLE: &str = "Sync › Add device";
@@ -19,6 +19,12 @@ const QR_GAP_ROWS: u16 = 0;
 const FOOTER_ROWS: u16 = 1;
 const FALLBACK_WIDTH: u16 = 64;
 const READY_HINTS: &[(&str, &str)] = &[("c", "copy invitation"), ("Esc", "back")];
+/// Black modules on a white field regardless of theme, since scanners read
+/// dark-on-light codes most reliably. Explicit RGB, because terminal themes can
+/// remap the named black and white.
+const QR_STYLE: Style = Style::new()
+    .fg(Color::Rgb(0, 0, 0))
+    .bg(Color::Rgb(255, 255, 255));
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct PairingLayout {
@@ -94,37 +100,41 @@ pub(crate) fn pairing_layout(terminal: Rect, presentation: &PairingPresentation)
 pub(crate) fn pairing_area(terminal: Rect, pairing: &PairingOverlay) -> Rect {
     match pairing {
         PairingOverlay::Ready(presentation) => pairing_layout(terminal, presentation).area,
-        _ => status_layout(terminal, &status_lines(pairing, FALLBACK_WIDTH)).0,
+        _ => status_layout(terminal, status_rows(pairing, FALLBACK_WIDTH)).0,
     }
 }
 
-pub(in crate::tui::ui) fn render_pairing(frame: &mut Frame, pairing: &PairingOverlay) {
+pub(in crate::tui::ui) fn render_pairing(
+    frame: &mut Frame,
+    theme: &Theme,
+    pairing: &PairingOverlay,
+) {
     match pairing {
-        PairingOverlay::Ready(presentation) => render_presentation(frame, presentation),
-        _ => render_status(frame, pairing),
+        PairingOverlay::Ready(presentation) => render_presentation(frame, theme, presentation),
+        _ => render_status(frame, theme, pairing),
     }
 }
 
 /// Lines for the page before its QR code is available.
-fn status_lines(pairing: &PairingOverlay, width: u16) -> Vec<Line<'static>> {
+fn status_lines(theme: &Theme, pairing: &PairingOverlay, width: u16) -> Vec<Line<'static>> {
     let inner = usize::from(width.saturating_sub(DIALOG_CHROME_COLUMNS));
     match pairing {
         PairingOverlay::Creating { started_at } => vec![Line::from(vec![
             Span::styled(
                 format!("{} ", super::sync_dialog::spinner(*started_at)),
-                Style::new().fg(ACCENT),
+                Style::new().fg(theme.accent),
             ),
-            Span::styled("Creating invitation…", Style::new().fg(FG)),
+            Span::styled("Creating invitation…", Style::new().fg(theme.fg)),
         ])],
         PairingOverlay::Failed(message) => {
             let mut lines = vec![Line::from(Span::styled(
                 "! Couldn't create the invitation",
-                Style::new().fg(RED),
+                Style::new().fg(theme.danger),
             ))];
             lines.extend(wrap_with_code(
-                &crate::tui::theme::Theme::dark(),
+                theme,
                 message,
-                Style::new().fg(FG),
+                Style::new().fg(theme.fg),
                 inner,
             ));
             lines
@@ -133,44 +143,56 @@ fn status_lines(pairing: &PairingOverlay, width: u16) -> Vec<Line<'static>> {
     }
 }
 
-fn status_layout(terminal: Rect, lines: &[Line<'static>]) -> (Rect, u16) {
+/// Row count of `status_lines`, which hit testing needs without a theme.
+fn status_rows(pairing: &PairingOverlay, width: u16) -> usize {
+    let inner = usize::from(width.saturating_sub(DIALOG_CHROME_COLUMNS));
+    match pairing {
+        PairingOverlay::Creating { .. } => 1,
+        PairingOverlay::Failed(message) => {
+            1 + wrap_with_code(&Theme::dark(), message, Style::new(), inner).len()
+        }
+        PairingOverlay::Ready(_) => 0,
+    }
+}
+
+fn status_layout(terminal: Rect, rows: usize) -> (Rect, u16) {
     let width = FALLBACK_WIDTH.min(terminal.width.saturating_sub(2));
-    let body = u16::try_from(lines.len()).unwrap_or(u16::MAX);
+    let body = u16::try_from(rows).unwrap_or(u16::MAX);
     let height = body
         .saturating_add(FOOTER_ROWS)
         .saturating_add(DIALOG_CHROME_ROWS);
     (dialog_area(terminal, width, height), body)
 }
 
-fn render_status(frame: &mut Frame, pairing: &PairingOverlay) {
+fn render_status(frame: &mut Frame, theme: &Theme, pairing: &PairingOverlay) {
     let width = FALLBACK_WIDTH.min(frame.area().width.saturating_sub(2));
-    let lines = status_lines(pairing, width);
-    let (area, body) = status_layout(frame.area(), &lines);
+    let lines = status_lines(theme, pairing, width);
+    let (area, body) = status_layout(frame.area(), lines.len());
     let inner = Dialog::new(PAIRING_TITLE, area.width, area.height).render_block_at(frame, area);
     frame.render_widget(
-        Paragraph::new(lines).style(Style::new().bg(BG_ALT)),
+        Paragraph::new(lines).style(Style::new().bg(theme.bg_raised)),
         Rect::new(inner.x, inner.y, inner.width, body.min(inner.height)),
     );
     let hints: &[(&str, &str)] = match pairing {
         PairingOverlay::Failed(_) => &[("Enter", "retry"), ("Esc", "back")],
         _ => &[("Esc", "back")],
     };
-    render_hints(frame, footer_rect(inner), hints);
+    render_hints(frame, theme, footer_rect(inner), hints);
 }
 
-fn render_presentation(frame: &mut Frame, presentation: &PairingPresentation) {
+fn render_presentation(frame: &mut Frame, theme: &Theme, presentation: &PairingPresentation) {
     let layout = pairing_layout(frame.area(), presentation);
     let inner = Dialog::new(PAIRING_TITLE, layout.area.width, layout.area.height)
         .render_block_at(frame, layout.area);
     debug_assert_eq!(inner, layout.inner);
 
     if let Some(qr) = layout.qr {
-        render_qr_header(frame, layout.content, presentation);
+        render_qr_header(frame, theme, layout.content, presentation);
         render_qr(frame, qr, presentation.qr());
     } else {
-        render_text(frame, layout.content, &fallback_text(), FG);
+        render_text(frame, theme, layout.content, &fallback_text(), theme.fg);
     }
-    render_hints(frame, layout.footer, READY_HINTS);
+    render_hints(frame, theme, layout.footer, READY_HINTS);
 }
 
 fn waiting_text(presentation: &PairingPresentation) -> String {
@@ -194,14 +216,20 @@ fn qr_header_height(presentation: &PairingPresentation, width: u16) -> u16 {
         .saturating_add(wrapped_height(NETWORK_REQUIREMENT, width))
 }
 
-fn render_qr_header(frame: &mut Frame, area: Rect, presentation: &PairingPresentation) {
+fn render_qr_header(
+    frame: &mut Frame,
+    theme: &Theme,
+    area: Rect,
+    presentation: &PairingPresentation,
+) {
     let waiting = waiting_text(presentation);
     let waiting_height = wrapped_height(&waiting, area.width);
     render_text(
         frame,
+        theme,
         Rect::new(area.x, area.y, area.width, waiting_height.min(area.height)),
         &waiting,
-        FG,
+        theme.fg,
     );
 
     let server = format!("Server: {}", presentation.server_identity());
@@ -209,6 +237,7 @@ fn render_qr_header(frame: &mut Frame, area: Rect, presentation: &PairingPresent
     let server_y = area.y.saturating_add(waiting_height);
     render_text(
         frame,
+        theme,
         Rect::new(
             area.x,
             server_y,
@@ -216,13 +245,14 @@ fn render_qr_header(frame: &mut Frame, area: Rect, presentation: &PairingPresent
             server_height.min(area.bottom().saturating_sub(server_y)),
         ),
         &server,
-        FG_MUTED,
+        theme.fg_muted,
     );
 
     let handoff_height = wrapped_height(HANDOFF, area.width);
     let handoff_y = server_y.saturating_add(server_height);
     render_text(
         frame,
+        theme,
         Rect::new(
             area.x,
             handoff_y,
@@ -230,12 +260,13 @@ fn render_qr_header(frame: &mut Frame, area: Rect, presentation: &PairingPresent
             handoff_height.min(area.bottom().saturating_sub(handoff_y)),
         ),
         HANDOFF,
-        FG_MUTED,
+        theme.fg_muted,
     );
 
     let requirement_y = handoff_y.saturating_add(handoff_height);
     render_text(
         frame,
+        theme,
         Rect::new(
             area.x,
             requirement_y,
@@ -243,29 +274,25 @@ fn render_qr_header(frame: &mut Frame, area: Rect, presentation: &PairingPresent
             area.bottom().saturating_sub(requirement_y),
         ),
         NETWORK_REQUIREMENT,
-        FG_MUTED,
+        theme.fg_muted,
     );
 }
 
 fn render_qr(frame: &mut Frame, area: Rect, qr: &PairingQr) {
-    // Explicit RGB, since themes can remap the named black and white.
-    let style = Style::new()
-        .fg(Color::Rgb(0, 0, 0))
-        .bg(Color::Rgb(255, 255, 255));
     let lines = qr
         .rows()
         .iter()
-        .map(|row| Line::from(Span::styled(row.as_str(), style)))
+        .map(|row| Line::from(Span::styled(row.as_str(), QR_STYLE)))
         .collect::<Vec<_>>();
-    frame.render_widget(Paragraph::new(lines).style(style), area);
+    frame.render_widget(Paragraph::new(lines).style(QR_STYLE), area);
 }
 
-fn render_hints(frame: &mut Frame, area: Rect, hints: &[(&str, &str)]) {
+fn render_hints(frame: &mut Frame, theme: &Theme, area: Rect, hints: &[(&str, &str)]) {
     if area.width == 0 || area.height == 0 {
         return;
     }
     frame.render_widget(
-        Paragraph::new(dialog_hint_line(hints)).style(Style::new().bg(BG_ALT)),
+        Paragraph::new(dialog_hint_line(hints)).style(Style::new().bg(theme.bg_raised)),
         area,
     );
 }
@@ -274,13 +301,13 @@ fn hint_width(hints: &[(&str, &str)]) -> u16 {
     u16::try_from(dialog_hint_line(hints).width()).unwrap_or(u16::MAX)
 }
 
-fn render_text(frame: &mut Frame, area: Rect, text: &str, color: Color) {
+fn render_text(frame: &mut Frame, theme: &Theme, area: Rect, text: &str, color: Color) {
     if area.width == 0 || area.height == 0 {
         return;
     }
-    let style = Style::new().fg(color).bg(BG_ALT);
+    let style = Style::new().fg(color).bg(theme.bg_raised);
     frame.render_widget(
-        Paragraph::new(wrap_text(text, area.width, style)).style(style),
+        Paragraph::new(wrap_text(theme, text, area.width, style)).style(style),
         area,
     );
 }
@@ -301,18 +328,11 @@ fn footer_rect(inner: Rect) -> Rect {
 }
 
 fn wrapped_height(text: &str, width: u16) -> u16 {
-    u16::try_from(wrap_text(text, width, Style::new()).len()).unwrap_or(u16::MAX)
+    u16::try_from(wrap_text(&Theme::dark(), text, width, Style::new()).len()).unwrap_or(u16::MAX)
 }
 
-fn wrap_text(text: &str, width: u16, style: Style) -> Vec<Line<'static>> {
+fn wrap_text(theme: &Theme, text: &str, width: u16, style: Style) -> Vec<Line<'static>> {
     text.split('\n')
-        .flat_map(|paragraph| {
-            wrap_with_code(
-                &crate::tui::theme::Theme::dark(),
-                paragraph,
-                style,
-                usize::from(width),
-            )
-        })
+        .flat_map(|paragraph| wrap_with_code(theme, paragraph, style, usize::from(width)))
         .collect()
 }

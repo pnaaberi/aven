@@ -283,7 +283,8 @@ fn body(theme: &Theme, view: &SyncDialogView<'_>, width: usize) -> Body {
     }
     if view.state.page == SyncPage::Home && view.state.details {
         body.lines.push(Line::from(""));
-        body.lines.push(super::shared::section_line("details"));
+        body.lines
+            .push(super::shared::section_line(theme, "details"));
         body.lines.extend(detail_lines(theme, view.status, width));
         if let Some(OperationResult::Failed(failure)) = &view.activity.last {
             body.lines.extend(wrapped_row(
@@ -837,7 +838,7 @@ fn devices_lines(theme: &Theme, body: &mut Body, view: &SyncDialogView<'_>, widt
         && let Some(OperationResult::Failed(failure)) = activity.device_result()
     {
         lines.push(Line::from(""));
-        lines.push(super::shared::section_line("details"));
+        lines.push(super::shared::section_line(theme, "details"));
         lines.extend(paragraph(
             theme,
             &failure.message,

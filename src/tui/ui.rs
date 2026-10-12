@@ -231,7 +231,7 @@ fn render_surface(
 
     if frame.area().width < MIN_TUI_WIDTH || frame.area().height < MIN_TUI_HEIGHT {
         if let Some(OverlayView::Metadata(state)) = &view.overlay {
-            self::overlays::metadata::render(frame, state);
+            self::overlays::metadata::render(frame, theme, state);
             return;
         }
         frame.render_widget(
@@ -251,10 +251,10 @@ fn render_surface(
     ) {
         if let Some(intro) = view.onboarding_intro {
             render_onboarding_splash(frame, theme, intro);
-            render_onboarding_raised(frame, intro.dialog_reveal);
+            render_onboarding_raised(frame, theme, intro.dialog_reveal);
         } else {
             render_dimmed_onboarding_splash(frame, theme);
-            render_onboarding(frame);
+            render_onboarding(frame, theme);
         }
         return;
     }
@@ -866,7 +866,7 @@ fn render_overlay_content(
     undo_description: &str,
 ) {
     match overlay {
-        OverlayView::Onboarding { .. } => render_onboarding(frame),
+        OverlayView::Onboarding { .. } => render_onboarding(frame, theme),
         OverlayView::Help { scroll } => render_help(frame, theme, *scroll, undo_description),
         OverlayView::DetailHelp { scroll } => {
             render_detail_help(frame, theme, *scroll, None, undo_description)
@@ -882,6 +882,7 @@ fn render_overlay_content(
             intent,
         } => render_search(
             frame,
+            theme,
             SearchRenderView {
                 input,
                 cursor: *cursor,
@@ -915,28 +916,28 @@ fn render_overlay_content(
                 undo_description,
             },
         ),
-        OverlayView::Metadata(state) => self::overlays::metadata::render(frame, state),
+        OverlayView::Metadata(state) => self::overlays::metadata::render(frame, theme, state),
         OverlayView::AddTask(state) => self::overlays::render_add_task(frame, theme, state),
         OverlayView::TextInput(state)
             if state.kind == TextInputKind::EditTitle && inline_title_editor => {}
         OverlayView::TextInput(state) => render_text_input(frame, theme, state),
         OverlayView::MultilineInput(state) => render_multiline_input(frame, theme, state),
-        OverlayView::Picker(state) => render_picker(frame, state),
+        OverlayView::Picker(state) => render_picker(frame, theme, state),
         OverlayView::TagCombobox(state) => render_tag_combobox(frame, theme, state),
         OverlayView::HeaderMenu(state) => render_header_menu(frame, state),
         OverlayView::OrderMenu(state) => render_order_menu(frame, state),
         OverlayView::Confirm(state) => render_confirm(frame, state),
         OverlayView::TextPanel(state) => render_text_panel(frame, state),
         OverlayView::Changelog { markdown, scroll } => {
-            self::overlays::render_changelog(frame, markdown, *scroll)
+            self::overlays::render_changelog(frame, theme, markdown, *scroll)
         }
-        OverlayView::Pairing(presentation) => render_pairing(frame, presentation),
-        OverlayView::RecurrenceHistory(state) => render_recurrence_history(frame, state),
+        OverlayView::Pairing(presentation) => render_pairing(frame, theme, presentation),
+        OverlayView::RecurrenceHistory(state) => render_recurrence_history(frame, theme, state),
         OverlayView::Sync(view) => render_sync_dialog(frame, theme, view),
         OverlayView::DatabaseStats { stats, scroll } => {
-            render_database_stats(frame, stats, *scroll)
+            render_database_stats(frame, theme, stats, *scroll)
         }
-        OverlayView::Update(state) => render_update(frame, state),
+        OverlayView::Update(state) => render_update(frame, theme, state),
         OverlayView::Detail { .. } | OverlayView::AttachmentPreview { .. } => {}
     }
 }

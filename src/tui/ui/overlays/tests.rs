@@ -14,7 +14,7 @@ use crate::tui::store::{
     DatabaseStatsPriorityCounts, DatabaseStatsStatusCounts, SyncStatusCheck, TuiDatabaseStats,
     TuiSyncStatus,
 };
-use crate::tui::theme::{self, BG_ALT, FG, FG_DIM, RED, Theme};
+use crate::tui::theme::{FG, Theme};
 use crate::tui::widgets::priority_icon;
 use ratatui::Frame;
 use ratatui::Terminal;
@@ -32,8 +32,9 @@ fn buffer_text(backend: &TestBackend) -> String {
 }
 
 fn render_non_help_overlay_content(frame: &mut Frame, overlay: &OverlayView<'_>) {
+    let theme = &Theme::dark();
     match overlay {
-        OverlayView::Onboarding { .. } => render_onboarding(frame),
+        OverlayView::Onboarding { .. } => render_onboarding(frame, theme),
         OverlayView::Search {
             input,
             cursor,
@@ -45,6 +46,7 @@ fn render_non_help_overlay_content(frame: &mut Frame, overlay: &OverlayView<'_>)
             intent,
         } => render_search(
             frame,
+            theme,
             SearchRenderView {
                 input,
                 cursor: *cursor,
@@ -58,21 +60,23 @@ fn render_non_help_overlay_content(frame: &mut Frame, overlay: &OverlayView<'_>)
                 intent,
             },
         ),
-        OverlayView::Metadata(state) => super::metadata::render(frame, state),
-        OverlayView::AddTask(state) => render_add_task(frame, &Theme::dark(), state),
-        OverlayView::TextInput(state) => render_text_input(frame, &Theme::dark(), state),
-        OverlayView::MultilineInput(state) => render_multiline_input(frame, &Theme::dark(), state),
-        OverlayView::Picker(state) => render_picker(frame, state),
-        OverlayView::TagCombobox(state) => render_tag_combobox(frame, &Theme::dark(), state),
+        OverlayView::Metadata(state) => super::metadata::render(frame, theme, state),
+        OverlayView::AddTask(state) => render_add_task(frame, theme, state),
+        OverlayView::TextInput(state) => render_text_input(frame, theme, state),
+        OverlayView::MultilineInput(state) => render_multiline_input(frame, theme, state),
+        OverlayView::Picker(state) => render_picker(frame, theme, state),
+        OverlayView::TagCombobox(state) => render_tag_combobox(frame, theme, state),
         OverlayView::Confirm(state) => render_confirm(frame, state),
         OverlayView::TextPanel(state) => render_text_panel(frame, state),
-        OverlayView::Changelog { markdown, scroll } => render_changelog(frame, markdown, *scroll),
-        OverlayView::Pairing(presentation) => render_pairing(frame, presentation),
-        OverlayView::Sync(view) => render_sync_dialog(frame, &Theme::dark(), view),
-        OverlayView::DatabaseStats { stats, scroll } => {
-            render_database_stats(frame, stats, *scroll)
+        OverlayView::Changelog { markdown, scroll } => {
+            render_changelog(frame, theme, markdown, *scroll)
         }
-        OverlayView::Update(state) => render_update(frame, state),
+        OverlayView::Pairing(presentation) => render_pairing(frame, theme, presentation),
+        OverlayView::Sync(view) => render_sync_dialog(frame, theme, view),
+        OverlayView::DatabaseStats { stats, scroll } => {
+            render_database_stats(frame, theme, stats, *scroll)
+        }
+        OverlayView::Update(state) => render_update(frame, theme, state),
         OverlayView::Detail { .. } => {}
         _ => unreachable!("test helper only renders non-help overlays"),
     }

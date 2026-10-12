@@ -11,14 +11,17 @@ use super::super::scroll::{clamp_scroll_start, render_vertical_scrollbar};
 use crate::tui::changelog::changelog_dialog_size;
 use crate::tui::markdown::render_markdown_reflowed_without_link_urls;
 use crate::tui::overlay::dialog_area;
-use crate::tui::theme::{BG_ALT, BLUE, FG, FG_MUTED};
+use crate::tui::theme::Theme;
 
-const INSTALLED_BADGE_BG: Color = Color::Rgb(55, 56, 52);
-
-pub(in crate::tui::ui) fn render_changelog(frame: &mut Frame, markdown: &str, scroll: u16) {
+pub(in crate::tui::ui) fn render_changelog(
+    frame: &mut Frame,
+    theme: &Theme,
+    markdown: &str,
+    scroll: u16,
+) {
     let terminal_size = Size::new(frame.area().width, frame.area().height);
     let (width, height) = changelog_dialog_size(terminal_size);
-    let rendered = changelog_lines(markdown, width);
+    let rendered = changelog_lines(markdown, width, Some(theme));
     let content = Dialog::new("Changelog", width, height).render_block(frame);
     let body = changelog_body_area(content);
     let text_area = changelog_text_area(body);
@@ -38,7 +41,7 @@ pub(in crate::tui::ui) fn render_changelog(frame: &mut Frame, markdown: &str, sc
                 .cloned()
                 .collect::<Vec<_>>(),
         ))
-        .style(Style::new().fg(FG).bg(BG_ALT)),
+        .style(Style::new().fg(theme.fg).bg(theme.bg_raised)),
         text_area,
     );
     frame.render_widget(
@@ -48,16 +51,10 @@ pub(in crate::tui::ui) fn render_changelog(frame: &mut Frame, markdown: &str, sc
             ("PgUp/PgDn", "page"),
             ("Esc", "close"),
         ]))
-        .style(Style::new().fg(FG).bg(BG_ALT)),
+        .style(Style::new().fg(theme.fg).bg(theme.bg_raised)),
         hint,
     );
-    render_vertical_scrollbar(
-        frame,
-        &crate::tui::theme::Theme::dark(),
-        body,
-        rendered.len(),
-        scroll,
-    );
+    render_vertical_scrollbar(frame, theme, body, rendered.len(), scroll);
 }
 
 pub(crate) fn changelog_link_at(
@@ -101,7 +98,7 @@ pub(in crate::tui::ui) fn changelog_link_at_in_area(
         return None;
     }
 
-    let lines = changelog_lines(markdown, render_width);
+    let lines = changelog_lines(markdown, render_width, None);
     let start = clamp_scroll_start(scroll, lines.len(), body.height as usize);
     let target_line = start.saturating_add(row.saturating_sub(body.y) as usize);
     let links = changelog_links(markdown);
@@ -131,9 +128,13 @@ pub(in crate::tui::ui) fn changelog_link_at_in_area(
     None
 }
 
+/// Changelog reader lines. Without a theme the lines keep their text and
+/// geometry but carry no badge colors, which is enough for hit testing and
+/// scroll limits.
 pub(in crate::tui::ui) fn changelog_lines(
     markdown: &str,
     width: u16,
+    theme: Option<&Theme>,
 ) -> Vec<ratatui::text::Line<'static>> {
     let mut rendered = render_markdown_reflowed_without_link_urls(
         &crate::tui::theme::Theme::dark(),
@@ -144,15 +145,7 @@ pub(in crate::tui::ui) fn changelog_lines(
         let mut spans = Vec::new();
         for span in std::mem::take(&mut line.spans) {
             if span.content == "installed" {
-                spans.extend([
-                    Span::styled("", Style::new().fg(INSTALLED_BADGE_BG).bg(BG_ALT)),
-                    Span::styled(" ●", Style::new().fg(BLUE).bg(INSTALLED_BADGE_BG)),
-                    Span::styled(
-                        " installed ",
-                        Style::new().fg(FG_MUTED).bg(INSTALLED_BADGE_BG),
-                    ),
-                    Span::styled("", Style::new().fg(INSTALLED_BADGE_BG).bg(BG_ALT)),
-                ]);
+                spans.extend(installed_badge(theme));
             } else {
                 spans.push(span);
             }
@@ -163,6 +156,21 @@ pub(in crate::tui::ui) fn changelog_lines(
     lines.extend(rendered);
     lines.push(ratatui::text::Line::from(""));
     lines
+}
+
+fn installed_badge(theme: Option<&Theme>) -> [Span<'static>; 4] {
+    let style = |colors: fn(&Theme) -> (Color, Color)| {
+        theme.map_or_else(Style::new, |theme| {
+            let (fg, bg) = colors(theme);
+            Style::new().fg(fg).bg(bg)
+        })
+    };
+    [
+        Span::styled("", style(|t| (t.badge_installed_bg, t.bg_raised))),
+        Span::styled(" ●", style(|t| (t.info, t.badge_installed_bg))),
+        Span::styled(" installed ", style(|t| (t.fg_muted, t.badge_installed_bg))),
+        Span::styled("", style(|t| (t.badge_installed_bg, t.bg_raised))),
+    ]
 }
 
 fn changelog_text_area(body: Rect) -> Rect {
@@ -232,16 +240,24 @@ mod tests {
 
     #[test]
     fn reader_adds_top_padding_and_styles_installed_badge() {
-        let lines = changelog_lines("## v1.2.3  `installed`", 80);
+        let theme = Theme::dark();
+        let lines = changelog_lines("## v1.2.3  `installed`", 80, Some(&theme));
 
         assert!(lines[0].to_string().is_empty());
         assert!(lines[1].to_string().contains(" ● installed "));
+        let dot = lines[1]
+            .spans
+            .iter()
+            .find(|span| span.content == " ●")
+            .unwrap();
+        assert_eq!(dot.style.fg, Some(theme.info));
+        assert_eq!(dot.style.bg, Some(theme.badge_installed_bg));
         assert!(lines.last().unwrap().to_string().is_empty());
     }
 
     #[test]
     fn reader_hides_link_destinations_and_reserves_scrollbar_gap() {
-        let lines = changelog_lines("- [Read the guide](/guide/)", 80);
+        let lines = changelog_lines("- [Read the guide](/guide/)", 80, None);
         let rendered = lines
             .iter()
             .map(ratatui::text::Line::to_string)
@@ -253,7 +269,7 @@ mod tests {
 
     #[test]
     fn reader_reflows_source_wrapped_entries_to_dialog_width() {
-        let lines = changelog_lines("- alpha beta gamma\n  delta epsilon zeta", 32);
+        let lines = changelog_lines("- alpha beta gamma\n  delta epsilon zeta", 32, None);
         let rendered = lines
             .iter()
             .map(ratatui::text::Line::to_string)
