@@ -326,7 +326,7 @@ impl AppConfig {
         } else {
             let text = fs::read_to_string(path)
                 .with_context(|| format!("could not read {}", path.display()))?;
-            serde_yaml::from_str(&text)
+            serde_saphyr::from_str(&text)
                 .with_context(|| format!("could not parse {}", path.display()))?
         };
         config.sync.disable_override |= sync_disabled_from_env();
@@ -462,7 +462,7 @@ pub fn write_default_config(path: &Path) -> Result<()> {
     }
     let config = AppConfig::default();
     config.validate()?;
-    let text = serde_yaml::to_string(&config)?;
+    let text = serde_saphyr::to_string(&config)?;
     write_config_text(path, text)
 }
 

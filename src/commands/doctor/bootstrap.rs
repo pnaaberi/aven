@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use serde_yaml::Value;
+use serde_json::Value;
 
 use crate::config::{self as app_config, AppConfig};
 
@@ -48,7 +48,7 @@ pub(super) fn inspect_config() -> ConfigBootstrap {
             };
         }
     };
-    let loose = serde_yaml::from_str::<Value>(&text).ok();
+    let loose = serde_saphyr::from_str::<Value>(&text).ok();
     let loose_db_path = loose.as_ref().and_then(configured_database_path);
     match AppConfig::load_from_path(&path) {
         Ok(config) => ConfigBootstrap {
@@ -58,7 +58,7 @@ pub(super) fn inspect_config() -> ConfigBootstrap {
             failure: None,
         },
         Err(_) => {
-            let location = serde_yaml::from_str::<AppConfig>(&text)
+            let location = serde_saphyr::from_str::<AppConfig>(&text)
                 .err()
                 .and_then(|error| error.location())
                 .map(|location| {

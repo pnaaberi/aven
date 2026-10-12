@@ -341,7 +341,7 @@ mod tests {
             config.tui.table.columns,
             [TableColumn::Status, TableColumn::Priority, TableColumn::Ref]
         );
-        let text = serde_yaml::to_string(&config).unwrap();
+        let text = serde_saphyr::to_string(&config).unwrap();
         assert_eq!(
             load_config(&text).unwrap().tui.table.columns,
             config.tui.table.columns
@@ -360,7 +360,7 @@ mod tests {
         assert!(config.tui.table.compact_status);
         assert_eq!(config.tui.table.columns, default_table_columns());
 
-        let text = serde_yaml::to_string(&config).unwrap();
+        let text = serde_saphyr::to_string(&config).unwrap();
         assert!(load_config(&text).unwrap().tui.table.compact_status);
     }
 
@@ -375,7 +375,7 @@ mod tests {
         );
         assert_eq!(TableColumn::Due.name(), "due");
 
-        let text = serde_yaml::to_string(&config).unwrap();
+        let text = serde_saphyr::to_string(&config).unwrap();
         assert_eq!(
             load_config(&text).unwrap().tui.table.columns,
             config.tui.table.columns
@@ -487,8 +487,8 @@ mod tests {
     #[test]
     fn default_columns_round_trip() {
         let config = AppConfig::default();
-        let yaml = serde_yaml::to_string(&config).unwrap();
-        let loaded: AppConfig = serde_yaml::from_str(&yaml).unwrap();
+        let yaml = serde_saphyr::to_string(&config).unwrap();
+        let loaded: AppConfig = serde_saphyr::from_str(&yaml).unwrap();
 
         loaded.validate().unwrap();
         assert_eq!(loaded.tui.columns, config.tui.columns);

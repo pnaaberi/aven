@@ -15,7 +15,7 @@ pub fn set_scalar(path: &Path, section: &str, key: &str, value: &str) -> Result<
         String::new()
     };
     if !text.trim().is_empty() {
-        serde_yaml::from_str::<AppConfig>(&text)
+        serde_saphyr::from_str::<AppConfig>(&text)
             .with_context(|| format!("could not parse {}", path.display()))?
             .validate()
             .with_context(|| format!("invalid config {}", path.display()))?;
@@ -195,11 +195,11 @@ fn read_config_text(path: &Path) -> Result<String> {
         return fs::read_to_string(path)
             .with_context(|| format!("could not read {}", path.display()));
     }
-    serde_yaml::to_string(&AppConfig::default()).context("could not serialize default config")
+    serde_saphyr::to_string(&AppConfig::default()).context("could not serialize default config")
 }
 
 fn write_edited_config(path: &Path, text: String) -> Result<()> {
-    let config = serde_yaml::from_str::<AppConfig>(&text)
+    let config = serde_saphyr::from_str::<AppConfig>(&text)
         .with_context(|| format!("edited config did not parse for {}", path.display()))?;
     config
         .validate()
@@ -295,8 +295,9 @@ fn append_managed_entries(text: &str, entries: &[ManagedProjectOverride]) -> Res
             find_child_key(&lines, project_line + 1, project_end, 2, "overrides")
         {
             if !is_block_mapping_key(&lines[overrides_line], "overrides") {
-                let header: serde_yaml::Value = serde_yaml::from_str(lines[overrides_line].trim())?;
-                if !header["overrides"].as_sequence().is_some_and(Vec::is_empty) {
+                let header: serde_json::Value =
+                    serde_saphyr::from_str(lines[overrides_line].trim())?;
+                if !header["overrides"].as_array().is_some_and(Vec::is_empty) {
                     bail!(
                         "cannot safely edit project path mappings: overrides must use a YAML block sequence; config unchanged"
                     );
@@ -325,7 +326,7 @@ fn append_managed_entries(text: &str, entries: &[ManagedProjectOverride]) -> Res
 }
 
 fn parse_managed_entry(lines: &[String]) -> Result<ManagedProjectOverride> {
-    let mut entries: Vec<ManagedProjectOverride> = serde_yaml::from_str(&lines.join("\n"))
+    let mut entries: Vec<ManagedProjectOverride> = serde_saphyr::from_str(&lines.join("\n"))
         .context(
             "cannot safely edit project path mappings: unsupported managed entry; config unchanged",
         )?;
@@ -361,7 +362,7 @@ fn render_managed_entries(entries: &[ManagedProjectOverride]) -> Vec<String> {
 }
 
 fn yaml_scalar(value: &str) -> String {
-    serde_yaml::to_string(value)
+    serde_saphyr::to_string(&value)
         .unwrap_or_else(|_| format!("\"{}\"", value.replace('"', "\\\"")))
         .trim()
         .trim_end_matches("...")

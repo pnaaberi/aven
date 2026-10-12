@@ -25,8 +25,9 @@ fn project_override_workspace_ids_are_validated() {
 
 #[test]
 fn update_automatic_checks_parse_from_config() {
-    let disabled: AppConfig = serde_yaml::from_str("update:\n  automatic_checks: false\n").unwrap();
-    let default: AppConfig = serde_yaml::from_str("{}\n").unwrap();
+    let disabled: AppConfig =
+        serde_saphyr::from_str("update:\n  automatic_checks: false\n").unwrap();
+    let default: AppConfig = serde_saphyr::from_str("{}\n").unwrap();
 
     assert!(!disabled.update.automatic_checks);
     assert!(default.update.automatic_checks);
@@ -73,7 +74,7 @@ fn runtime_disable_override_is_not_serialized() {
     config.sync.enabled = true;
     config.sync.disable_override = true;
 
-    let text = serde_yaml::to_string(&config).unwrap();
+    let text = serde_saphyr::to_string(&config).unwrap();
 
     assert!(text.contains("enabled: true"));
     assert!(!text.contains("disabled:"));
@@ -173,15 +174,15 @@ fn local_image_optimization_defaults_to_off() {
     );
     assert!(!config.local.image_optimization.optimizes_pasted_images());
     assert!(!config.local.image_optimization.optimizes_file_attachments());
-    let yaml = serde_yaml::to_string(&config).unwrap();
-    assert!(yaml.contains("image_optimization: off"));
+    let yaml = serde_saphyr::to_string(&config).unwrap();
+    assert!(yaml.contains("image_optimization: \"off\""));
 
     for (value, expected) in [
         ("paste", ImageOptimizationConfig::Paste),
         ("on", ImageOptimizationConfig::On),
     ] {
         let parsed: AppConfig =
-            serde_yaml::from_str(&format!("local:\n  image_optimization: {value}\n")).unwrap();
+            serde_saphyr::from_str(&format!("local:\n  image_optimization: {value}\n")).unwrap();
         assert_eq!(parsed.local.image_optimization, expected);
     }
 }

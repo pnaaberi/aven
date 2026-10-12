@@ -343,7 +343,7 @@ mod tests {
             1
         );
         assert!(config_text.contains(
-            "# aven-managed project path mapping\n    - workspace_id: '0000000000000000'\n      workspace: default\n      project: checkle"
+            "# aven-managed project path mapping\n    - workspace_id: \"0000000000000000\"\n      workspace: default\n      project: checkle"
         ));
         let config = AppConfig::load_from_path(&config_path).unwrap();
         assert_eq!(

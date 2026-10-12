@@ -332,7 +332,7 @@ mod tests {
             message.contains("unknown field `timeot_seconds`"),
             "{message}"
         );
-        assert!(message.contains("tui.commands[0]"), "{message}");
+        assert!(message.contains("timeot_seconds: 30"), "{message}");
         assert!(message.contains("line 6"), "{message}");
     }
 
@@ -382,7 +382,7 @@ mod tests {
                 "tui:\n  commands:\n    - name: dispatch\n      description: Dispatch\n      program: dispatch\n      requires: none\n",
             )
             .unwrap();
-        let yaml = serde_yaml::to_string(&config).unwrap();
+        let yaml = serde_saphyr::to_string(&config).unwrap();
 
         assert!(yaml.contains("target: none"));
         assert!(!yaml.contains("requires:"));

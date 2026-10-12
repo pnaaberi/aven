@@ -133,7 +133,7 @@ fn render_optional_string(value: Option<&str>) -> String {
 }
 
 fn yaml_string(value: &str) -> Result<String> {
-    Ok(serde_yaml::to_string(value)?
+    Ok(serde_saphyr::to_string(&value)?
         .trim()
         .trim_end_matches("...")
         .trim()

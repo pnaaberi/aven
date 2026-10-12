@@ -19,7 +19,7 @@ pub struct ConfigPathsOutcome {
 pub fn show_config() -> Result<ConfigShowOutcome> {
     let path = app_config::config_file_path()?;
     let config = app_config::AppConfig::load()?;
-    let text = serde_yaml::to_string(&config)?;
+    let text = serde_saphyr::to_string(&config)?;
     Ok(ConfigShowOutcome { path, text })
 }
 
