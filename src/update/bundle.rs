@@ -920,6 +920,73 @@ mod tests {
         assert!(!log.exists());
     }
 
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    #[ignore = "requires a signed macOS baseline binary and a signed candidate app archive"]
+    async fn signed_macos_app_round_trip() {
+        let baseline = std::env::var_os("AVEN_MACOS_QUALIFICATION_BASELINE")
+            .expect("set AVEN_MACOS_QUALIFICATION_BASELINE to the signed baseline binary");
+        let archive_path = std::env::var_os("AVEN_MACOS_QUALIFICATION_APP_ARCHIVE")
+            .expect("set AVEN_MACOS_QUALIFICATION_APP_ARCHIVE to the signed candidate app archive");
+        let verifier = Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts/verify-macos-release");
+        let verified = |path: &Path| {
+            std::process::Command::new(&verifier)
+                .arg(path)
+                .status()
+                .unwrap()
+                .success()
+        };
+        assert!(verified(Path::new(&baseline)));
+        let temp = tempfile::tempdir().unwrap();
+        let home = temp.path().join("home");
+        let bin = temp.path().join("bin");
+        std::fs::create_dir(&bin).unwrap();
+        let target = bin.join("aven");
+        let baseline_bytes = std::fs::read(&baseline).unwrap();
+        std::fs::write(&target, &baseline_bytes).unwrap();
+        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let archive = std::fs::read(archive_path).unwrap();
+        let sum = checksum(&archive, "aven-test-app.tar.gz");
+
+        // A bare install migrates to the bundle and keeps its PATH entry.
+        loopback_install(
+            archive.clone(),
+            sum.clone(),
+            &target,
+            &home,
+            crate::update::CURRENT_VERSION,
+        )
+        .await
+        .unwrap();
+        let bundle = direct_install_bundle(&home);
+        let executable = bundle.join(BUNDLE_EXECUTABLE);
+        assert_eq!(std::fs::read_link(&target).unwrap(), executable);
+        assert_ne!(std::fs::read(&executable).unwrap(), baseline_bytes);
+        assert!(verified(&bundle));
+
+        // A bundled install is replaced as a whole and stays signed.
+        loopback_install(
+            archive,
+            sum,
+            &executable,
+            &home,
+            crate::update::CURRENT_VERSION,
+        )
+        .await
+        .unwrap();
+        assert!(verified(&bundle));
+        assert_eq!(names(bundle.parent().unwrap()), vec!["Aven.app"]);
+        assert_eq!(names(&bin), vec!["aven"]);
+        let output = std::process::Command::new(&target)
+            .arg("--version")
+            .output()
+            .unwrap();
+        assert_eq!(
+            output.stdout,
+            format!("aven {}\n", crate::update::CURRENT_VERSION).into_bytes()
+        );
+    }
+
     #[tokio::test]
     async fn migration_replaces_a_leftover_bundle() {
         let temp = tempfile::tempdir().unwrap();
