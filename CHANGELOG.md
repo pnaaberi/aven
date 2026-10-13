@@ -3,6 +3,10 @@ title: Changelog
 description: Release notes for aven.
 ---
 
+## Unreleased
+
+- Install the prebuilt binary with Nix, without compiling: `nix profile install https://github.com/raine/aven/releases/latest/download/aven-nix.tar.gz`. See [Getting started](https://aventasks.dev/getting-started/#install).
+
 ## v0.1.48 (2026-10-12)
 
 - New light mode for the TUI, with automatic light or dark theme selection to match your terminal background. Thanks [@grncdr](https://github.com/grncdr)! ([#31](https://github.com/raine/aven/pull/31))
