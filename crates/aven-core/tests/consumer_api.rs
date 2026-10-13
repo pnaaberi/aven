@@ -6,15 +6,22 @@ use aven_core::api::{
     QueueDateKind, QueueMutation, QueueMutationKind, QueueReason, RecurrenceDuePolicy,
     RecurrenceFrequency, RecurrenceHistoryKind, RecurrenceOutcome, RecurrenceProjectionState,
     RecurrenceRule, RecurrenceScheduleInput, RecurrenceSeriesState, Store, TaskCapture,
-    UpdateRecurrenceTemplate, UpdateTask,
+    TaskListDirection, TaskListQuery, TaskListSort, UpdateRecurrenceTemplate, UpdateTask,
 };
 use aven_core::choices::{TaskPriority, TaskSource, TaskStatus};
 use aven_core::db::Database;
-use aven_core::ids::{TaskId, WorkspaceId};
+use aven_core::ids::{ProjectId, TaskId, WorkspaceId};
 use aven_core::recurrence::RecurrenceSeriesId;
 use aven_core::test_support::encrypted_sync::EncryptedSyncServer;
 use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::{Connection, SqliteConnection};
+
+fn project_query(project_id: ProjectId) -> TaskListQuery {
+    TaskListQuery {
+        project_id: Some(project_id),
+        ..TaskListQuery::new(TaskListSort::Updated, TaskListDirection::Desc)
+    }
+}
 
 #[tokio::test]
 async fn consumer_navigation_reads_project_and_search_rows_by_stable_identity() {
@@ -62,9 +69,10 @@ async fn consumer_navigation_reads_project_and_search_rows_by_stable_identity() 
         .unwrap();
 
     let project_rows = store
-        .project_tasks(&workspace.id, &project.id)
+        .task_list(&workspace.id, project_query(project.id.clone()))
         .await
-        .unwrap();
+        .unwrap()
+        .rows;
     assert_eq!(project_rows.len(), 1);
     assert_eq!(project_rows[0].id, ios.id);
     assert_eq!(project_rows[0].project_key, "ios");
@@ -92,7 +100,7 @@ async fn consumer_navigation_reads_project_and_search_rows_by_stable_identity() 
         .await
         .unwrap();
     let cross_workspace = store
-        .project_tasks(&workspace.id, &foreign_project.id)
+        .task_list(&workspace.id, project_query(foreign_project.id))
         .await
         .unwrap_err();
     assert_eq!(cross_workspace.code, ErrorCode::NotFound);
@@ -111,7 +119,7 @@ async fn consumer_navigation_reads_project_and_search_rows_by_stable_identity() 
         .await
         .unwrap();
     let unavailable = store
-        .project_tasks(&workspace.id, &project.id)
+        .task_list(&workspace.id, project_query(project.id.clone()))
         .await
         .unwrap_err();
     assert_eq!(unavailable.code, ErrorCode::NotFound);
