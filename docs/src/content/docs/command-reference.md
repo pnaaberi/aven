@@ -1153,6 +1153,8 @@ systemd user service named `aven-daemon.service`:
 - `restart` restarts the service.
 - `repair` rewrites and restarts an installed service from active configuration. `--if-installed` succeeds without changes when the service is absent. `--program` selects the stored executable path.
 
+On macOS, a daemon that runs `Aven.app`'s executable through a symlink, such as Homebrew's `bin/aven`, moves its LaunchAgent to the bundle path when it starts. It keeps the recorded database, environment, and log paths, and reloads the service from a separate process. It leaves a disabled service, or a plist edited outside aven, unchanged; `aven daemon status` then suggests `aven daemon repair`.
+
 On Linux, a systemd user service stops when you log out unless lingering is
 enabled with `loginctl enable-linger`.
 

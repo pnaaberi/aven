@@ -39,11 +39,13 @@ expect "sha256 \"$(printf '%064d' 4)\""
 expect '(prefix/"Aven.app").install "Contents"'
 expect 'bin.install_symlink prefix/"Aven.app/Contents/MacOS/aven"'
 expect 'bin.install "aven"'
-expect 'aven daemon repair --if-installed'
 expect '"/usr/bin/codesign", "--verify", "--strict", prefix/"Aven.app"'
 expect 'Identifier=fi.zendit.Aven'
 if grep -q 'def post_install' "$tmp/aven.rb"; then
   fail "formula defines the deprecated post_install"
+fi
+if grep -q 'def caveats' "$tmp/aven.rb"; then
+  fail "formula asks for a manual daemon repair; the daemon migrates itself"
 fi
 if grep -qE 'aven-darwin-(arm64|amd64)\.tar\.gz' "$tmp/aven.rb"; then
   fail "formula still uses the bare macOS archive"

@@ -70,18 +70,6 @@ class Aven < Formula
     generate_completions_from_executable(bin/"aven", "completions")
   end
 
-  # A post_install repair cannot reach the LaunchAgent: Homebrew runs it
-  # sandboxed with a temporary HOME. The caveat asks for it instead.
-  def caveats
-    return unless OS.mac?
-
-    <<~EOS
-      If you use the aven daemon, run this after installing or upgrading so it
-      runs from Aven.app and Login Items lists it as Aven:
-        aven daemon repair --if-installed
-    EOS
-  end
-
   test do
     assert_match "Local-first task manager", shell_output("#{bin}/aven --help")
     if OS.mac?

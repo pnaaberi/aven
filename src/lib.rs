@@ -264,6 +264,7 @@ async fn dispatch_standalone(
                 let database = db::Database::open(&db_path).await?;
                 cmd_internal_natural_add(&database, &config, args).await
             }
+            InternalSubcommand::ReloadDaemon => daemon::reload_service_definition(),
         },
         StandaloneCommand::Daemon(args) => {
             let config = config::AppConfig::load()?;

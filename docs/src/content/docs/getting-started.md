@@ -19,7 +19,7 @@ Or install with Homebrew:
 brew install raine/aven/aven
 ```
 
-Homebrew installs run without access to your home directory, so they cannot update the [background daemon](/command-reference/#aven-daemon). If you run it on macOS, run `aven daemon repair --if-installed` after a Homebrew install or upgrade so it runs from `Aven.app`. The install script and `aven update` do this for you.
+On macOS, an installed [background daemon](/command-reference/#aven-daemon) restarts on the new version shortly after a Homebrew install or upgrade and moves itself to `Aven.app`, so Login Items lists it as Aven.
 
 ## Open Aven
 
