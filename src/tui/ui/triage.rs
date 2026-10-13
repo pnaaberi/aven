@@ -198,13 +198,22 @@ fn render_header(
         ),
         Span::styled(" eligible", Style::new().fg(theme.fg_dim)),
         Span::styled(" │ ", Style::new().fg(theme.border)),
-        Span::styled("ws ", Style::new().fg(theme.fg_dim)),
-        Span::styled(
-            store.active_workspace.key.clone(),
-            Style::new().fg(theme.fg_muted),
-        ),
-        Span::raw(" "),
     ]);
+    let mut scope = scope;
+    match &session.project {
+        Some(project) => scope.spans.extend([
+            Span::styled("project ", Style::new().fg(theme.fg_dim)),
+            Span::styled(project.clone(), Style::new().fg(theme.project(project))),
+        ]),
+        None => scope.spans.extend([
+            Span::styled("ws ", Style::new().fg(theme.fg_dim)),
+            Span::styled(
+                store.active_workspace.key.clone(),
+                Style::new().fg(theme.fg_muted),
+            ),
+        ]),
+    }
+    scope.spans.push(Span::raw(" "));
     let [left, right] = Layout::horizontal([
         Constraint::Fill(1),
         Constraint::Length(scope.width() as u16),

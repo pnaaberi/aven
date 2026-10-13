@@ -361,3 +361,36 @@ async fn triage_paging_keys_scroll_the_card_and_reset_on_the_next_card() {
     press(&mut app, &[KeyCode::Char('j')]).await;
     assert_eq!(app.triage.as_ref().unwrap().card_scroll(), 0);
 }
+
+#[tokio::test]
+async fn triage_opened_in_a_project_scope_covers_only_that_project() {
+    let mut app = test_app().await;
+    app.store
+        .create_project("Mobile App".to_string())
+        .await
+        .unwrap();
+    create_and_select_task(&mut app, test_task_draft("Elsewhere")).await;
+    let mut draft = test_task_draft("In project");
+    draft.project = Some("mobile-app".to_string());
+    create_and_select_task(&mut app, draft).await;
+    app.show_scope(TaskScopeTarget::Project("mobile-app".to_string()))
+        .await
+        .unwrap();
+
+    app.open_triage().await.unwrap();
+
+    let session = app.triage.as_ref().unwrap();
+    assert_eq!(session.project.as_deref(), Some("mobile-app"));
+    assert_eq!(card_title(&app), Some("In project"));
+    assert_eq!(session.entries.len(), 1);
+    assert_eq!(
+        app.store.view_state.scope,
+        TaskScope::Project("mobile-app".to_string())
+    );
+
+    press(&mut app, &[KeyCode::Esc]).await;
+    assert_eq!(
+        app.store.view_state.scope,
+        TaskScope::Project("mobile-app".to_string())
+    );
+}

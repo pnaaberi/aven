@@ -130,6 +130,8 @@ pub(crate) struct TriageSession {
     pub(crate) eligible: usize,
     pub(crate) more_available: bool,
     pub(crate) project_counts: BTreeMap<String, ProjectCounts>,
+    /// Project the session is limited to, from the scope triage opened in.
+    pub(crate) project: Option<String>,
     shown: BTreeSet<TaskId>,
     changes: Vec<TriageChange>,
     pending: Option<PendingCommand>,
@@ -264,12 +266,17 @@ struct Candidates {
     project_counts: BTreeMap<String, ProjectCounts>,
 }
 
-async fn load_candidates(store: &TuiStore, exclude: &BTreeSet<TaskId>) -> Result<Candidates> {
+async fn load_candidates(
+    store: &TuiStore,
+    project: Option<&str>,
+    exclude: &BTreeSet<TaskId>,
+) -> Result<Candidates> {
     let items = store
         .database()
         .list_task_items(
             &store.active_workspace.id,
             TaskFilters {
+                project: project.map(str::to_string),
                 statuses: ["inbox", "todo", "active"].map(str::to_string).to_vec(),
                 exclude_epics: true,
                 availability: TaskAvailabilityFilter::Available,
@@ -374,9 +381,17 @@ fn command_intent(action: Action) -> Option<TriageIntent> {
 
 impl App {
     pub(crate) async fn open_triage(&mut self) -> Result<()> {
-        let candidates = load_candidates(&self.store, &BTreeSet::new()).await?;
+        // A project scope limits triage to that project.
+        let project = match &self.store.view_state.scope {
+            TaskScope::Project(key) => Some(key.clone()),
+            TaskScope::Workspace => None,
+        };
+        let candidates = load_candidates(&self.store, project.as_deref(), &BTreeSet::new()).await?;
         if candidates.entries.is_empty() {
-            self.set_info("nothing to triage");
+            self.set_info(match &project {
+                Some(key) => format!("nothing to triage in {key}"),
+                None => "nothing to triage".to_string(),
+            });
             return Ok(());
         }
         let eligible = candidates.entries.len();
@@ -391,10 +406,12 @@ impl App {
         self.detail = crate::tui::detail_session::DetailSession::inactive();
         self.list.clear_marks();
         self.list.focus_tasks();
-        // Commands act on the list selection, so the list shows every open
-        // task while triage runs and the selection follows the card.
+        // Commands act on the list selection, so the list shows every task in
+        // the triage scope while triage runs and the selection follows the card.
         let triage_view = TaskViewState {
-            scope: TaskScope::Workspace,
+            scope: project
+                .clone()
+                .map_or(TaskScope::Workspace, TaskScope::Project),
             query: TaskQuery::All,
             ..TaskViewState::default()
         };
@@ -409,6 +426,7 @@ impl App {
             cursor: 0,
             eligible,
             project_counts: candidates.project_counts,
+            project,
             changes: Vec::new(),
             pending: None,
             custom: None,
@@ -428,7 +446,8 @@ impl App {
 
     async fn next_triage_page(&mut self) -> Result<()> {
         let session = self.triage.as_ref().expect("triage session");
-        let candidates = load_candidates(&self.store, &session.shown).await?;
+        let candidates =
+            load_candidates(&self.store, session.project.as_deref(), &session.shown).await?;
         if candidates.entries.is_empty() {
             self.set_info("nothing else to triage");
             return Ok(());
