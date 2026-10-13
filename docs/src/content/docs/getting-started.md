@@ -17,6 +17,12 @@ Or install with Homebrew:
 brew install raine/aven/aven
 ```
 
+Or install the prebuilt release binary with Nix:
+
+```sh
+nix profile install https://github.com/raine/aven/releases/latest/download/aven-nix.tar.gz
+```
+
 ## Open Aven
 
 ```sh

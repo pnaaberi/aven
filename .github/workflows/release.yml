@@ -171,6 +171,10 @@ jobs:
         with:
           pattern: aven-*
           merge-multiple: true
+      - name: Assemble Nix release flake
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: scripts/assemble-nix-release "$VERSION" . aven-nix.tar.gz
       - uses: softprops/action-gh-release@v3
         with:
           token: ${{ github.token }}
@@ -253,6 +257,22 @@ jobs:
             git pull --rebase
             git push
           fi
+
+  nix-verify:
+    needs: release
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: cachix/install-nix-action@v31
+      - name: Build published Nix release flake
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          nix build --print-build-logs \
+            "https://github.com/raine/aven/releases/download/$VERSION/aven-nix.tar.gz"
+          [[ "$(./result/bin/aven --version)" == "aven ${VERSION#v}" ]]
 
   container-verify:
     needs: build

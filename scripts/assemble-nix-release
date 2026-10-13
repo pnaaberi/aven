@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Packs nix/release-flake into a flake tarball pinned to one release's archives.
+set -euo pipefail
+
+if [[ $# != 3 ]]; then
+  echo 'usage: scripts/assemble-nix-release VERSION CHECKSUM_DIR OUTPUT.tar.gz' >&2
+  exit 2
+fi
+version="${1#v}"
+checksums="$2"
+output="$3"
+root="$(cd "$(dirname "$0")/.." && pwd)"
+
+sha() { awk '{print $1}' "$checksums/$1.sha256"; }
+
+scratch="$(mktemp -d)"
+trap 'rm -rf "$scratch"' EXIT
+flake="$scratch/aven-nix"
+mkdir "$flake"
+cp "$root/nix/release-flake/flake.nix" "$flake/"
+# The release flake has the same nixpkgs input as the repository flake.
+cp "$root/flake.lock" "$flake/"
+jq -n --arg version "$version" \
+  --arg darwin_arm "$(sha aven-darwin-arm64)" \
+  --arg darwin_intel "$(sha aven-darwin-amd64)" \
+  --arg linux_arm "$(sha aven-linux-arm64)" \
+  --arg linux_intel "$(sha aven-linux-amd64)" \
+  '{version: $version, sha256: {
+    "aarch64-darwin": $darwin_arm,
+    "aarch64-linux": $linux_arm,
+    "x86_64-darwin": $darwin_intel,
+    "x86_64-linux": $linux_intel
+  }}' >"$flake/release.json"
+# Keeps macOS tar from adding AppleDouble entries beside the flake directory.
+COPYFILE_DISABLE=1 tar -C "$scratch" -czf "$output" aven-nix
