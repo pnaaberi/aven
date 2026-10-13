@@ -218,54 +218,16 @@ jobs:
           repository: raine/homebrew-aven
           token: ${{ secrets.RELEASE_TOKEN }}
           path: tap
+      - uses: actions/checkout@v5
+        with:
+          path: source
+          persist-credentials: false
       - name: Generate formula and push to tap
         env:
           VERSION: ${{ github.ref_name }}
         run: |
           VERSION="${VERSION#v}"
-          SHA_MAC_ARM=$(awk '{print $1}' aven-darwin-arm64.sha256)
-          SHA_MAC_INTEL=$(awk '{print $1}' aven-darwin-amd64.sha256)
-          SHA_LINUX_ARM=$(awk '{print $1}' aven-linux-arm64.sha256)
-          SHA_LINUX_INTEL=$(awk '{print $1}' aven-linux-amd64.sha256)
-
-          cat > tap/Formula/aven.rb << EOF
-          class Aven < Formula
-            desc "Local-first task manager CLI and sync server"
-            homepage "https://github.com/raine/aven"
-            version "${VERSION}"
-            license "MIT"
-
-            on_macos do
-              if Hardware::CPU.arm?
-                url "https://github.com/raine/aven/releases/download/v${VERSION}/aven-darwin-arm64.tar.gz"
-                sha256 "${SHA_MAC_ARM}"
-              else
-                url "https://github.com/raine/aven/releases/download/v${VERSION}/aven-darwin-amd64.tar.gz"
-                sha256 "${SHA_MAC_INTEL}"
-              end
-            end
-
-            on_linux do
-              if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
-                url "https://github.com/raine/aven/releases/download/v${VERSION}/aven-linux-arm64.tar.gz"
-                sha256 "${SHA_LINUX_ARM}"
-              else
-                url "https://github.com/raine/aven/releases/download/v${VERSION}/aven-linux-amd64.tar.gz"
-                sha256 "${SHA_LINUX_INTEL}"
-              end
-            end
-
-            def install
-              bin.install "aven"
-              generate_completions_from_executable(bin/"aven", "completions")
-            end
-
-            test do
-              assert_match "Local-first task manager", shell_output("#{bin}/aven --help")
-            end
-          end
-          EOF
-          sed -i 's/^          //' tap/Formula/aven.rb
+          source/scripts/homebrew-formula "$VERSION" . > tap/Formula/aven.rb
 
           cd tap
           git config user.name "github-actions[bot]"
