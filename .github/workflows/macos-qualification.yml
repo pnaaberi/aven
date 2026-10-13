@@ -127,7 +127,7 @@ jobs:
       - name: Package and qualify
         run: |
           mkdir qualified extracted
-          tar -C unsigned -czf "qualified/${{ matrix.artifact }}.tar.gz" "$BIN_NAME"
+          scripts/package-macos-binary "unsigned/${BIN_NAME}" "qualified/${{ matrix.artifact }}.tar.gz"
           (cd qualified && shasum -a 256 "${{ matrix.artifact }}.tar.gz" > "${{ matrix.artifact }}.sha256")
           (cd qualified && shasum -a 256 -c "${{ matrix.artifact }}.sha256")
           tar -xzf "qualified/${{ matrix.artifact }}.tar.gz" -C extracted

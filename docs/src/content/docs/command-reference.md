@@ -1148,10 +1148,12 @@ service and log paths, and a recovery action. Its JSON states are
 Service management is available on macOS, as a LaunchAgent, and on Linux, as a
 systemd user service named `aven-daemon.service`:
 
-- `install` writes, enables, and starts the service. It records the resolved database, config directory, and executable. On macOS it also records log paths; on Linux output goes to the journal (`journalctl --user -u aven-daemon.service`). `--program` stores an explicit executable path instead of the running binary.
+- `install` writes, enables, and starts the service. It records the resolved database, config directory, and executable. On macOS it also records log paths, and an executable inside `Aven.app` is recorded by its bundle path so Login Items lists the daemon as Aven; on Linux output goes to the journal (`journalctl --user -u aven-daemon.service`). `--program` stores an explicit executable path instead of the running binary.
 - `uninstall` stops and removes the service file.
 - `restart` restarts the service.
 - `repair` rewrites and restarts an installed service from active configuration. `--if-installed` succeeds without changes when the service is absent. `--program` selects the stored executable path.
+
+On macOS, a daemon that runs `Aven.app`'s executable through a symlink, such as Homebrew's `bin/aven`, moves its LaunchAgent to the bundle path when it starts. It keeps the recorded database, environment, and log paths, and reloads the service from a separate process. It leaves a disabled service, or a plist edited outside aven, unchanged; `aven daemon status` then suggests `aven daemon repair`.
 
 On Linux, a systemd user service stops when you log out unless lingering is
 enabled with `loginctl enable-linger`.
@@ -1319,6 +1321,8 @@ aven update [--yes]
 Package-manager installations receive manager-specific update instructions. Direct installations report an available release without changing the executable unless `--yes` is supplied.
 
 A direct update downloads the platform archive, verifies it, replaces the current executable, and asks you to restart running aven processes. Cached release information is used when a fresh check fails and a valid cache entry exists.
+
+On macOS, aven runs from `Aven.app`, and a direct update replaces the whole bundle. A standalone `aven` executable is replaced by a symlink to `~/.local/share/aven/Aven.app/Contents/MacOS/aven`. An installed daemon restarts on the new executable and moves its LaunchAgent into the bundle.
 
 ```sh
 aven update

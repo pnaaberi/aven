@@ -93,6 +93,11 @@ pub(crate) fn build_daemon_status(
         if service.program_matches_current == Some(false) {
             guidance.push("Repair the executable path with `aven daemon repair`.".to_string());
         }
+        if service.bundle_migration_pending == Some(true) {
+            guidance.push(
+                "Run `aven daemon repair` so Login Items lists the daemon as Aven.".to_string(),
+            );
+        }
         if state == StatusState::Failed {
             guidance.push(
                 "Restart it with `aven daemon restart`; inspect the log paths if it remains stopped."
@@ -143,6 +148,7 @@ mod tests {
             program: installed.then(|| PathBuf::from("/bin/aven")),
             current_executable: PathBuf::from("/bin/aven"),
             program_matches_current: installed.then_some(true),
+            bundle_migration_pending: installed.then_some(false),
             stdout_path: Some(PathBuf::from("/logs/out")),
             stderr_path: Some(PathBuf::from("/logs/err")),
         }
@@ -191,6 +197,23 @@ mod tests {
         assert_eq!(
             build_daemon_status(&AppConfig::default(), service(true)).state,
             StatusState::Blocked
+        );
+    }
+
+    #[test]
+    fn pending_bundle_migration_suggests_repair_without_changing_state() {
+        let mut pending = service(true);
+        pending.bundle_migration_pending = Some(true);
+        let status = build_daemon_status(&configured(), pending);
+        assert_eq!(status.state, StatusState::Healthy);
+        assert_eq!(
+            status.guidance,
+            ["Run `aven daemon repair` so Login Items lists the daemon as Aven."]
+        );
+        assert!(
+            build_daemon_status(&configured(), service(true))
+                .guidance
+                .is_empty()
         );
     }
 }

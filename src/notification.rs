@@ -91,7 +91,7 @@ fn show_notification(message: &str) {
 
 #[cfg(target_os = "macos")]
 mod macos {
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
     use std::sync::OnceLock;
 
     use core_foundation::array::{CFArray, CFArrayRef};
@@ -100,7 +100,7 @@ mod macos {
     use core_foundation::string::{CFString, CFStringRef};
     use core_foundation::url::{CFURL, CFURLRef};
 
-    pub(super) const AVEN_BUNDLE_ID: &str = "fi.zendit.Aven";
+    pub(super) use crate::app_bundle::{AVEN_BUNDLE_ID, enclosing_bundle};
     pub(super) const FALLBACK_BUNDLE_ID: &str = "com.apple.Terminal";
 
     #[link(name = "CoreServices", kind = "framework")]
@@ -154,20 +154,6 @@ mod macos {
                 FALLBACK_BUNDLE_ID
             }
         }
-    }
-
-    /// The `.app` directory whose main executable is the canonical `aven` path.
-    pub(super) fn enclosing_bundle(executable: &Path) -> Option<PathBuf> {
-        if executable.file_name()? != "aven" {
-            return None;
-        }
-        let macos = executable.parent()?;
-        let contents = macos.parent()?;
-        let bundle = contents.parent()?;
-        (macos.file_name()? == "MacOS"
-            && contents.file_name()? == "Contents"
-            && bundle.extension()? == "app")
-            .then(|| bundle.to_path_buf())
     }
 
     pub(super) fn bundle_identifier(bundle: &Path) -> Option<String> {

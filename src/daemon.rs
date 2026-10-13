@@ -19,8 +19,8 @@ use crate::sync::encrypted::{self, DaemonRound};
 mod service;
 
 pub use service::{
-    InstalledService, ServiceInstallArgs, ServiceRepairArgs, ServiceStatus, install, repair,
-    restart, status_snapshot, uninstall,
+    InstalledService, ServiceInstallArgs, ServiceRepairArgs, ServiceStatus, install,
+    reload_service_definition, repair, restart, status_snapshot, uninstall,
 };
 
 const BINARY_CHECK_INTERVAL: Duration = Duration::from_secs(30);
@@ -52,6 +52,10 @@ pub struct DaemonRunArgs {
 pub async fn run(args: DaemonRunArgs) -> Result<()> {
     args.config.ensure_automatic_sync_enabled()?;
     let wake_addr = args.config.wake_addr()?;
+    #[cfg(target_os = "macos")]
+    if move_service_into_bundle().await {
+        return Ok(());
+    }
     let interval_seconds = args.config.sync_interval_seconds();
     let database = Database::open(&args.db_path).await?;
     let socket = UdpSocket::bind(wake_addr).await.with_context(|| {
@@ -170,6 +174,58 @@ async fn run_loop(
         }
     }
     Ok(())
+}
+
+/// Points the LaunchAgent at Aven.app's executable when it still runs it
+/// through a symlink, then has a separate process reload the service. Returns
+/// true when launchd stopped this daemon for the reload.
+#[cfg(target_os = "macos")]
+async fn move_service_into_bundle() -> bool {
+    use std::os::unix::process::CommandExt as _;
+
+    let program = match service::prepare_bundle_migration() {
+        Ok(service::BundleMigration::Prepared { program }) => program,
+        Ok(service::BundleMigration::NotNeeded) => return false,
+        Ok(service::BundleMigration::Skipped(reason)) => {
+            println!("daemon-bundle-migration-skipped reason={reason}");
+            return false;
+        }
+        Err(error) => {
+            warn!(error = %format!("{error:#}"), "daemon bundle migration failed");
+            return false;
+        }
+    };
+    println!("daemon-bundle-migration program={}", program.display());
+    let mut command = std::process::Command::new(&program);
+    command
+        .args(["internal", "reload-daemon"])
+        .stdin(std::process::Stdio::null());
+    // Bootout ends every process in the job's process group, including a
+    // reload started from it, so the reload runs in its own session.
+    unsafe {
+        command.pre_exec(|| {
+            if libc::setsid() == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    let mut child = match tokio::process::Command::from(command).spawn() {
+        Ok(child) => child,
+        Err(error) => {
+            warn!(error = %error, "daemon reload could not start");
+            return false;
+        }
+    };
+    // If the reload fails before stopping this daemon, keep running on the
+    // loaded definition; the rewritten plist applies at the next login.
+    tokio::select! {
+        _ = shutdown_signal() => true,
+        status = child.wait() => {
+            warn!(status = ?status, "daemon reload exited without stopping the daemon");
+            false
+        }
+    }
 }
 
 fn daemon_error(error: &anyhow::Error) -> String {
