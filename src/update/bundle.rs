@@ -12,7 +12,6 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, atomic::AtomicBool};
-use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 use flate2::read::GzDecoder;
@@ -25,7 +24,6 @@ use crate::app_bundle::{BUNDLE_EXECUTABLE, BUNDLE_NAME, direct_install_bundle, e
 
 const ENTRY_LIMIT: usize = 4096;
 const EXTRACTED_LIMIT: u64 = 256 * 1024 * 1024;
-const REPAIR_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum BundleLayout {
@@ -127,7 +125,6 @@ pub(super) async fn install(
 
     Ok(InstallSuccess {
         version: release.version.clone(),
-        warnings: repair_daemon(&executable).await.into_iter().collect(),
     })
 }
 
@@ -321,35 +318,6 @@ fn link_executable(link: &Path, executable: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Lets the new executable rewrite an installed LaunchAgent so it runs from
-/// the bundle. Returns a warning instead of failing the finished update.
-async fn repair_daemon(executable: &Path) -> Option<String> {
-    let output = tokio::time::timeout(
-        REPAIR_TIMEOUT,
-        tokio::process::Command::new(executable)
-            .args(["daemon", "repair", "--if-installed"])
-            .stdin(std::process::Stdio::null())
-            .kill_on_drop(true)
-            .output(),
-    )
-    .await;
-    let problem = match output {
-        Ok(Ok(output)) if output.status.success() => return None,
-        Ok(Ok(output)) => {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            match stderr.trim() {
-                "" => output.status.to_string(),
-                stderr => stderr.to_string(),
-            }
-        }
-        Ok(Err(error)) => error.to_string(),
-        Err(_) => "timed out".to_string(),
-    };
-    Some(format!(
-        "could not repair the daemon ({problem}); run `aven daemon repair`"
-    ))
-}
-
 #[cfg(test)]
 mod tests {
     use std::os::unix::fs::PermissionsExt;
@@ -402,10 +370,10 @@ mod tests {
         builder.into_inner().unwrap().finish().unwrap()
     }
 
-    fn script(version: &str, repair_log: &Path) -> Vec<u8> {
+    fn script(version: &str, daemon_log: &Path) -> Vec<u8> {
         format!(
             "#!/bin/sh\nif [ \"$1\" = daemon ]; then printf '%s\\n' \"$0 $*\" >> '{}'; exit 0; fi\nprintf 'aven {version}\\n'\n",
-            repair_log.display()
+            daemon_log.display()
         )
         .into_bytes()
     }
@@ -795,14 +763,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn update_swaps_the_whole_bundle_and_repairs_the_daemon() {
+    async fn update_swaps_the_whole_bundle_and_leaves_the_daemon_alone() {
         let temp = tempfile::tempdir().unwrap();
         let home = temp.path().join("home");
         let apps = temp.path().join("apps");
         let bundle = apps.join("Aven.app");
         write_bundle(&bundle, b"old executable");
         std::fs::write(bundle.join("Contents/stale"), b"old only").unwrap();
-        let log = temp.path().join("repair.log");
+        let log = temp.path().join("daemon.log");
         let archive = app_archive(&script("1.2.3", &log));
         let sum = checksum(&archive, "aven-test-app.tar.gz");
 
@@ -812,7 +780,6 @@ mod tests {
             .unwrap();
 
         assert_eq!(installed.version, Version::new(1, 2, 3));
-        assert!(installed.warnings.is_empty(), "{:?}", installed.warnings);
         assert_eq!(names(&apps), vec!["Aven.app"]);
         assert_eq!(
             std::fs::read(bundle.join(BUNDLE_EXECUTABLE)).unwrap(),
@@ -827,10 +794,8 @@ mod tests {
             !home.exists(),
             "an update must not create the migration path"
         );
-        assert_eq!(
-            std::fs::read_to_string(&log).unwrap(),
-            format!("{} daemon repair --if-installed\n", target.display())
-        );
+        // An installed daemon restarts on the new executable by itself.
+        assert!(!log.exists());
     }
 
     #[tokio::test]
@@ -841,7 +806,7 @@ mod tests {
         let bundle = apps.join("Aven.app");
         write_bundle(&bundle, b"old executable");
         let target = bundle.join(BUNDLE_EXECUTABLE);
-        let log = temp.path().join("repair.log");
+        let log = temp.path().join("daemon.log");
         let good = app_archive(&script("1.2.3", &log));
         let hostile = tar_gz(&[
             ("Aven.app/Contents/Info.plist", Kind::File, b"p", 0o644),
@@ -934,15 +899,14 @@ mod tests {
         std::fs::create_dir(&bin).unwrap();
         let target = bin.join("aven");
         std::fs::write(&target, b"bare executable").unwrap();
-        let log = temp.path().join("repair.log");
+        let log = temp.path().join("daemon.log");
         let archive = app_archive(&script("1.2.3", &log));
         let sum = checksum(&archive, "aven-test-app.tar.gz");
 
-        let installed = loopback_install(archive, sum, &target, &home, "1.2.3")
+        loopback_install(archive, sum, &target, &home, "1.2.3")
             .await
             .unwrap();
 
-        assert!(installed.warnings.is_empty(), "{:?}", installed.warnings);
         let bundle = direct_install_bundle(&home);
         let executable = bundle.join(BUNDLE_EXECUTABLE);
         assert_eq!(std::fs::read_link(&target).unwrap(), executable);
@@ -953,10 +917,7 @@ mod tests {
             .output()
             .unwrap();
         assert_eq!(output.stdout, b"aven 1.2.3\n");
-        assert_eq!(
-            std::fs::read_to_string(&log).unwrap(),
-            format!("{} daemon repair --if-installed\n", executable.display())
-        );
+        assert!(!log.exists());
     }
 
     #[tokio::test]
@@ -969,7 +930,7 @@ mod tests {
         std::fs::create_dir(&bin).unwrap();
         let target = bin.join("aven");
         std::fs::write(&target, b"bare executable").unwrap();
-        let log = temp.path().join("repair.log");
+        let log = temp.path().join("daemon.log");
         let archive = app_archive(&script("1.2.3", &log));
         let sum = checksum(&archive, "aven-test-app.tar.gz");
 
@@ -1019,20 +980,5 @@ mod tests {
             std::fs::read(staged.join(BUNDLE_EXECUTABLE)).unwrap(),
             b"new"
         );
-    }
-
-    #[tokio::test]
-    async fn daemon_repair_failure_is_a_warning() {
-        let temp = tempfile::tempdir().unwrap();
-        let executable = temp.path().join("aven");
-        std::fs::write(
-            &executable,
-            "#!/bin/sh\necho 'sync is disabled' >&2\nexit 1\n",
-        )
-        .unwrap();
-        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
-        let warning = repair_daemon(&executable).await.unwrap();
-        assert!(warning.contains("sync is disabled"), "{warning}");
-        assert!(warning.contains("aven daemon repair"), "{warning}");
     }
 }

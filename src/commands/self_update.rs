@@ -83,9 +83,6 @@ async fn install_release(
     };
 
     println!("Installed aven v{}.", success.version);
-    for warning in &success.warnings {
-        println!("Warning: {warning}");
-    }
     println!("Restart any running aven processes to use the update.");
     Ok(())
 }

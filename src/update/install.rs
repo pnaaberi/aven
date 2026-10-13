@@ -78,7 +78,6 @@ pub(super) async fn install_direct_for_home(
 
     Ok(InstallSuccess {
         version: plan.release.version,
-        warnings: Vec::new(),
     })
 }
 

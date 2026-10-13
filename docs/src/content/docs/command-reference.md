@@ -1322,7 +1322,7 @@ Package-manager installations receive manager-specific update instructions. Dire
 
 A direct update downloads the platform archive, verifies it, replaces the current executable, and asks you to restart running aven processes. Cached release information is used when a fresh check fails and a valid cache entry exists.
 
-On macOS, aven runs from `Aven.app`, and a direct update replaces the whole bundle. A standalone `aven` executable is replaced by a symlink to `~/.local/share/aven/Aven.app/Contents/MacOS/aven`. After either update, `aven daemon repair --if-installed` runs so an installed daemon starts from the bundle.
+On macOS, aven runs from `Aven.app`, and a direct update replaces the whole bundle. A standalone `aven` executable is replaced by a symlink to `~/.local/share/aven/Aven.app/Contents/MacOS/aven`. An installed daemon restarts on the new executable and moves its LaunchAgent into the bundle.
 
 ```sh
 aven update

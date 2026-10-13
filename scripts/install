@@ -24,7 +24,6 @@ readonly blue='\033[0;34m'
 readonly reset='\033[0m'
 
 install_dir_result=""
-app_executable_result=""
 tmp_dir_to_remove=""
 
 cleanup() {
@@ -316,7 +315,6 @@ install_from_release() {
             install_app "$tmp_dir/app/Aven.app" "$HOME/.local/share/aven"
             link_binary "$HOME/.local/share/aven/Aven.app/Contents/MacOS/aven" "$install_dir"
             install_dir_result=$install_dir
-            app_executable_result="$HOME/.local/share/aven/Aven.app/Contents/MacOS/aven"
             return
         fi
         log_warning "$version has no Aven.app archive; installing the bare binary"
@@ -331,15 +329,6 @@ install_from_release() {
 
     install_binary "$tmp_dir/aven" "$install_dir"
     install_dir_result=$install_dir
-}
-
-# Points an installed LaunchAgent at the bundle and restarts it.
-repair_daemon() {
-    local executable=$1
-
-    if ! "$executable" daemon repair --if-installed; then
-        log_warning "Could not update the aven daemon; run: aven daemon repair"
-    fi
 }
 
 verify_installation() {
@@ -379,9 +368,6 @@ main() {
 
     install_from_release "$platform"
     verify_installation "$install_dir_result"
-    if [[ -n "$app_executable_result" ]]; then
-        repair_daemon "$app_executable_result"
-    fi
 }
 
 # Tests source this script to call its functions.

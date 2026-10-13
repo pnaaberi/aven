@@ -247,9 +247,6 @@ impl App {
             self.update.cancelled = None;
             match result {
                 Ok(Ok(success)) => {
-                    if !success.warnings.is_empty() {
-                        self.set_warning(success.warnings.join("; "));
-                    }
                     self.update.availability = UpdateAvailability::Restart(success.version.clone());
                     self.overlay = Some(OverlayState::Update(UpdateOverlayState::Success {
                         version: success.version.to_string(),

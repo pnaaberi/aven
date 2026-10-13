@@ -157,8 +157,6 @@ pub(crate) struct UpdateProgress {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct InstallSuccess {
     pub(crate) version: Version,
-    /// Problems after the new version was installed, such as a failed daemon repair.
-    pub(crate) warnings: Vec<String>,
 }
 
 pub(crate) fn current_version() -> Version {

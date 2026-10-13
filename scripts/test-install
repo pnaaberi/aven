@@ -20,13 +20,13 @@ sha256_line() {
   fi
 }
 
-# A stand-in for the aven executable: prints help and records daemon repairs.
+# A stand-in for the aven executable: prints help and records daemon commands.
 fake_aven() {
   cat <<EOF
 #!/bin/sh
 if [ "\$1" = daemon ]; then
-  printf '%s\n' "\$0 \$*" >>"$tmp/repair.log"
-  exit \${FAKE_REPAIR_STATUS:-0}
+  printf '%s\n' "\$0 \$*" >>"$tmp/daemon.log"
+  exit 0
 fi
 echo "Local-first task manager $1"
 EOF
@@ -80,9 +80,6 @@ run_install() {
     export HOME=$home AVEN_VERSION=v1.2.3 AVEN_INSTALL_DIR=$install_dir
     install_from_release "$platform"
     verify_installation "$install_dir_result"
-    if [[ -n "$app_executable_result" ]]; then
-      repair_daemon "$app_executable_result"
-    fi
   )
 }
 
@@ -121,8 +118,9 @@ Aven.app/Contents/MacOS
 Aven.app/Contents/MacOS/aven
 Aven.app/Contents/Resources
 Aven.app/Contents/Resources/Aven.icns" ]] || fail "unexpected bundle layout: $(listing "$home/.local/share/aven")"
-[[ $(cat "$tmp/repair.log") == "$executable daemon repair --if-installed" ]] || fail "daemon repair did not run from the bundle"
-rm "$tmp/repair.log"
+# An installed daemon moves itself into the bundle when it restarts on the new
+# executable, so the installer leaves it alone.
+[[ ! -e $tmp/daemon.log ]] || fail "installer ran a daemon command"
 
 # Reinstalling replaces the whole bundle, including files the new one lacks.
 printf 'stale\n' >"$app/Contents/stale"
@@ -133,7 +131,6 @@ run_install "$second" darwin-arm64 "$home" "$bin" >"$tmp/second.log" 2>&1 ||
 [[ $("$bin/aven") == "Local-first task manager second" ]] || fail "reinstall did not replace the bundle"
 [[ ! -e $app/Contents/stale ]] || fail "reinstall merged into the old bundle"
 [[ $(listing "$home/.local/share/aven" | grep -c '^[^/]*$') == 1 ]] || fail "reinstall left staging bundles"
-rm "$tmp/repair.log"
 
 # A bare binary from an older install is replaced by the symlink.
 rm "$bin/aven"
@@ -142,13 +139,6 @@ chmod 755 "$bin/aven"
 run_install "$second" darwin-arm64 "$home" "$bin" >"$tmp/migrate.log" 2>&1 ||
   fail "bare-to-bundle install failed: $(cat "$tmp/migrate.log")"
 [[ -L $bin/aven && $(readlink "$bin/aven") == "$executable" ]] || fail "bare binary was not replaced by the symlink"
-rm "$tmp/repair.log"
-
-# A failed daemon repair warns without failing the install.
-FAKE_REPAIR_STATUS=3 run_install "$second" darwin-arm64 "$home" "$bin" >"$tmp/repair-failure.log" 2>&1 ||
-  fail "install failed when daemon repair failed"
-grep -q 'Could not update the aven daemon' "$tmp/repair-failure.log" || fail "repair failure was not reported"
-rm "$tmp/repair.log"
 
 # Rejected archives leave the installed bundle and symlink untouched.
 installed_state() {
@@ -174,7 +164,7 @@ hostile() {
   add_checksum "$release/aven-darwin-arm64-app.tar.gz"
   reject_install "$name" "$reason" "$release" darwin-arm64 "$home" "$bin"
   [[ $(installed_state) == "$before" ]] || fail "$name: rejected install changed the existing install"
-  [[ ! -e $tmp/repair.log ]] || fail "$name: rejected install ran daemon repair"
+  [[ ! -e $tmp/daemon.log ]] || fail "$name: rejected install ran a daemon command"
 }
 hostile extra-root 'entries outside Aven.app' touch evil
 hostile symlink 'links or special files' ln -s /etc Aven.app/Contents/link
@@ -209,9 +199,9 @@ run_install "$old" darwin-arm64 "$old_home" "$old_bin" >"$tmp/old.log" 2>&1 ||
 [[ -f $old_bin/aven && ! -L $old_bin/aven ]] || fail "bare fallback did not install a regular file"
 [[ ! -e $old_home/.local ]] || fail "bare fallback created the bundle directory"
 grep -q 'has no Aven.app archive' "$tmp/old.log" || fail "bare fallback was not reported"
-[[ ! -e $tmp/repair.log ]] || fail "bare fallback ran daemon repair"
+[[ ! -e $tmp/daemon.log ]] || fail "bare fallback ran a daemon command"
 
-# Linux keeps installing the bare binary and never repairs the daemon.
+# Linux keeps installing the bare binary.
 linux_home="$tmp/linux-home"
 linux_bin="$tmp/linux-bin"
 mkdir -p "$linux_home"
@@ -222,6 +212,6 @@ run_install "$linux" linux-amd64 "$linux_home" "$linux_bin" >"$tmp/linux.log" 2>
   fail "linux install failed: $(cat "$tmp/linux.log")"
 [[ -f $linux_bin/aven && ! -L $linux_bin/aven ]] || fail "linux install did not install a regular file"
 [[ $("$linux_bin/aven") == "Local-first task manager linux" ]] || fail "linux install used the wrong archive"
-[[ ! -e $linux_home/.local && ! -e $tmp/repair.log ]] || fail "linux install touched the bundle path or daemon"
+[[ ! -e $linux_home/.local && ! -e $tmp/daemon.log ]] || fail "linux install touched the bundle path or daemon"
 
-echo "ok: macOS installs Aven.app with a bin symlink and repairs the daemon; reinstall replaces the bundle; hostile archives, checksum mismatches and symlinked bundle paths are rejected; releases without an app archive and Linux install the bare binary"
+echo "ok: macOS installs Aven.app with a bin symlink and leaves the daemon alone; reinstall replaces the bundle; hostile archives, checksum mismatches and symlinked bundle paths are rejected; releases without an app archive and Linux install the bare binary"
