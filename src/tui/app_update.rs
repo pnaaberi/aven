@@ -247,6 +247,9 @@ impl App {
             self.update.cancelled = None;
             match result {
                 Ok(Ok(success)) => {
+                    if !success.warnings.is_empty() {
+                        self.set_warning(success.warnings.join("; "));
+                    }
                     self.update.availability = UpdateAvailability::Restart(success.version.clone());
                     self.overlay = Some(OverlayState::Update(UpdateOverlayState::Success {
                         version: success.version.to_string(),
@@ -449,6 +452,7 @@ mod tests {
             archive_name: "aven-test.tar.gz".to_string(),
             archive_url: "https://example.com/aven-test.tar.gz".to_string(),
             checksum_url: "https://example.com/aven-test.sha256".to_string(),
+            app: None,
         }
     }
 

@@ -178,6 +178,7 @@ async fn update_review_supports_action_focus_and_later() {
                     archive_name: "aven-test.tar.gz".to_string(),
                     archive_url: "https://example.com/aven-test.tar.gz".to_string(),
                     checksum_url: "https://example.com/aven-test.sha256".to_string(),
+                    app: None,
                 },
                 method: crate::update::InstallMethod::Direct {
                     target: "/tmp/aven".into(),

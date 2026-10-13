@@ -14,6 +14,10 @@ use anyhow::Result;
 #[cfg(not(target_os = "linux"))]
 use anyhow::bail;
 
+#[cfg(target_os = "macos")]
+use crate::app_bundle::{
+    AVEN_BUNDLE_ID, BUNDLE_EXECUTABLE, BUNDLE_NAME, direct_install_bundle, enclosing_bundle,
+};
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 use crate::config;
 use crate::config::AppConfig;
@@ -411,15 +415,29 @@ fn absolute_path(path: PathBuf) -> Result<PathBuf> {
     Ok(std::env::current_dir()?.join(path))
 }
 
+/// Bundle paths come first: Login Items attributes the agent to Aven.app only
+/// when the program path itself is inside the bundle, not a symlink to it.
 #[cfg(target_os = "macos")]
 fn stable_program_path(current_exe: &Path) -> PathBuf {
+    let home = dirs::home_dir();
     let mut candidates = vec![
+        Path::new("/opt/homebrew/opt/aven")
+            .join(BUNDLE_NAME)
+            .join(BUNDLE_EXECUTABLE),
+        Path::new("/usr/local/opt/aven")
+            .join(BUNDLE_NAME)
+            .join(BUNDLE_EXECUTABLE),
+    ];
+    if let Some(home) = &home {
+        candidates.push(direct_install_bundle(home).join(BUNDLE_EXECUTABLE));
+    }
+    candidates.extend([
         PathBuf::from("/opt/homebrew/opt/aven/bin/aven"),
         PathBuf::from("/usr/local/opt/aven/bin/aven"),
         PathBuf::from("/opt/homebrew/bin/aven"),
         PathBuf::from("/usr/local/bin/aven"),
-    ];
-    if let Some(home) = dirs::home_dir() {
+    ]);
+    if let Some(home) = &home {
         candidates.push(home.join(".cargo/bin/aven"));
         candidates.push(home.join(".local/bin/aven"));
     }
@@ -657,6 +675,14 @@ fn render_plist(spec: &ServiceSpec) -> String {
             )
         })
         .collect::<String>();
+    // Login Items lists the agent under the app's name and icon.
+    let associated_bundle = if enclosing_bundle(&spec.executable).is_some() {
+        format!(
+            "  <key>AssociatedBundleIdentifiers</key>\n  <array>\n    <string>{AVEN_BUNDLE_ID}</string>\n  </array>\n"
+        )
+    } else {
+        String::new()
+    };
 
     format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
@@ -686,6 +712,7 @@ fn render_plist(spec: &ServiceSpec) -> String {
   <string>{}</string>\n\
   <key>StandardErrorPath</key>\n\
   <string>{}</string>\n\
+{}\
 </dict>\n\
 </plist>\n",
         escape_xml(&spec.label),
@@ -693,7 +720,8 @@ fn render_plist(spec: &ServiceSpec) -> String {
         escape_xml(path_str(&spec.db_path)),
         env_xml,
         escape_xml(path_str(&spec.stdout_path)),
-        escape_xml(path_str(&spec.stderr_path))
+        escape_xml(path_str(&spec.stderr_path)),
+        associated_bundle
     )
 }
 
@@ -771,6 +799,57 @@ mod tests {
         assert!(plist.contains("<true/>"));
         assert!(!plist.contains("<key>SuccessfulExit</key>"));
         assert!(plist.contains("<key>ThrottleInterval</key>"));
+        assert!(!plist.contains("AssociatedBundleIdentifiers"));
+    }
+
+    #[test]
+    fn bundled_program_associates_the_agent_with_aven_app() {
+        let mut spec = test_spec();
+        spec.executable = PathBuf::from("/opt/homebrew/opt/aven/Aven.app/Contents/MacOS/aven");
+        let plist = render_plist(&spec);
+        assert!(plist.contains(
+            "  <key>AssociatedBundleIdentifiers</key>\n  <array>\n    <string>fi.zendit.Aven</string>\n  </array>\n</dict>"
+        ));
+        assert_eq!(
+            program_from_plist_text(&plist).as_deref(),
+            Some("/opt/homebrew/opt/aven/Aven.app/Contents/MacOS/aven")
+        );
+
+        for bare in [
+            "/opt/homebrew/bin/aven",
+            "/x/Aven.app/Contents/Resources/aven",
+        ] {
+            spec.executable = PathBuf::from(bare);
+            assert!(
+                !render_plist(&spec).contains("AssociatedBundleIdentifiers"),
+                "{bare}"
+            );
+        }
+    }
+
+    #[test]
+    fn plist_with_bundle_association_is_valid_xml_plist() {
+        let mut spec = test_spec();
+        spec.executable = PathBuf::from("/Users/me/.local/share/aven/Aven.app/Contents/MacOS/aven");
+        let path = spec.plist_path.clone();
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, render_plist(&spec)).unwrap();
+        let output = Command::new("/usr/bin/plutil")
+            .args([
+                "-extract",
+                "AssociatedBundleIdentifiers.0",
+                "raw",
+                "-o",
+                "-",
+            ])
+            .arg(&path)
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).trim(),
+            "fi.zendit.Aven"
+        );
     }
 
     #[test]
@@ -975,6 +1054,36 @@ mod tests {
         assert_eq!(
             stable_program_path_from_candidates(&current, vec![stable.clone()]),
             stable
+        );
+    }
+
+    #[test]
+    fn stable_program_path_prefers_the_bundle_over_bin_symlinks() {
+        let dir = tempfile::tempdir().unwrap();
+        let cellar_bundle = dir.path().join("Cellar/aven/1.0.0/Aven.app");
+        let executable = cellar_bundle.join(BUNDLE_EXECUTABLE);
+        std::fs::create_dir_all(executable.parent().unwrap()).unwrap();
+        std::fs::write(&executable, "aven").unwrap();
+        let opt = dir.path().join("opt/aven");
+        std::fs::create_dir_all(opt.parent().unwrap()).unwrap();
+        std::os::unix::fs::symlink(cellar_bundle.parent().unwrap(), &opt).unwrap();
+        let bin = dir.path().join("bin/aven");
+        std::fs::create_dir_all(bin.parent().unwrap()).unwrap();
+        std::os::unix::fs::symlink(&executable, &bin).unwrap();
+        let opt_bundle = opt.join(BUNDLE_NAME).join(BUNDLE_EXECUTABLE);
+
+        // Launched through the PATH symlink, the program still points inside the bundle.
+        assert_eq!(
+            stable_program_path_from_candidates(&bin, vec![opt_bundle.clone(), bin.clone()]),
+            opt_bundle
+        );
+        // A bare executable never matches a bundle left beside it.
+        let bare = dir.path().join("bare/aven");
+        std::fs::create_dir_all(bare.parent().unwrap()).unwrap();
+        std::fs::write(&bare, "aven").unwrap();
+        assert_eq!(
+            stable_program_path_from_candidates(&bare, vec![opt_bundle, bin]),
+            bare
         );
     }
 

@@ -3,6 +3,8 @@ use anyhow::Result;
 use aven_core::{
     change_log, choices, db, ids, labels, query, queue, refs, task_fields, types, undo,
 };
+#[cfg(target_os = "macos")]
+mod app_bundle;
 mod attachments;
 mod cli;
 mod clipboard;
