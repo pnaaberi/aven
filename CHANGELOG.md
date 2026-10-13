@@ -3,9 +3,9 @@ title: Changelog
 description: Release notes for aven.
 ---
 
-## Unreleased
+## v0.1.49 (2026-10-13)
 
-- Install the prebuilt binary with Nix, without compiling: `nix profile install https://github.com/raine/aven/releases/latest/download/aven-nix.tar.gz`. See [Getting started](https://aventasks.dev/getting-started/#install).
+- Install the prebuilt binary with Nix, without compiling: `nix profile install https://github.com/raine/aven/releases/latest/download/aven-nix.tar.gz`.
 
 ## v0.1.48 (2026-10-12)
 
