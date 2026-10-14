@@ -1006,6 +1006,36 @@ async fn tab_completes_command_then_cycles_arguments_and_resets_on_edit() {
 }
 
 #[tokio::test]
+async fn command_name_cycle_keeps_matches_visible_until_editing() {
+    let mut app = test_app().await;
+    app.begin_command().await;
+    type_chars(&mut app, ":edit-").await;
+    let (_, matches) = command_input_and_choices(&app);
+    assert!(matches.len() > 1);
+
+    for expected in matches.iter().chain(matches.iter().take(1)) {
+        app.handle_overlay_key(key(KeyCode::Tab)).await.unwrap();
+        let (input, choices) = command_input_and_choices(&app);
+        assert_eq!(&input, expected);
+        assert_eq!(choices, matches);
+        let Some(OverlayState::Command { state }) = &app.overlay else {
+            panic!("command overlay");
+        };
+        assert_eq!(state.highlighted_name(), Some(expected.as_str()));
+    }
+    app.handle_overlay_key(key(KeyCode::BackTab)).await.unwrap();
+    assert_eq!(command_input_and_choices(&app).0, *matches.last().unwrap());
+    assert_eq!(command_input_and_choices(&app).1, matches);
+
+    type_chars(&mut app, "zzzz").await;
+    assert!(command_input_and_choices(&app).1.is_empty());
+    assert!(matches!(
+        &app.overlay,
+        Some(OverlayState::Command { state }) if state.cycle_input.is_none()
+    ));
+}
+
+#[tokio::test]
 async fn argument_cycle_keeps_rows_browsable_and_enter_applies_highlight() {
     let mut app = test_app().await;
     app.begin_command().await;

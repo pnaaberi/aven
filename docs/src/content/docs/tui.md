@@ -326,7 +326,8 @@ The in-app command catalog is the authoritative shortcut reference:
   Tab to cycle values while keeping the choices visible. Typing an argument
   filters the choices. For example, `:theme terminal` uses your terminal's own
   colors. This does not change your config.
-- `:` searches command names and descriptions. `:sync` opens the **Sync**
+- `:` searches command names and descriptions. Tab cycles through matches
+  while keeping them visible; typing resumes filtering. `:sync` opens the **Sync**
   dialog; `:config-status` remains an alias. From a task-list surface, choose
   `:add-device` to invite another device to sync. The **Add device** overlay
   shows the invitation as a QR code with the time left and the command to run
