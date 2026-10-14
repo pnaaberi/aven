@@ -494,7 +494,7 @@ async fn edit_project_picker_excludes_project_inference() {
 }
 
 #[tokio::test]
-async fn edit_priority_picker_prefills_current_priority() {
+async fn priority_footer_choice_updates_priority_and_promotes_inbox_task() {
     let mut app = test_app().await;
     create_and_select_task(
         &mut app,
@@ -714,11 +714,15 @@ async fn detail_copy_hotkeys_copy_task_text_and_show_feedback() {
     assert!(app.view().copy_description_available);
     assert!(app.view().copy_notes_available);
 
-    for (key_code, expected_message) in [
-        ('t', "copied task title"),
-        ('d', "copied task description"),
-        ('a', "copied task title and description"),
-        ('n', "copied task notes"),
+    for (key_code, expected_message, expected_text) in [
+        ('t', "copied task title", "Copy target"),
+        ('d', "copied task description", "First paragraph.\n\n- item"),
+        (
+            'a',
+            "copied task title and description",
+            "Copy target\n\nFirst paragraph.\n\n- item",
+        ),
+        ('n', "copied task notes", "Note body"),
     ] {
         app.show_detail(3);
         app.dispatch_key(key(KeyCode::Char('y')), (80, 24).into())
@@ -728,6 +732,10 @@ async fn detail_copy_hotkeys_copy_task_text_and_show_feedback() {
             .await
             .unwrap();
 
+        assert_eq!(
+            crate::tui::platform::clipboard_text_for_test().as_deref(),
+            Some(expected_text)
+        );
         assert_eq!(toast_message(&app).as_deref(), Some(expected_message));
         assert_eq!(toast_severity(&app), Some(ToastSeverity::Success));
         assert!(app.overlay.is_none());
@@ -776,17 +784,25 @@ async fn table_copy_hotkeys_copy_task_text_and_show_feedback() {
     assert!(app.view().copy_description_available);
     assert!(app.view().copy_notes_available);
 
-    for (key_code, expected_message) in [
-        ('t', "copied task title"),
-        ('d', "copied task description"),
-        ('a', "copied task title and description"),
-        ('n', "copied task notes"),
+    for (key_code, expected_message, expected_text) in [
+        ('t', "copied task title", "Copy target"),
+        ('d', "copied task description", "First paragraph.\n\n- item"),
+        (
+            'a',
+            "copied task title and description",
+            "Copy target\n\nFirst paragraph.\n\n- item",
+        ),
+        ('n', "copied task notes", "Note body"),
     ] {
         app.handle_normal_key(KeyCode::Char('y')).await.unwrap();
         app.handle_normal_key(KeyCode::Char(key_code))
             .await
             .unwrap();
 
+        assert_eq!(
+            crate::tui::platform::clipboard_text_for_test().as_deref(),
+            Some(expected_text)
+        );
         assert_eq!(toast_message(&app).as_deref(), Some(expected_message));
         assert_eq!(toast_severity(&app), Some(ToastSeverity::Success));
         assert!(app.overlay.is_none());
