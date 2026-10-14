@@ -1029,7 +1029,9 @@ async fn mouse_wheel_stops_at_task_list_edges() {
 #[tokio::test]
 async fn mouse_wheel_ignored_with_overlay() {
     let mut app = test_app().await;
-    let _ = create_and_select_task(&mut app, test_task_draft("task")).await;
+    create_and_select_task(&mut app, test_task_draft("first")).await;
+    create_and_select_task(&mut app, test_task_draft("second")).await;
+    app.list.select_task(Some(0));
     app.begin_search();
     let selected = app.list.selected_task();
 
@@ -1059,7 +1061,9 @@ async fn modal_overlay_mouse_does_not_reach_detail_underlay() {
 #[tokio::test]
 async fn mouse_wheel_ignored_in_sidebar_focus() {
     let mut app = test_app().await;
-    let _ = create_and_select_task(&mut app, test_task_draft("task")).await;
+    create_and_select_task(&mut app, test_task_draft("first")).await;
+    create_and_select_task(&mut app, test_task_draft("second")).await;
+    app.list.select_task(Some(0));
     app.list.focus_sidebar();
 
     app.dispatch_mouse(mouse_wheel(MouseEventKind::ScrollDown), (80, 24).into())
@@ -1073,7 +1077,9 @@ async fn mouse_wheel_ignored_in_sidebar_focus() {
 #[tokio::test]
 async fn mouse_wheel_ignored_with_detail_underlay() {
     let mut app = test_app().await;
-    let _ = create_and_select_task(&mut app, test_task_draft("task")).await;
+    create_and_select_task(&mut app, test_task_draft("first")).await;
+    create_and_select_task(&mut app, test_task_draft("second")).await;
+    app.list.select_task(Some(0));
     app.detail = crate::tui::detail_session::DetailSession::open(0);
 
     app.dispatch_mouse(mouse_wheel(MouseEventKind::ScrollDown), (80, 24).into())
@@ -1081,12 +1087,15 @@ async fn mouse_wheel_ignored_with_detail_underlay() {
         .unwrap();
 
     assert_eq!(app.list.selected_task(), Some(0));
+    assert!(app.detail.is_active());
 }
 
 #[tokio::test]
 async fn mouse_wheel_ignored_for_small_terminal() {
     let mut app = test_app().await;
-    let _ = create_and_select_task(&mut app, test_task_draft("task")).await;
+    create_and_select_task(&mut app, test_task_draft("first")).await;
+    create_and_select_task(&mut app, test_task_draft("second")).await;
+    app.list.select_task(Some(0));
 
     app.dispatch_mouse(mouse_wheel(MouseEventKind::ScrollDown), (69, 24).into())
         .await
