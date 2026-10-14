@@ -61,39 +61,35 @@ fn epic_json_surfaces_include_state_and_links() {
     let child = extract_ref(&ok(env.aven(&db, ["add", "json child", "--project", "app"])));
     ok(env.aven(&db, ["epic", "add", &child, &epic]));
 
-    let list = ok(env.aven(&db, ["list", "--epics", "--json"]));
-    contains_all(
-        &list,
-        &[
-            "\"is_epic\": true",
-            "\"epic_parent\": null",
-            "\"epic_children\"",
-            "json child",
-        ],
-    );
+    let json = |args: &[&str]| -> serde_json::Value {
+        serde_json::from_str(&ok(env.aven(&db, args.iter().copied()))).unwrap()
+    };
+    let list = json(&["list", "--epics", "--json"]);
+    assert_eq!(list.as_array().unwrap().len(), 1);
+    assert_eq!(list[0]["ref"], epic);
+    assert_eq!(list[0]["is_epic"], true);
+    assert_eq!(list[0].get("epic_parent"), Some(&serde_json::Value::Null));
+    assert_eq!(list[0]["epic_children"].as_array().unwrap().len(), 1);
+    assert_eq!(list[0]["epic_children"][0]["ref"], child);
+    assert_eq!(list[0]["epic_children"][0]["title"], "json child");
 
-    let show_child = ok(env.aven(&db, ["show", &child, "--json"]));
-    contains_all(
-        &show_child,
-        &["\"is_epic\": false", "\"epic_parent\"", "json parent"],
-    );
+    let shown = json(&["show", &child, "--json"]);
+    let context = json(&["context", &child, "--json"]);
+    for (state, parent) in [
+        (&shown["is_epic"], &shown["epic_parent"]),
+        (&context["task"]["is_epic"], &context["epic_parent"]),
+    ] {
+        assert_eq!(state, false);
+        assert_eq!(parent["ref"], epic);
+        assert_eq!(parent["title"], "json parent");
+    }
 
-    let context_child = ok(env.aven(&db, ["context", &child, "--json"]));
-    contains_all(
-        &context_child,
-        &["\"is_epic\": false", "\"epic_parent\"", "json parent"],
-    );
-
-    let epic_list = ok(env.aven(&db, ["epic", "list", &epic, "--json"]));
-    contains_all(
-        &epic_list,
-        &[
-            "\"epic\"",
-            "\"is_epic\": true",
-            "\"children\"",
-            "json child",
-        ],
-    );
+    let children = json(&["epic", "list", &epic, "--json"]);
+    assert_eq!(children["epic"]["ref"], epic);
+    assert_eq!(children["epic"]["is_epic"], true);
+    assert_eq!(children["children"].as_array().unwrap().len(), 1);
+    assert_eq!(children["children"][0]["ref"], child);
+    assert_eq!(children["children"][0]["title"], "json child");
 }
 
 #[test]

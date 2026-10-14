@@ -136,6 +136,14 @@ fn related_export_uses_v3_and_round_trips_tombstone_state() {
         &ok(env.aven(&target, ["doctor", "--integrity"])),
         &["related link changes", "0 invalid"],
     );
+    let reexport = env.path("related-reexport.json");
+    ok(env.aven(&target, ["export", "--output", reexport.to_str().unwrap()]));
+    let restored: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(reexport).unwrap()).unwrap();
+    assert_eq!(
+        restored["tables"]["task_related_links"],
+        snapshot["tables"]["task_related_links"]
+    );
 }
 
 #[test]
