@@ -1040,6 +1040,23 @@ mod tests {
 
     #[test]
     fn unavailable_protected_storage_uses_surface_specific_recovery() {
+        for (kind, code, message) in [
+            (
+                ProtectedLocalKeyStoreErrorKind::Unavailable,
+                "protected-key-storage-unavailable",
+                "Protected sync key storage is unavailable.",
+            ),
+            (
+                ProtectedLocalKeyStoreErrorKind::Corrupt,
+                "protected-key-storage-unsafe",
+                "Protected sync key storage is corrupt or unsafe.",
+            ),
+        ] {
+            let error = Error::new(ProtectedLocalKeyStoreError::new(kind));
+            let explanation = explain(ErrorAction::Setup, ErrorSurface::Cli, &error).unwrap();
+            assert_eq!(explanation.code, code);
+            assert_eq!(explanation.message, message);
+        }
         let error = anyhow::Error::new(ProtectedLocalKeyStoreError::new(
             ProtectedLocalKeyStoreErrorKind::Unavailable,
         ));

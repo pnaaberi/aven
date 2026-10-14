@@ -77,33 +77,6 @@ async fn daemon_resources_persist_until_config_server_or_fatal_error_changes() {
     assert_ne!(sync.cached.as_ref().unwrap().generation, recovered);
 }
 
-#[test]
-fn protected_key_storage_failures_explain_setup_errors() {
-    use crate::protected_local_keys::{
-        ProtectedLocalKeyStoreError, ProtectedLocalKeyStoreErrorKind,
-    };
-    use crate::sync::error_explanations::{self, ErrorAction, ErrorSurface};
-
-    for (kind, code, message) in [
-        (
-            ProtectedLocalKeyStoreErrorKind::Unavailable,
-            "protected-key-storage-unavailable",
-            "Protected sync key storage is unavailable.",
-        ),
-        (
-            ProtectedLocalKeyStoreErrorKind::Corrupt,
-            "protected-key-storage-unsafe",
-            "Protected sync key storage is corrupt or unsafe.",
-        ),
-    ] {
-        let error = anyhow::Error::new(ProtectedLocalKeyStoreError::new(kind));
-        let explanation =
-            error_explanations::explain(ErrorAction::Setup, ErrorSurface::Cli, &error).unwrap();
-        assert_eq!(explanation.code, code);
-        assert_eq!(explanation.message, message);
-    }
-}
-
 /// Runs `aven` argument vectors from `AVEN_CLI_WORKER_ARGS` through the
 /// ordinary parse and dispatch path, then exits with the command's status.
 #[test]
