@@ -899,3 +899,61 @@ async fn wrapped_help_keyboard_and_mouse_reach_matching_endpoints_after_resize()
         }
     }
 }
+
+#[tokio::test]
+async fn detail_first_and_last_shortcuts_scroll_without_changing_tasks() {
+    let mut app = test_app().await;
+    let mut draft = test_task_draft("Jump scroll target");
+    draft.description = (0..100)
+        .map(|index| format!("line {index}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let index = create_and_select_task(&mut app, draft).await;
+    let task_id = app.store.tasks[index].task.id.clone();
+    app.store
+        .add_note_to_task(&task_id, "Focusable note".to_string())
+        .await
+        .unwrap();
+    app.refresh().await.unwrap();
+    let selected = app.list.selected_task();
+    app.show_detail(0);
+    let size = (80, 24).into();
+    let cap = app.detail_document_for_query(size).unwrap().scroll_cap();
+    assert!(cap > 0);
+
+    for focus in [false, true] {
+        for bottom in [KeyCode::Char('G'), KeyCode::End] {
+            if focus {
+                app.dispatch_key(key(KeyCode::Tab), size).await.unwrap();
+                assert!(app.detail.state().unwrap().focused_target().is_some());
+            }
+            app.dispatch_key(key(bottom), size).await.unwrap();
+            assert_eq!(detail_scroll(&app), cap);
+            assert!(app.detail.state().unwrap().focused_target().is_none());
+            assert_eq!(app.list.selected_task(), selected);
+
+            if focus {
+                app.dispatch_key(key(KeyCode::Tab), size).await.unwrap();
+                assert!(app.detail.state().unwrap().focused_target().is_some());
+            }
+            let before_prefix = detail_scroll(&app);
+            app.dispatch_key(key(KeyCode::Char('g')), size)
+                .await
+                .unwrap();
+            assert_eq!(detail_scroll(&app), before_prefix);
+            assert!(!app.pending_shortcut.is_empty());
+            app.dispatch_key(key(KeyCode::Char('g')), size)
+                .await
+                .unwrap();
+            assert_eq!(detail_scroll(&app), 0);
+            assert!(app.pending_shortcut.is_empty());
+            assert!(app.detail.state().unwrap().focused_target().is_none());
+            assert_eq!(app.list.selected_task(), selected);
+        }
+    }
+    app.show_detail(cap);
+    app.dispatch_key(key(KeyCode::Home), size).await.unwrap();
+    assert_eq!(detail_scroll(&app), 0);
+    assert!(app.detail.is_active());
+    assert!(app.overlay.is_none());
+}
