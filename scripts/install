@@ -259,6 +259,37 @@ link_binary() {
     fi
 }
 
+# Prints the existing Aven.app install that a bare binary would downgrade
+# around: the standard bundle, or an install_dir/aven symlink into a bundle.
+existing_bundle_install() {
+    local install_dir=$1
+    local bundle="$HOME/.local/share/aven/Aven.app"
+    local link="$install_dir/aven"
+
+    if [[ -e $bundle || -L $bundle ]]; then
+        printf '%s\n' "$bundle"
+    elif [[ -L $link && $(readlink "$link") == *.app/Contents/MacOS/aven ]]; then
+        printf '%s\n' "$link"
+    fi
+}
+
+# A bare binary would replace the bin/aven symlink while an installed daemon
+# keeps running the newer bundle, so refuse before changing anything.
+refuse_bundle_downgrade() {
+    local version=$1
+    local install_dir=$2
+    local existing
+
+    existing=$(existing_bundle_install "$install_dir")
+    if [[ -z $existing ]]; then
+        return
+    fi
+    log_error "$version has no Aven.app archive and cannot replace the Aven.app install at $existing"
+    printf '\nInstall a release that includes Aven.app, or uninstall the current aven first.\n'
+    printf 'After installing an older release, if you use the aven daemon, run: aven daemon repair\n\n'
+    exit 1
+}
+
 download_and_verify() {
     local base_url=$1
     local archive_name=$2
@@ -317,6 +348,7 @@ install_from_release() {
             install_dir_result=$install_dir
             return
         fi
+        refuse_bundle_downgrade "$version" "$install_dir"
         log_warning "$version has no Aven.app archive; installing the bare binary"
     fi
 

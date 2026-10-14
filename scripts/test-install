@@ -201,6 +201,44 @@ run_install "$old" darwin-arm64 "$old_home" "$old_bin" >"$tmp/old.log" 2>&1 ||
 grep -q 'has no Aven.app archive' "$tmp/old.log" || fail "bare fallback was not reported"
 [[ ! -e $tmp/daemon.log ]] || fail "bare fallback ran a daemon command"
 
+# Another bare release replaces a bare install in place.
+run_install "$old" darwin-arm64 "$old_home" "$old_bin" >"$tmp/old-again.log" 2>&1 ||
+  fail "bare reinstall failed: $(cat "$tmp/old-again.log")"
+[[ -f $old_bin/aven && ! -L $old_bin/aven ]] || fail "bare reinstall did not install a regular file"
+
+# A release without an app archive never replaces a bundled install: the bare
+# binary would replace bin/aven while a migrated daemon keeps running the
+# newer bundle.
+plist="$home/Library/LaunchAgents/com.raine.aven.daemon.plist"
+mkdir -p "$(dirname "$plist")"
+printf '<plist><array><string>%s</string></array></plist>\n' "$executable" >"$plist"
+plist_before=$(cat "$plist")
+reject_install downgrade 'cannot replace the Aven.app install' "$old" darwin-arm64 "$home" "$bin"
+grep -q 'Install a release that includes Aven.app' "$tmp/downgrade.log" || fail "downgrade refusal gave no next step"
+[[ $(installed_state) == "$before" ]] || fail "downgrade changed the bundled install"
+[[ $(listing "$bin") == aven ]] || fail "downgrade left files in the install directory: $(listing "$bin")"
+[[ $(cat "$plist") == "$plist_before" ]] || fail "downgrade changed the LaunchAgent"
+[[ ! -e $tmp/daemon.log ]] || fail "downgrade ran a daemon command"
+
+# The standard bundle also blocks a bare install into another directory.
+reject_install downgrade-other-dir 'cannot replace the Aven.app install' "$old" darwin-arm64 "$home" "$tmp/other-bin"
+[[ ! -e $tmp/other-bin ]] || fail "downgrade into another directory created it"
+[[ $(installed_state) == "$before" ]] || fail "downgrade into another directory changed the bundled install"
+
+# A custom install directory whose aven links into a bundle elsewhere is
+# protected without a standard bundle.
+custom_home="$tmp/custom-home"
+custom_bin="$tmp/custom-bin"
+custom_app="$tmp/custom/Aven.app/Contents/MacOS/aven"
+mkdir -p "$custom_home" "$custom_bin" "$(dirname "$custom_app")"
+fake_aven custom >"$custom_app"
+chmod 755 "$custom_app"
+ln -s "$custom_app" "$custom_bin/aven"
+reject_install downgrade-custom-link 'cannot replace the Aven.app install' "$old" darwin-arm64 "$custom_home" "$custom_bin"
+[[ $(readlink "$custom_bin/aven") == "$custom_app" && $(listing "$custom_bin") == aven ]] ||
+  fail "downgrade replaced a custom bundle symlink"
+[[ ! -e $custom_home/.local && ! -e $tmp/daemon.log ]] || fail "custom downgrade touched the bundle path or daemon"
+
 # Linux keeps installing the bare binary.
 linux_home="$tmp/linux-home"
 linux_bin="$tmp/linux-bin"
@@ -214,4 +252,4 @@ run_install "$linux" linux-amd64 "$linux_home" "$linux_bin" >"$tmp/linux.log" 2>
 [[ $("$linux_bin/aven") == "Local-first task manager linux" ]] || fail "linux install used the wrong archive"
 [[ ! -e $linux_home/.local && ! -e $tmp/daemon.log ]] || fail "linux install touched the bundle path or daemon"
 
-echo "ok: macOS installs Aven.app with a bin symlink and leaves the daemon alone; reinstall replaces the bundle; hostile archives, checksum mismatches and symlinked bundle paths are rejected; releases without an app archive and Linux install the bare binary"
+echo "ok: macOS installs Aven.app with a bin symlink and leaves the daemon alone; reinstall replaces the bundle; hostile archives, checksum mismatches and symlinked bundle paths are rejected; releases without an app archive install the bare binary but never over a bundled install; Linux installs the bare binary"
