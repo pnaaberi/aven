@@ -814,6 +814,9 @@ mod tests {
             };
         }
 
+        add!(Join, Tui, "sync-join-requires-empty-database";
+            anyhow!("error shared-state-install target database is not empty").context("error sync-join-requires-empty-database hint=\"join with a new database\"");
+            &[]; &["`aven --db /new/path sync join`"]; &[]);
         add!(Join, Cli, "enrollment-network";
             anyhow!("error enrollment-network outcome-unknown").context("error sync-join-incomplete");
             &[]; &["Local work continues"]; &["nothing changed"]);
