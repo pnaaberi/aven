@@ -954,21 +954,6 @@ async fn copy_requires_selected_task() {
 }
 
 #[tokio::test]
-async fn undo_shortcut_reverts_last_mutation() {
-    let mut app = test_app().await;
-    let selected = create_and_select_task(&mut app, test_task_draft("Before")).await;
-    app.store
-        .update_title(Some(selected), "After".to_string())
-        .await
-        .unwrap();
-    assert_eq!(app.store.tasks[selected].task.title, "After");
-
-    app.handle_normal_key(KeyCode::Char('u')).await.unwrap();
-    assert_eq!(app.store.tasks[selected].task.title, "Before");
-    assert!(toast_message(&app).is_some_and(|message| message.contains("undid")));
-}
-
-#[tokio::test]
 async fn undo_shortcut_keeps_selected_row_position() {
     let mut app = test_app().await;
     create_and_select_task(&mut app, test_task_draft("First")).await;
@@ -984,6 +969,7 @@ async fn undo_shortcut_keeps_selected_row_position() {
 
     assert_eq!(app.list.selected_task(), Some(selected));
     assert_eq!(app.store.tasks[selected].task.status, TaskStatus::Inbox);
+    assert!(toast_message(&app).is_some_and(|message| message.contains("undid")));
 }
 
 #[tokio::test]
@@ -994,6 +980,7 @@ async fn undo_command_reverts_last_mutation() {
         .update_title(Some(selected), "After".to_string())
         .await
         .unwrap();
+    assert_eq!(app.store.tasks[selected].task.title, "After");
 
     app.begin_command().await;
     for ch in "undo".chars() {
