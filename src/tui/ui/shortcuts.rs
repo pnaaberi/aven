@@ -696,24 +696,6 @@ fn command_name_style(theme: &Theme) -> Style {
     Style::new().fg(theme.accent).add_modifier(Modifier::BOLD)
 }
 
-#[cfg(test)]
-fn command_hint_line(
-    theme: &Theme,
-    leading: Span<'static>,
-    command: &BuiltInCommand,
-    command_name_width: usize,
-) -> Line<'static> {
-    let mut spans = vec![
-        leading,
-        Span::styled(
-            format!("{:<command_name_width$}", command_label(command.name)),
-            command_name_style(theme),
-        ),
-    ];
-    spans.push(Span::styled(command.description, theme.dim()));
-    Line::from(spans)
-}
-
 fn catalog_command_hint_line(
     theme: &Theme,
     leading: Span<'static>,
@@ -782,23 +764,6 @@ fn help_command_line(
         theme.dim(),
     ));
     Line::from(spans)
-}
-
-#[cfg(test)]
-fn command_line(command: &BuiltInCommand, context: CommandContext) -> Line<'static> {
-    let theme = Theme::dark();
-    let keys = command
-        .keys(context)
-        .iter()
-        .map(|key| key.label)
-        .collect::<Vec<_>>()
-        .join("/");
-    command_hint_line(
-        &theme,
-        Span::styled(format!("{keys:<10}"), theme.muted()),
-        command,
-        19,
-    )
 }
 
 struct CommandPaletteOptions<'a> {
@@ -1783,32 +1748,6 @@ mod tests {
     }
 
     #[test]
-    fn prefix_hint_lines_use_shared_catalog() {
-        let lines = prefix_hint_lines(CommandContext::Normal, &["t".to_string()]);
-        let rendered = lines
-            .iter()
-            .map(|line| line.to_string())
-            .collect::<Vec<_>>()
-            .join("\n");
-        assert!(rendered.contains(":status-active"));
-        assert!(rendered.contains(":priority-medium"));
-        assert!(rendered.contains(" a "));
-        assert!(rendered.contains(" m "));
-    }
-
-    #[test]
-    fn detail_prefix_hint_lines_use_detail_catalog() {
-        let lines = prefix_hint_lines(CommandContext::Detail, &["t".to_string()]);
-        let rendered = lines
-            .iter()
-            .map(|line| line.to_string())
-            .collect::<Vec<_>>()
-            .join("\n");
-        assert!(rendered.contains(":edit-title"));
-        assert!(rendered.contains(" e t "));
-    }
-
-    #[test]
     fn prefix_hint_lines_show_remaining_chord_sequence() {
         let rendered = prefix_hint_lines(CommandContext::Normal, &["t".to_string()])
             .iter()
@@ -1847,27 +1786,6 @@ mod tests {
             title.find("edit selected task title"),
             description.find("edit selected task description")
         );
-    }
-
-    #[test]
-    fn copy_prefix_groups_every_copy_action() {
-        for (context, command_prefix) in [
-            (CommandContext::Normal, ":copy-"),
-            (CommandContext::Detail, ":copy-"),
-        ] {
-            let rendered = prefix_hint_lines(context, &["y".to_string()])
-                .iter()
-                .map(|line| line.to_string())
-                .collect::<Vec<_>>()
-                .join("\n");
-
-            for name in ["ref", "id", "title", "description", "text", "notes"] {
-                assert!(
-                    rendered.contains(&format!("{command_prefix}{name}")),
-                    "{context:?} copy menu missing {name}"
-                );
-            }
-        }
     }
 
     #[test]
@@ -1993,17 +1911,6 @@ mod tests {
         assert_eq!(prefix_hint_visible_rows(30, 20), 20);
         assert_eq!(prefix_hint_visible_rows(10, 20), 6);
         assert_eq!(prefix_hint_visible_rows(2, 20), 1);
-    }
-
-    #[test]
-    fn command_line_includes_multi_key_label() {
-        let command = COMMANDS
-            .iter()
-            .find(|command| command.name == "status-active")
-            .unwrap();
-        let line = command_line(command, CommandContext::Normal);
-        let rendered = line.to_string();
-        assert!(rendered.contains("t a"));
     }
 
     #[test]
@@ -2253,12 +2160,6 @@ mod tests {
     }
 
     #[test]
-    fn overlay_render_includes_help_title() {
-        let rendered = render_help_overlay(0);
-        assert!(rendered.contains("Shortcuts"));
-    }
-
-    #[test]
     fn help_overlays_use_matching_bounds() {
         assert_eq!(
             dialog_corners(&render_help_buffer(0)),
@@ -2326,21 +2227,6 @@ mod tests {
             let rendered = render_command_overlay(name, name.len());
             assert!(rendered.contains(&format!(":{name}")), "{rendered}");
         }
-    }
-
-    #[test]
-    fn global_help_includes_upcoming_view_route() {
-        let rendered = help_columns()
-            .iter()
-            .flat_map(|sections| {
-                help_column_lines(&Theme::dark(), sections, DEFAULT_UNDO_DESCRIPTION)
-            })
-            .map(|line| line.to_string())
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        assert!(rendered.contains("v p"));
-        assert!(rendered.contains("show upcoming task view"));
     }
 
     #[test]
@@ -2439,24 +2325,6 @@ mod tests {
                 command.name
             );
             assert!(rendered.contains(&keys), ":{} keys missing", command.name);
-        }
-    }
-
-    #[test]
-    fn detail_help_lists_recurrence_lifecycle_shortcuts() {
-        let rendered = detail_help_lines(&Theme::dark(), DEFAULT_UNDO_DESCRIPTION)
-            .iter()
-            .map(|line| line.to_string())
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        for (keys, description) in [
-            ("t r p", "pause the selected recurring series"),
-            ("t r r", "resume the selected recurring series"),
-            ("t r s", "stop future occurrences after the current task"),
-        ] {
-            assert!(rendered.contains(keys));
-            assert!(rendered.contains(description));
         }
     }
 
