@@ -429,6 +429,7 @@ async fn layout_shortcut_toggles_columns_and_list() {
 #[tokio::test]
 async fn layout_switch_preserves_query_rows_selection_marks_and_history() {
     let mut app = test_app().await;
+    create_and_select_task(&mut app, test_task_draft("other layout task")).await;
     let index = create_and_select_task(&mut app, test_task_draft("layout task")).await;
     let task_id = app.store.tasks[index].task.id.clone();
     app.list.select_task(Some(index));
@@ -449,7 +450,7 @@ async fn layout_switch_preserves_query_rows_selection_marks_and_history() {
         Some("active query does not support columns layout")
     );
 
-    app.store.show_view(TaskQuery::All).await.unwrap();
+    app.show_view(TaskQuery::All).await.unwrap();
     app.list.select_task(
         app.store
             .tasks
@@ -475,13 +476,18 @@ async fn layout_switch_preserves_query_rows_selection_marks_and_history() {
             .map(|item| item.task.id.clone())
             .collect::<Vec<_>>()
     );
-    assert_eq!(task_ids, all_ids);
+    assert_eq!(
+        task_ids.iter().collect::<std::collections::BTreeSet<_>>(),
+        all_ids.iter().collect::<std::collections::BTreeSet<_>>()
+    );
     assert_eq!(
         app.store.tasks[app.list.selected_task().unwrap()].task.id,
         task_id
     );
     assert!(app.list.marked_task_ids().contains(&task_id));
-    assert!(app.list.navigation_is_empty());
+    assert!(!app.list.navigation_is_empty());
+    app.go_back().await.unwrap();
+    assert_eq!(app.store.view_state.query, TaskQuery::Queue);
 }
 
 #[tokio::test]
@@ -896,8 +902,8 @@ async fn column_view_navigates_within_and_between_lanes() {
             .selected_task(app.list.selected_task())
             .unwrap()
             .task
-            .status,
-        TaskStatus::Active
+            .title,
+        "active two"
     );
     app.move_left();
     assert_eq!(app.list.selected_task(), Some(todo));
@@ -907,8 +913,8 @@ async fn column_view_navigates_within_and_between_lanes() {
             .selected_task(app.list.selected_task())
             .unwrap()
             .task
-            .status,
-        TaskStatus::Active
+            .title,
+        "active one"
     );
 }
 

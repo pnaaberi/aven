@@ -304,7 +304,20 @@ async fn every_ready_first_page_candidate_resolves_a_captured_target() {
 #[tokio::test]
 async fn command_overlay_executes_unique_lookup_and_keeps_overlay_on_errors() {
     let mut app = test_app().await;
-
+    let selected = create_and_select_task(&mut app, test_task_draft("Before refresh")).await;
+    let task_id = app.store.tasks[selected].task.id.clone();
+    app.store
+        .database()
+        .update_task(
+            &app.store.active_workspace,
+            &task_id,
+            crate::operations::TaskUpdate {
+                title: Some("After refresh".to_string()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
     app.begin_command().await;
     for ch in "ref".chars() {
         app.handle_overlay_key(key(KeyCode::Char(ch)))
@@ -313,6 +326,7 @@ async fn command_overlay_executes_unique_lookup_and_keeps_overlay_on_errors() {
     }
     app.handle_overlay_key(key(KeyCode::Enter)).await.unwrap();
     assert!(app.overlay.is_none());
+    assert_eq!(app.store.tasks[selected].task.title, "After refresh");
 
     app.begin_command().await;
     app.handle_overlay_key(key(KeyCode::Char('s')))
@@ -383,7 +397,11 @@ async fn command_overlay_arrow_selection_wraps() {
     app.begin_command().await;
     app.handle_overlay_key(key(KeyCode::Up)).await.unwrap();
     let last = match &app.overlay {
-        Some(OverlayState::Command { state }) => state.highlighted,
+        Some(OverlayState::Command { state }) => {
+            assert!(!state.candidates.is_empty());
+            assert_eq!(state.highlighted, Some(state.candidates.len() - 1));
+            state.highlighted
+        }
         overlay => panic!("expected command overlay, got {overlay:?}"),
     };
     app.handle_overlay_key(key(KeyCode::Down)).await.unwrap();
