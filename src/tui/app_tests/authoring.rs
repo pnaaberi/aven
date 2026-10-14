@@ -32,6 +32,52 @@ async fn add_task_alias_creates_task_after_title() {
 }
 
 #[tokio::test]
+async fn add_task_from_columns_uses_active_lane_status() {
+    let mut app = test_app().await;
+    app.show_view(TaskQuery::All).await.unwrap();
+    app.store
+        .view_state
+        .set_layout(TaskLayout::Columns)
+        .unwrap();
+
+    for (selected_status, expected_status) in [
+        ("active", TaskStatus::Active),
+        ("canceled", TaskStatus::Done),
+    ] {
+        let mut draft = test_task_draft("Existing column task");
+        draft.status = selected_status.to_string();
+        create_and_select_task(&mut app, draft).await;
+        app.handle_normal_key(KeyCode::Char('a')).await.unwrap();
+        assert!(matches!(
+            &app.overlay,
+            Some(OverlayState::AddTask(state))
+                if state.effective_status() == expected_status.as_str()
+        ));
+        type_chars(&mut app, "New column task").await;
+        app.handle_overlay_key(key(KeyCode::Enter)).await.unwrap();
+        assert!(app.overlay.is_none());
+        let task = app.store.selected_task(app.list.selected_task()).unwrap();
+        assert_eq!(task.task.title, "New column task");
+        assert_eq!(task.task.status, expected_status);
+    }
+
+    app.list.select_task(None);
+    app.begin_add_task().await.unwrap();
+    assert!(matches!(
+        &app.overlay,
+        Some(OverlayState::AddTask(state)) if state.effective_status() == "inbox"
+    ));
+    app.handle_overlay_key(key(KeyCode::Esc)).await.unwrap();
+    app.list.select_task(Some(0));
+    app.store.view_state.set_layout(TaskLayout::List).unwrap();
+    app.begin_add_task().await.unwrap();
+    assert!(matches!(
+        &app.overlay,
+        Some(OverlayState::AddTask(state)) if state.effective_status() == "inbox"
+    ));
+}
+
+#[tokio::test]
 async fn create_more_reopens_blank_composer_with_retained_defaults() {
     let (_dir, pool, mut app) = test_app_with_pool().await;
     app.handle_normal_key(KeyCode::Char('a')).await.unwrap();
