@@ -494,16 +494,20 @@ fn explicit_zero_result_limit_reports_clap_value_error() {
 fn list_json_supports_limit() {
     let env = TestEnv::new();
     let db = env.db("list-json.sqlite");
-    ok(env.aven(&db, ["add", "task one", "--project", "app"]));
-    ok(env.aven(&db, ["add", "task two", "--project", "app"]));
+    let one = extract_ref(&ok(env.aven(&db, ["add", "task one", "--project", "app"])));
+    let two = extract_ref(&ok(env.aven(&db, ["add", "task two", "--project", "app"])));
 
     let output = ok(env.aven(&db, ["list", "--json", "--limit", "1"]));
     let items: serde_json::Value = serde_json::from_str(&output).unwrap();
     assert_eq!(items.as_array().unwrap().len(), 1);
-    assert!(items[0]["ref"].is_string());
-    assert!(items[0]["title"].is_string());
-    assert!(items[0]["status"].is_string());
-    assert!(items[0]["project"].is_string());
+    let expected_title = match items[0]["ref"].as_str().unwrap() {
+        task_ref if task_ref == one => "task one",
+        task_ref if task_ref == two => "task two",
+        unexpected => panic!("unexpected task ref {unexpected}"),
+    };
+    assert_eq!(items[0]["title"], expected_title);
+    assert_eq!(items[0]["status"], "inbox");
+    assert_eq!(items[0]["project"], "app");
 }
 
 #[test]
@@ -1808,7 +1812,7 @@ fn bulk_update_sets_status_by_project_and_status() {
 }
 
 #[test]
-fn bulk_update_selectors_include_future_tasks() {
+fn bulk_update_selectors_include_future_tasks_and_control_deleted_visibility() {
     let env = TestEnv::new();
     let db = env.db("bulk-update-future.sqlite");
     let open = extract_ref(&ok(env.aven(
@@ -1846,15 +1850,25 @@ fn bulk_update_selectors_include_future_tasks() {
         ],
     )));
     ok(env.aven(&db, ["delete", &deleted]));
+    let live_now = extract_ref(&ok(env.aven(&db, ["add", "live now", "--project", "app"])));
+    let deleted_now = extract_ref(&ok(
+        env.aven(&db, ["add", "deleted now", "--project", "app"])
+    ));
+    ok(env.aven(&db, ["delete", &deleted_now]));
 
     let all = ok(env.aven(&db, ["bulk-update", "--all", "--set-priority", "high"]));
     contains_all(
         &all,
-        &["bulk-update-summary matched=2 changed=2 would_change=2 unchanged=0 dry_run=no"],
+        &["bulk-update-summary matched=3 changed=3 would_change=3 unchanged=0 dry_run=no"],
     );
     contains_all(&ok(env.aven(&db, ["show", &open])), &["priority=high"]);
     contains_all(&ok(env.aven(&db, ["show", &terminal])), &["priority=high"]);
     contains_all(&ok(env.aven(&db, ["show", &deleted])), &["priority=none"]);
+    contains_all(&ok(env.aven(&db, ["show", &live_now])), &["priority=high"]);
+    contains_all(
+        &ok(env.aven(&db, ["show", &deleted_now])),
+        &["priority=none"],
+    );
 
     let terminal_only = ok(env.aven(
         &db,
@@ -1887,9 +1901,13 @@ fn bulk_update_selectors_include_future_tasks() {
     ));
     contains_all(
         &including_deleted,
-        &["bulk-update-summary matched=3 changed=3 would_change=3 unchanged=0 dry_run=no"],
+        &["bulk-update-summary matched=5 changed=5 would_change=5 unchanged=0 dry_run=no"],
     );
     contains_all(&ok(env.aven(&db, ["show", &deleted])), &["priority=medium"]);
+    contains_all(
+        &ok(env.aven(&db, ["show", &deleted_now])),
+        &["priority=medium"],
+    );
 }
 
 #[test]
@@ -1904,39 +1922,6 @@ fn bulk_update_requires_selector_and_mutation() {
         &fail(env.aven(&db, ["bulk-update", "--all"])),
         &["error bulk-update-requires-mutation"],
     );
-}
-
-#[test]
-fn bulk_update_all_excludes_deleted_unless_requested() {
-    let env = TestEnv::new();
-    let db = env.db("bulk-update-deleted.sqlite");
-    let live = extract_ref(&ok(env.aven(&db, ["add", "live", "--project", "app"])));
-    let deleted = extract_ref(&ok(env.aven(&db, ["add", "deleted", "--project", "app"])));
-    ok(env.aven(&db, ["delete", &deleted]));
-
-    let updated = ok(env.aven(&db, ["bulk-update", "--all", "--set-priority", "high"]));
-    contains_all(
-        &updated,
-        &["bulk-update-summary matched=1 changed=1 would_change=1 unchanged=0 dry_run=no"],
-    );
-    contains_all(&ok(env.aven(&db, ["show", &live])), &["priority=high"]);
-    contains_all(&ok(env.aven(&db, ["show", &deleted])), &["priority=none"]);
-
-    let included = ok(env.aven(
-        &db,
-        [
-            "bulk-update",
-            "--all",
-            "--include-deleted",
-            "--set-priority",
-            "urgent",
-        ],
-    ));
-    contains_all(
-        &included,
-        &["bulk-update-summary matched=2 changed=2 would_change=2 unchanged=0 dry_run=no"],
-    );
-    contains_all(&ok(env.aven(&db, ["show", &deleted])), &["priority=urgent"]);
 }
 
 #[test]
