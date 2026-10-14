@@ -81,6 +81,11 @@ async fn search_overlay_refreshes_results_after_paste() {
 
     app.begin_search();
     app.dispatch_paste("needle").await.unwrap();
+    assert!(matches!(
+        &app.overlay,
+        Some(OverlayState::Search(state)) if state.input.as_str() == "needle"
+    ));
+    assert!(app.search_preview_work_pending());
     settle_search_preview(&mut app).await;
 
     let Some(OverlayState::Search(state)) = &app.overlay else {
@@ -127,7 +132,7 @@ async fn search_overlay_tab_opens_results_list() {
 }
 
 #[tokio::test]
-async fn search_overlay_keeps_input_immediate_while_preview_runs() {
+async fn search_overlay_runs_latest_preview_after_input_changes() {
     let mut app = test_app().await;
     create_and_select_task(&mut app, test_task_draft("needle first")).await;
 
@@ -135,30 +140,6 @@ async fn search_overlay_keeps_input_immediate_while_preview_runs() {
     app.handle_overlay_key(key(KeyCode::Char('n')))
         .await
         .unwrap();
-    app.handle_overlay_key(key(KeyCode::Char('e')))
-        .await
-        .unwrap();
-
-    let Some(OverlayState::Search(state)) = &app.overlay else {
-        panic!("expected search overlay");
-    };
-    assert_eq!(state.input.as_str(), "ne");
-    assert!(matches!(
-        app.search.view(),
-        SearchControllerView::Running { query: "ne" }
-    ));
-}
-
-#[tokio::test]
-async fn search_overlay_marks_first_preview_as_stale_while_running() {
-    let mut app = test_app().await;
-    create_and_select_task(&mut app, test_task_draft("needle first")).await;
-
-    app.begin_search();
-    app.handle_overlay_key(key(KeyCode::Char('n')))
-        .await
-        .unwrap();
-
     let Some(OverlayState::Search(state)) = &app.overlay else {
         panic!("expected search overlay");
     };
@@ -170,20 +151,19 @@ async fn search_overlay_marks_first_preview_as_stale_while_running() {
         app.search.view(),
         SearchControllerView::Running { query: "n" }
     ));
-}
 
-#[tokio::test]
-async fn search_overlay_runs_latest_preview_after_input_changes() {
-    let mut app = test_app().await;
-    create_and_select_task(&mut app, test_task_draft("needle first")).await;
-
-    app.begin_search();
-    app.handle_overlay_key(key(KeyCode::Char('n')))
-        .await
-        .unwrap();
     app.handle_overlay_key(key(KeyCode::Char('e')))
         .await
         .unwrap();
+    assert!(matches!(
+        &app.overlay,
+        Some(OverlayState::Search(state)) if state.input.as_str() == "ne"
+    ));
+    assert!(matches!(
+        app.search.view(),
+        SearchControllerView::Running { query: "ne" }
+    ));
+
     app.handle_overlay_key(key(KeyCode::Char('e')))
         .await
         .unwrap();
@@ -302,21 +282,6 @@ async fn search_overlay_cancel_aborts_active_preview() {
 
     assert!(app.overlay.is_none());
     assert!(!app.search_preview_work_pending());
-}
-
-#[tokio::test]
-async fn search_overlay_paste_keeps_input_immediate_while_preview_runs() {
-    let mut app = test_app().await;
-    create_and_select_task(&mut app, test_task_draft("pasted needle")).await;
-
-    app.begin_search();
-    app.dispatch_paste("needle").await.unwrap();
-
-    let Some(OverlayState::Search(state)) = &app.overlay else {
-        panic!("expected search overlay");
-    };
-    assert_eq!(state.input.as_str(), "needle");
-    assert!(app.search_preview_work_pending());
 }
 
 #[tokio::test]
