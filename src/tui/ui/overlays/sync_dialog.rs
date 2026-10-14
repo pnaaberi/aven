@@ -5,7 +5,7 @@ use ratatui::layout::{Rect, Size};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, Paragraph};
-use unicode_width::UnicodeWidthStr;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use super::super::dialog::{Dialog, dialog_hint_line};
 use super::super::inline_code::wrap_with_code;
@@ -37,6 +37,7 @@ const MAX_DIALOG_WIDTH: u16 = 64;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SyncDialogHit {
     Action(usize),
+    CloudLink,
     Inside,
     Outside,
 }
@@ -45,6 +46,7 @@ struct Body {
     lines: Vec<Line<'static>>,
     /// Body line and cell range of each action, in action order.
     actions: Vec<ActionArea>,
+    cloud_links: Vec<ActionArea>,
 }
 
 #[derive(Clone, Copy)]
@@ -183,6 +185,14 @@ pub(crate) fn sync_dialog_hit(
     }
     let line = layout.start + usize::from(row - layout.body_area.y);
     let column = column - layout.body_area.x;
+    if layout
+        .body
+        .cloud_links
+        .iter()
+        .any(|area| area.line == line && (area.start..area.end).contains(&column))
+    {
+        return SyncDialogHit::CloudLink;
+    }
     layout
         .body
         .actions
@@ -235,6 +245,7 @@ fn body(theme: &Theme, view: &SyncDialogView<'_>, width: usize) -> Body {
     let mut body = Body {
         lines: Vec::new(),
         actions: Vec::new(),
+        cloud_links: Vec::new(),
     };
     match &view.state.page {
         SyncPage::Home => home_lines(theme, &mut body, view, width),
@@ -296,7 +307,62 @@ fn body(theme: &Theme, view: &SyncDialogView<'_>, width: usize) -> Body {
             ));
         }
     }
+    link_cloud_labels(theme, &mut body);
     body
+}
+
+/// Finds link cells in the rendered lines, including labels split by wrapping.
+fn link_cloud_labels(theme: &Theme, body: &mut Body) {
+    let mut chars = Vec::new();
+    for (line, text) in body.lines.iter().enumerate() {
+        let mut column = 0;
+        for ch in text.to_string().chars() {
+            let end = column + ch.width().unwrap_or(0) as u16;
+            chars.push((
+                ch,
+                Some(ActionArea {
+                    line,
+                    start: column,
+                    end,
+                }),
+            ));
+            column = end;
+        }
+        chars.push((' ', None));
+    }
+    let label: Vec<_> = "Aven Cloud".chars().collect();
+    for window in chars.windows(label.len()) {
+        if window.iter().map(|(ch, _)| *ch).eq(label.iter().copied()) {
+            body.cloud_links
+                .extend(window.iter().filter_map(|(_, area)| *area));
+        }
+    }
+    let link_style = Style::new()
+        .fg(theme.accent)
+        .add_modifier(Modifier::UNDERLINED);
+    for (line_index, line) in body.lines.iter_mut().enumerate() {
+        let mut column = 0;
+        let mut spans: Vec<Span<'static>> = Vec::new();
+        for span in &line.spans {
+            for ch in span.content.chars() {
+                let linked = body.cloud_links.iter().any(|area| {
+                    area.line == line_index && (area.start..area.end).contains(&column)
+                });
+                let style = if linked {
+                    span.style.patch(link_style)
+                } else {
+                    span.style
+                };
+                if let Some(last) = spans.last_mut().filter(|last| last.style == style) {
+                    last.content.to_mut().push(ch);
+                } else {
+                    spans.push(Span::styled(ch.to_string(), style));
+                }
+                column += ch.width().unwrap_or(0) as u16;
+            }
+        }
+        line.spans = spans;
+    }
 }
 
 fn home_lines(theme: &Theme, body: &mut Body, view: &SyncDialogView<'_>, width: usize) {
@@ -1634,6 +1700,96 @@ pub(in crate::tui::ui) fn sync_dialog_lines_for_test_width(
 #[cfg(test)]
 mod cloud_tests {
     use super::*;
+
+    #[test]
+    fn cloud_link_styles_only_label_cells_and_handles_wrapping() {
+        let theme = Theme::dark();
+        for width in [21, 40, 60] {
+            let mut body = Body {
+                lines: paragraph(
+                    &theme,
+                    "界 Paste from Aven Cloud, or from `aven server setup` if you self-host.",
+                    theme.muted(),
+                    width,
+                ),
+                actions: Vec::new(),
+                cloud_links: Vec::new(),
+            };
+            let before: Vec<_> = body.lines.iter().map(ToString::to_string).collect();
+            link_cloud_labels(&theme, &mut body);
+            assert_eq!(
+                before,
+                body.lines
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+            );
+            let linked: String = body
+                .lines
+                .iter()
+                .flat_map(|line| &line.spans)
+                .filter(|span| span.style.add_modifier.contains(Modifier::UNDERLINED))
+                .map(|span| span.content.as_ref())
+                .collect();
+            assert_eq!(linked.replace(' ', ""), "AvenCloud", "width {width}");
+            assert!(!body.cloud_links.is_empty());
+        }
+    }
+
+    #[test]
+    fn cloud_link_hit_uses_visible_cells_and_scroll_offset() {
+        use crate::tui::overlay::SyncDialogState;
+        let theme = Theme::dark();
+        let status = TuiSyncStatus::default();
+        let activity = SyncActivity::default();
+        for (terminal, scroll) in [(Size::new(80, 24), 0), (Size::new(35, 10), 1)] {
+            let state = SyncDialogState {
+                page: SyncPage::Invitation {
+                    kind: InvitationKind::Setup,
+                    input: SecretText::default(),
+                    error: None,
+                },
+                scroll,
+                selected: usize::MAX,
+                ..Default::default()
+            };
+            let view = SyncDialogView {
+                state: &state,
+                status: &status,
+                activity: &activity,
+                syncing: None,
+            };
+            let layout = Layout::new(&theme, &view, terminal);
+            let mut hits = 0;
+            for area in &layout.body.cloud_links {
+                if area.line < layout.start || area.line >= layout.start + layout.visible_rows {
+                    continue;
+                }
+                for column in area.start..area.end {
+                    assert_eq!(
+                        sync_dialog_hit(
+                            &theme,
+                            &view,
+                            terminal,
+                            layout.body_area.x + column,
+                            layout.body_area.y + (area.line - layout.start) as u16
+                        ),
+                        SyncDialogHit::CloudLink
+                    );
+                    hits += 1;
+                }
+            }
+            assert!(hits > 0);
+            assert_eq!(
+                sync_dialog_hit(&theme, &view, terminal, layout.area.x, layout.area.y),
+                SyncDialogHit::Inside
+            );
+            assert_eq!(
+                sync_dialog_hit(&theme, &view, terminal, 0, 0),
+                SyncDialogHit::Outside
+            );
+        }
+    }
 
     #[test]
     fn hosting_identity_keeps_the_address_visible_without_labeling_other_origins() {
