@@ -312,21 +312,6 @@ async fn failed_waiting_command_leaves_app_open_with_error() {
 }
 
 #[tokio::test]
-async fn successful_stay_policy_leaves_app_open() {
-    let mut app = test_app().await;
-    app.set_config(config("/usr/bin/tee", CustomTuiCommandSuccess::Stay));
-
-    execute_custom_command(&mut app, 0, "dispatch")
-        .await
-        .unwrap();
-    poll_until_complete(&mut app).await;
-
-    assert!(!app.should_quit);
-    assert_eq!(toast_severity(&app), Some(ToastSeverity::Info));
-    assert!(toast_message(&app).unwrap().contains("completed"));
-}
-
-#[tokio::test]
 async fn stay_policy_retains_the_current_projection_after_external_mutation() {
     let mut app = test_app().await;
     let selected = create_and_select_task(&mut app, test_task_draft("Before stay")).await;
@@ -352,6 +337,8 @@ async fn stay_policy_retains_the_current_projection_after_external_mutation() {
 
     assert_eq!(app.store.tasks[selected].task.title, "Before stay");
     assert!(!app.should_quit);
+    assert_eq!(toast_severity(&app), Some(ToastSeverity::Info));
+    assert!(toast_message(&app).unwrap().contains("completed"));
 }
 
 #[tokio::test]
