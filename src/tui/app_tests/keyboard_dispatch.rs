@@ -17,13 +17,6 @@ async fn ctrl_c_quits_while_overlay_captures_input() {
 }
 
 #[tokio::test]
-async fn prefix_key_enters_prefix_mode() {
-    let mut app = test_app().await;
-    app.handle_normal_key(KeyCode::Char('t')).await.unwrap();
-    assert_pending(&app, &["t"]);
-}
-
-#[tokio::test]
 async fn add_task_alias_executes_immediately() {
     let mut app = test_app().await;
     app.handle_normal_key(KeyCode::Char('a')).await.unwrap();
@@ -95,6 +88,7 @@ async fn esc_cancels_prefix_before_overlay() {
 async fn invalid_continuation_shows_message() {
     let mut app = test_app().await;
     app.handle_normal_key(KeyCode::Char('t')).await.unwrap();
+    assert_pending(&app, &["t"]);
     app.handle_normal_key(KeyCode::Char('z')).await.unwrap();
     assert_pending_empty(&app);
     assert_eq!(
@@ -106,57 +100,51 @@ async fn invalid_continuation_shows_message() {
 #[tokio::test]
 async fn valid_continuation_executes_and_clears() {
     let mut app = test_app().await;
+    let selected = create_and_select_task(&mut app, test_task_draft("Activate me")).await;
+    let task_id = app.store.tasks[selected].task.id.clone();
     app.handle_normal_key(KeyCode::Char('t')).await.unwrap();
+    assert_pending(&app, &["t"]);
     app.handle_normal_key(KeyCode::Char('a')).await.unwrap();
     assert_pending_empty(&app);
+    assert_eq!(
+        app.store
+            .load_task_item(&task_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .task
+            .status,
+        TaskStatus::Active
+    );
 }
 
 #[tokio::test]
-async fn order_shortcut_sets_sort() {
+async fn sort_shortcuts_update_order_and_direction() {
     let mut app = test_app().await;
-    app.handle_normal_key(KeyCode::Char('o')).await.unwrap();
-    app.handle_normal_key(KeyCode::Char('p')).await.unwrap();
-    assert_eq!(app.store.view_state.order, TaskOrder::Priority);
-    assert_eq!(toast_message(&app), None);
-}
-
-#[tokio::test]
-async fn created_order_shortcut_defaults_to_descending() {
-    let mut app = test_app().await;
-    app.handle_normal_key(KeyCode::Char('o')).await.unwrap();
-    app.handle_normal_key(KeyCode::Char('c')).await.unwrap();
-    assert_eq!(app.store.view_state.order, TaskOrder::Created);
-    assert_eq!(app.store.sort_direction_label(), "desc");
-    assert_eq!(toast_message(&app), None);
-}
-
-#[tokio::test]
-async fn order_reverse_shortcut_toggles_direction() {
-    let mut app = test_app().await;
-    app.handle_normal_key(KeyCode::Char('o')).await.unwrap();
-    app.handle_normal_key(KeyCode::Char('r')).await.unwrap();
-    assert_eq!(app.store.sort_direction_label(), "desc");
-    assert_eq!(toast_message(&app), None);
-}
-
-#[tokio::test]
-async fn due_order_shortcut_sets_sort() {
-    let mut app = test_app().await;
-    app.handle_normal_key(KeyCode::Char('o')).await.unwrap();
-    app.handle_normal_key(KeyCode::Char('d')).await.unwrap();
-    assert_eq!(app.store.view_state.order, TaskOrder::DueOn);
-    assert_eq!(toast_message(&app), None);
-}
-
-#[tokio::test]
-async fn h_and_l_move_between_sidebar_and_tasks() {
-    let mut app = test_app().await;
-    app.list.focus_tasks();
-    app.handle_normal_key(KeyCode::Char('h')).await.unwrap();
-    assert_eq!(app.list.focus(), Focus::Sidebar);
-
-    app.handle_normal_key(KeyCode::Char('l')).await.unwrap();
-    assert_eq!(app.list.focus(), Focus::Tasks);
+    for direction in ["desc", "asc"] {
+        app.handle_normal_key(KeyCode::Char('o')).await.unwrap();
+        app.handle_normal_key(KeyCode::Char('r')).await.unwrap();
+        assert_eq!(app.store.sort_direction_label(), direction);
+        assert_pending_empty(&app);
+        assert_eq!(toast_message(&app), None);
+    }
+    for (continuation, order, direction) in [
+        ('p', TaskOrder::Priority, "asc"),
+        ('d', TaskOrder::DueOn, "asc"),
+        ('r', TaskOrder::DueOn, "desc"),
+        ('c', TaskOrder::Created, "desc"),
+        ('d', TaskOrder::DueOn, "desc"),
+    ] {
+        app.handle_normal_key(KeyCode::Char('o')).await.unwrap();
+        assert_pending(&app, &["o"]);
+        app.handle_normal_key(KeyCode::Char(continuation))
+            .await
+            .unwrap();
+        assert_eq!(app.store.view_state.order, order);
+        assert_eq!(app.store.sort_direction_label(), direction);
+        assert_pending_empty(&app);
+        assert_eq!(toast_message(&app), None);
+    }
 }
 
 #[tokio::test]
@@ -165,6 +153,7 @@ async fn sidebar_selection_survives_focus_changes() {
     app.list.focus_tasks();
 
     app.handle_normal_key(KeyCode::Char('h')).await.unwrap();
+    assert_eq!(app.list.focus(), Focus::Sidebar);
     let initial = app.list.selected_sidebar();
     app.handle_normal_key(KeyCode::Char('j')).await.unwrap();
     let selected = app.list.selected_sidebar();
@@ -483,13 +472,8 @@ async fn tab_reveals_sidebar_when_task_list_is_expanded() {
 }
 
 #[tokio::test]
-async fn implemented_commands_execute_their_flows() {
+async fn command_panel_opens_project_path_picker() {
     let mut app = test_app().await;
-
-    app.handle_normal_key(KeyCode::Char('o')).await.unwrap();
-    app.handle_normal_key(KeyCode::Char('d')).await.unwrap();
-    assert_eq!(app.store.view_state.order, TaskOrder::DueOn);
-    assert_eq!(toast_message(&app), None);
 
     app.begin_command().await;
     type_chars(&mut app, "add-project-path").await;
