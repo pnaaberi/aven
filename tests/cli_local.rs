@@ -112,7 +112,14 @@ fn attachment_add_list_get_and_delete_work_locally() {
             "diagram",
         ],
     ));
-    contains_all(&added, &["attachment-added", "media_type=image/png"]);
+    contains_all(
+        &added,
+        &[
+            "attachment-added",
+            "media_type=image/png",
+            "optimized=false",
+        ],
+    );
     assert_eq!(extract_byte_size(&added), image_bytes.len() as i64);
     let attachment_id = extract_attachment_id(&added);
     contains_none(&added, &["sha256=", "photo.png", "diagram"]);
@@ -231,7 +238,7 @@ fn attachment_add_list_get_and_delete_work_locally() {
 }
 
 #[test]
-fn attachment_add_preserves_png_by_default_and_optimizes_when_requested() {
+fn attachment_add_optimization_flags_reach_cli() {
     let env = TestEnv::new();
     let db = env.db("attachment-optimize.sqlite");
     let task_ref = extract_ref(&ok(
@@ -240,26 +247,6 @@ fn attachment_add_preserves_png_by_default_and_optimizes_when_requested() {
     let image = env.path("compressible.png");
     let bytes = compressible_png_bytes();
     std::fs::write(&image, &bytes).unwrap();
-
-    let preserved = ok(env.aven(
-        &db,
-        ["attachment", "add", &task_ref, image.to_str().unwrap()],
-    ));
-    contains_all(&preserved, &["attachment-added", "optimized=false"]);
-    assert_eq!(extract_byte_size(&preserved), bytes.len() as i64);
-    let preserved_id = extract_attachment_id(&preserved);
-    let preserved_output = env.path("preserved.png");
-    ok(env.aven(
-        &db,
-        [
-            "attachment",
-            "get",
-            &preserved_id,
-            "--output",
-            preserved_output.to_str().unwrap(),
-        ],
-    ));
-    assert_eq!(std::fs::read(preserved_output).unwrap(), bytes);
 
     let optimized = ok(env.aven(
         &db,
