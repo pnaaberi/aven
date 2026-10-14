@@ -75,6 +75,7 @@ mod tests {
         for origin in [
             "https://sync.aventasks.dev",
             "HTTPS://SYNC.AVENTASKS.DEV:443/",
+            "https://SYNC.AVENTASKS.DEV.:443/",
             "https://sync.aventasks.dev./",
             "https://%73ync.aventasks.dev",
         ] {

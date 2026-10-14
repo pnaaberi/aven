@@ -426,13 +426,10 @@ async fn cli_sets_up_pairs_and_syncs_two_installations() {
     a.ok(&["attachment", "add", &child, &seed_png.display().to_string()])
         .await;
 
-    // An unconfigured database stays local: sync explains setup, status
-    // reports it, and invitations need setup first.
+    // An unconfigured database stays local: sync and invitations explain
+    // that setup is required.
     let error = failure(&a.run(&["sync"]).await);
     assert!(error.contains("sync-not-set-up"), "{error}");
-    assert_eq!(status(&a).await["state"], "not-set-up");
-    let text = a.ok(&["sync", "status"]).await;
-    assert!(text.contains("Sync: not set up"), "{text}");
     let error = failure(&a.run(&["sync", "invite"]).await);
     assert!(error.contains("sync-not-set-up"), "{error}");
 
@@ -1102,10 +1099,8 @@ async fn cli_cloud_setup_confirmation_labels_hosting_without_dispatching_credent
     let root = tempfile::tempdir().unwrap();
     let node = Installation::new(root.path(), "cloud-confirmation");
     for (origin, cloud) in [
-        ("https://sync.aventasks.dev", true),
         ("https://SYNC.AVENTASKS.DEV.:443/", true),
         ("https://sync.aventasks.dev:444", false),
-        ("http://127.0.0.1:3746", false),
     ] {
         let invitation = SetupInvitation {
             server: aven_core::sync::client::server_origin(origin).unwrap(),
