@@ -113,11 +113,13 @@ fn cli_worker() {
         return;
     };
     let args: Vec<String> = serde_json::from_str(&args).unwrap();
+    // Boxed so the CLI future is not moved by value through `block_on` on the
+    // test thread, whose stack is smaller than the main thread `aven` runs on.
     let result = tokio::runtime::Runtime::new()
         .unwrap()
-        .block_on(crate::run_cli_from(
+        .block_on(Box::pin(crate::run_cli_from(
             std::iter::once("aven".to_string()).chain(args),
-        ));
+        )));
     std::io::stdout().flush().unwrap();
     match result {
         Ok(()) => std::process::exit(0),
