@@ -789,102 +789,58 @@ mod tests {
         use ErrorAction::{General, Join, Setup};
         use ErrorSurface::{Cli, Tui};
 
+        struct Case {
+            error: Error,
+            action: ErrorAction,
+            surface: ErrorSurface,
+            code: &'static str,
+            message: &'static [&'static str],
+            next: &'static [&'static str],
+            forbidden: &'static [&'static str],
+        }
         let mut cases = Vec::new();
-        let mut add = |error: Error,
-                       action,
-                       surface,
-                       code: &'static str,
-                       message: &'static [&'static str],
-                       next: &'static [&'static str],
-                       forbidden: &'static [&'static str]| {
-            cases.push((error, action, surface, code, message, next, forbidden));
-        };
+        macro_rules! add {
+            ($action:expr, $surface:expr, $code:expr;
+             $error:expr; $message:expr; $next:expr; $forbidden:expr) => {
+                cases.push(Case {
+                    error: $error,
+                    action: $action,
+                    surface: $surface,
+                    code: $code,
+                    message: $message,
+                    next: $next,
+                    forbidden: $forbidden,
+                });
+            };
+        }
 
-        add(
-            anyhow!("error enrollment-network outcome-unknown")
-                .context("error sync-join-incomplete"),
-            Join,
-            Cli,
-            "enrollment-network",
-            &[],
-            &["Local work continues"],
-            &["nothing changed"],
-        );
-        add(
-            anyhow!("error bootstrap-tls outcome-unknown")
-                .context("error sync-setup-outcome-unknown"),
-            Setup,
-            Cli,
-            "bootstrap-tls",
-            &["secure connection"],
-            &["certificate", "trusted"],
-            &[],
-        );
-        add(
-            anyhow!("error sync-request-body-limit"),
-            General,
-            Cli,
-            "sync-request-body-limit",
-            &["request"],
-            &["If a reverse proxy is in use", "8 MB"],
-            &[],
-        );
-        add(
-            anyhow!("error enrollment-unauthorized")
-                .context("error sync-server-refused hint=\"raw\""),
-            General,
-            Tui,
-            "sync-server-refused",
-            &[],
-            &["may have been removed"],
-            &["was removed"],
-        );
-        add(
-            Error::from(aven_core::sync::seed_claim::membership::Unauthorized)
-                .context("error sync-server-refused hint=\"raw\""),
-            General,
-            Cli,
-            "sync-server-refused",
-            &[],
-            &["may have been removed", "another device"],
-            &["was removed"],
-        );
-        add(
-            anyhow!("error sync-device-invitation-invalid"),
-            Join,
-            Cli,
-            "sync-device-invitation-invalid",
-            &[],
-            &["`aven sync invite`"],
-            &[],
-        );
-        add(
-            anyhow!("error encrypted-tail-refused outcome-unknown"),
-            General,
-            Cli,
-            "encrypted-tail-refused",
-            &[],
-            &["unsynced changes stay"],
-            &["reset"],
-        );
-        add(
-            anyhow!("error encrypted-tail-storage"),
-            General,
-            Cli,
-            "encrypted-tail-storage",
-            &[],
-            &["retries"],
-            &["reset"],
-        );
-        add(
-            anyhow!("error enrollment-store-unsupported"),
-            Join,
-            Cli,
-            "enrollment-store-unsupported",
-            &[],
-            &["Update Aven", "Do not replace"],
-            &["reset"],
-        );
+        add!(Join, Cli, "enrollment-network";
+            anyhow!("error enrollment-network outcome-unknown").context("error sync-join-incomplete");
+            &[]; &["Local work continues"]; &["nothing changed"]);
+        add!(Setup, Cli, "bootstrap-tls";
+            anyhow!("error bootstrap-tls outcome-unknown").context("error sync-setup-outcome-unknown");
+            &["secure connection"]; &["certificate", "trusted"]; &[]);
+        add!(General, Cli, "sync-request-body-limit";
+            anyhow!("error sync-request-body-limit");
+            &["request"]; &["If a reverse proxy is in use", "8 MB"]; &[]);
+        add!(General, Tui, "sync-server-refused";
+            anyhow!("error enrollment-unauthorized").context("error sync-server-refused hint=\"raw\"");
+            &[]; &["may have been removed"]; &["was removed"]);
+        add!(General, Cli, "sync-server-refused";
+            Error::from(aven_core::sync::seed_claim::membership::Unauthorized).context("error sync-server-refused hint=\"raw\"");
+            &[]; &["may have been removed", "another device"]; &["was removed"]);
+        add!(Join, Cli, "sync-device-invitation-invalid";
+            anyhow!("error sync-device-invitation-invalid");
+            &[]; &["`aven sync invite`"]; &[]);
+        add!(General, Cli, "encrypted-tail-refused";
+            anyhow!("error encrypted-tail-refused outcome-unknown");
+            &[]; &["unsynced changes stay"]; &["reset"]);
+        add!(General, Cli, "encrypted-tail-storage";
+            anyhow!("error encrypted-tail-storage");
+            &[]; &["retries"]; &["reset"]);
+        add!(Join, Cli, "enrollment-store-unsupported";
+            anyhow!("error enrollment-store-unsupported");
+            &[]; &["Update Aven", "Do not replace"]; &["reset"]);
 
         for code in [
             "sync-hosting-blocked",
@@ -896,61 +852,33 @@ mod tests {
                     let error =
                         anyhow!("error {code} outcome-unknown").context("error sync-join-command");
                     assert!(!aven_core::sync::client::errors::is_access_refusal(&error));
-                    add(
-                        error,
-                        action,
-                        surface,
-                        code,
-                        &[],
-                        &["Local tasks and images", "Keep the same"],
-                        &["Access unconfirmed"],
-                    );
+                    add!(action, surface, code;
+                        error;
+                        &[]; &["Local tasks and images", "Keep the same"]; &["Access unconfirmed"]);
                 }
             }
         }
         for surface in [Cli, Tui] {
             for action in [General, Setup, Join] {
-                add(
-                    anyhow!("error sync-vault-deleted outcome-unknown").context("error sync-round"),
-                    action,
-                    surface,
-                    "sync-vault-deleted",
-                    &["deleted"],
-                    &[
-                        "unsynced changes stay",
-                        "Run `aven sync reset`, then `aven sync setup` with a new setup code",
-                        "hasn't finished joining",
-                    ],
-                    &["Keep the same", "Access unconfirmed"],
-                );
+                add!(action, surface, "sync-vault-deleted";
+                    anyhow!("error sync-vault-deleted outcome-unknown").context("error sync-round");
+                    &["deleted"]; &["unsynced changes stay", "Run `aven sync reset`, then `aven sync setup` with a new setup code", "hasn't finished joining"]; &["Keep the same", "Access unconfirmed"]);
             }
             for code in [
                 "sync-setup-invitation-mismatch",
                 "sync-setup-server-mismatch",
             ] {
-                add(
-                    anyhow!("error {code} hint=\"raw\""),
-                    Setup,
-                    surface,
-                    code,
-                    &[],
-                    &["same Aven Cloud hosting", "keys are kept"],
-                    &["reset"],
-                );
+                add!(Setup, surface, code;
+                    anyhow!("error {code} hint=\"raw\"");
+                    &[]; &["same Aven Cloud hosting", "keys are kept"]; &["reset"]);
             }
             for code in [
                 "encrypted-tail-operation-unsupported",
                 "unsupported-remote-change",
             ] {
-                add(
-                    anyhow!("error {code}").context("error sync-round"),
-                    General,
-                    surface,
-                    code,
-                    &["doesn't understand", "Local tasks are safe"],
-                    &["Update Aven"],
-                    &["reset"],
-                );
+                add!(General, surface, code;
+                    anyhow!("error {code}").context("error sync-round");
+                    &["doesn't understand", "Local tasks are safe"]; &["Update Aven"]; &["reset"]);
             }
             for code in [
                 "encrypted-tail-invalid",
@@ -972,35 +900,17 @@ mod tests {
                 "encrypted-image-initial-catch-up",
                 "encrypted-image-projection",
             ] {
-                add(
-                    anyhow!("error {code}").context("error sync-round"),
-                    General,
-                    surface,
-                    code,
-                    &["to protect your data", "Local tasks are safe and editable"],
-                    &["`aven sync reset`", "/sync/setup/#rebuilding-sync"],
-                    &[],
-                );
+                add!(General, surface, code;
+                    anyhow!("error {code}").context("error sync-round");
+                    &["to protect your data", "Local tasks are safe and editable"]; &["`aven sync reset`", "/sync/setup/#rebuilding-sync"]; &[]);
             }
-            add(
-                anyhow!("error attachment-quota-exceeded").context("error sync-round"),
-                General,
-                surface,
-                "attachment-quota-exceeded",
-                &["sync server"],
-                &["server_workspace_quota_bytes"],
-                &[],
-            );
+            add!(General, surface, "attachment-quota-exceeded";
+                anyhow!("error attachment-quota-exceeded").context("error sync-round");
+                &["sync server"]; &["server_workspace_quota_bytes"]; &[]);
         }
-        add(
-            Error::from(aven_core::sync::encrypted_tail::PrefixIdentityCollision),
-            General,
-            Cli,
-            "encrypted-tail-prefix-identity-collision",
-            &["to protect your data"],
-            &["`aven sync reset`"],
-            &[],
-        );
+        add!(General, Cli, "encrypted-tail-prefix-identity-collision";
+            Error::from(aven_core::sync::encrypted_tail::PrefixIdentityCollision);
+            &["to protect your data"]; &["`aven sync reset`"]; &[]);
         for (code, next) in [
             (
                 "sync-setup-confirmation-required",
@@ -1011,15 +921,9 @@ mod tests {
                 &["`aven sync join`", "--yes"][..],
             ),
         ] {
-            add(
-                anyhow!("error {code} hint=\"rerun with --yes to confirm\""),
-                General,
-                Cli,
-                code,
-                &[],
-                next,
-                &[],
-            );
+            add!(General, Cli, code;
+                anyhow!("error {code} hint=\"rerun with --yes to confirm\"");
+                &[]; next; &[]);
         }
         for (surface, error) in [
             (
@@ -1028,19 +932,9 @@ mod tests {
             ),
             (Tui, anyhow!("error enrollment-refused")),
         ] {
-            add(
-                error,
-                Join,
-                surface,
-                "enrollment-refused",
-                &[],
-                &[
-                    "been cancelled",
-                    "temporarily unavailable",
-                    "same invitation later",
-                ],
-                &["removed"],
-            );
+            add!(Join, surface, "enrollment-refused";
+                error;
+                &[]; &["been cancelled", "temporarily unavailable", "same invitation later"]; &["removed"]);
         }
         for surface in [Cli, Tui] {
             let next: &'static [&'static str] = match surface {
@@ -1057,35 +951,16 @@ mod tests {
                     "if you self-host",
                 ],
             };
-            add(
-                anyhow!("error bootstrap-setup-invitation-expired")
-                    .context("error sync-setup-invitation-expired hint=\"expired\""),
-                General,
-                surface,
-                "sync-setup-invitation-expired",
-                &["This setup invitation expired."],
-                next,
-                &[],
-            );
-            add(
-                anyhow!("error sync-setup-invitation-rejected"),
-                General,
-                surface,
-                "sync-setup-invitation-rejected",
-                &["expired, was replaced"],
-                &["`aven server setup`", "Aven Cloud", "if you self-host"],
-                &[],
-            );
+            add!(General, surface, "sync-setup-invitation-expired";
+                anyhow!("error bootstrap-setup-invitation-expired").context("error sync-setup-invitation-expired hint=\"expired\"");
+                &["This setup invitation expired."]; next; &[]);
+            add!(General, surface, "sync-setup-invitation-rejected";
+                anyhow!("error sync-setup-invitation-rejected");
+                &["expired, was replaced"]; &["`aven server setup`", "Aven Cloud", "if you self-host"]; &[]);
         }
-        add(
-            anyhow!("error sync-setup-invitation-invalid"),
-            Setup,
-            Cli,
-            "sync-setup-invitation-invalid",
-            &[],
-            &["Aven Cloud", "if you self-host", "`aven server setup`"],
-            &[],
-        );
+        add!(Setup, Cli, "sync-setup-invitation-invalid";
+            anyhow!("error sync-setup-invitation-invalid");
+            &[]; &["Aven Cloud", "if you self-host", "`aven server setup`"]; &[]);
         for (raw, code, next) in [
             (
                 "enrollment-protected-missing",
@@ -1118,22 +993,26 @@ mod tests {
                 &["retry the same command"][..],
             ),
         ] {
-            add(anyhow!("error {raw}"), General, Cli, code, &[], next, &[]);
+            add!(General, Cli, code;
+                anyhow!("error {raw}");
+                &[]; next; &[]);
         }
         for code in ["encrypted-tail-apply", "encrypted-tail-domain"] {
-            add(
-                anyhow!("error task-not-found sequence=7 op_type=set_field")
-                    .context(format!("error {code}")),
-                General,
-                Cli,
-                code,
-                &[],
-                &["Update Aven"],
-                &["reset"],
-            );
+            add!(General, Cli, code;
+                anyhow!("error task-not-found sequence=7 op_type=set_field").context(format!("error {code}"));
+                &[]; &["Update Aven"]; &["reset"]);
         }
 
-        for (error, action, surface, code, message, next, forbidden) in cases {
+        for Case {
+            error,
+            action,
+            surface,
+            code,
+            message,
+            next,
+            forbidden,
+        } in cases
+        {
             let context = format!("{action:?}/{surface:?}: {error:#}");
             let explanation = explain(action, surface, &error)
                 .unwrap_or_else(|| panic!("missing explanation for {context}"));
