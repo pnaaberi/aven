@@ -174,11 +174,17 @@ fn project_picker_kinds_control_submit_hints_with_changed_titles() {
         let rendered = render_overlay_view(OverlayView::Picker(PickerView {
             kind,
             title: title.to_string(),
+            filter: "aven".to_string(),
+            filter_cursor: 4,
             items: borrow_slice(vec![picker_item("AVN aven", "aven")]),
             ..project_picker_view()
         }));
         assert!(rendered.contains(title), "{kind:?}");
         assert!(rendered.contains("PREFIX"), "{kind:?}");
+        assert!(rendered.contains("PROJECT"), "{kind:?}");
+        assert!(rendered.contains("AVN"), "{kind:?}");
+        assert!(rendered.contains("aven"), "{kind:?}");
+        assert!(!rendered.contains("/aven"), "{kind:?}");
         assert!(rendered.contains(hint), "{kind:?}");
     }
 }
