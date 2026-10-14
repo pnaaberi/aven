@@ -105,13 +105,11 @@ Press `a` to open the task composer. Project, status, priority, labels, availabi
 
 <p class="media-caption">Set task metadata, scheduling, title, and description in the same form.</p>
 
-`Enter` opens the focused metadata control, creates from the title, and inserts a newline in the description. `Ctrl-Enter` creates from any field in terminals that report modified Enter keys. `Ctrl-s` is the portable create shortcut. In text fields, use `Ctrl-Left` or `Alt-Left` and their right-arrow equivalents to move by word, and `Alt-Backspace` to delete the previous word. `Alt-B` and `Alt-F` are aliases for terminals that encode Option as an escape prefix.
+Press `Ctrl-s` to create the task from any field, or `Ctrl-Enter` in terminals that support it. `Enter` creates from the title, opens pickers on metadata fields, and adds a newline in the description. Text fields support `Alt-Left` and `Alt-Right` to move by word and `Alt-Backspace` to delete one.
 
-Press `Ctrl-g` to create the task and immediately start another. The next draft retains the project, status choice, priority, and labels, while clearing task-specific content such as the title, description, schedule, and attachments. This shortcut applies to standalone, non-repeating tasks.
+Press `Ctrl-g` to create the task and start another with the same project, status, priority, and labels. It isn't available for repeating tasks.
 
-The composer shows automatically derived statuses with an `(auto)` marker. A plain draft uses `inbox`. Choosing any priority other than `none` changes the automatic status to `todo`; returning to `none` restores `inbox` unless the task repeats. Repeating tasks also derive `todo`. These inputs compose independently, so clearing either one leaves `todo` while the other still applies.
-
-Choosing a status makes it explicit, including choosing `inbox`, and an explicit status stays unchanged when priority or recurrence changes. Choose **Auto** in the status picker to restore derivation. This priority behavior applies only to direct human choices in the TUI composer. CLI creation, agent creation, natural-language intake, and priority edits on existing tasks leave status unchanged unless a status is supplied or selected separately.
+New tasks default to `inbox`, or `todo` when they have a priority or repeat. The status field marks this default with `(auto)`. Choosing a status overrides it; choose **Auto** to go back.
 
 ### Set a schedule
 
