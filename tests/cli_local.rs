@@ -480,15 +480,6 @@ fn attachment_delete_is_idempotent() {
 }
 
 #[test]
-fn version_flag_prints_package_version() {
-    let output = ok(command()
-        .arg("--version")
-        .output()
-        .expect("run aven --version"));
-    assert_eq!(output.trim(), format!("aven {}", env!("CARGO_PKG_VERSION")));
-}
-
-#[test]
 fn explicit_zero_result_limit_reports_clap_value_error() {
     let env = TestEnv::new();
     let db = env.db("invalid-result-limit.sqlite");

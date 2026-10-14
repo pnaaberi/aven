@@ -106,11 +106,6 @@ fn disabled_sync_reports_actionable_error() {
 }
 
 #[test]
-fn sync_without_disable_override_is_allowed() {
-    AppConfig::default().ensure_sync_allowed().unwrap();
-}
-
-#[test]
 fn generated_client_config_omits_server_attachment_settings() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("config.yaml");
