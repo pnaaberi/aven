@@ -190,7 +190,10 @@ fn attachment_add_list_get_and_delete_work_locally() {
     ));
     assert_eq!(std::fs::read(output).unwrap(), image_bytes);
 
-    ok(env.aven(&db, ["attachment", "delete", &attachment_id]));
+    for _ in 0..2 {
+        let deleted = ok(env.aven(&db, ["attachment", "delete", &attachment_id]));
+        contains_all(&deleted, &["attachment-deleted", "deleted=yes"]);
+    }
     let hidden = ok(env.aven(&db, ["attachment", "list", &task_ref]));
     contains_none(&hidden, &[&attachment_id]);
     let all = ok(env.aven(&db, ["attachment", "list", &task_ref, "--all", "--json"]));
@@ -455,28 +458,6 @@ fn attachment_get_refuses_unavailable_imported_blob() {
     ));
     contains_all(&error, &["error attachment-blob-unavailable"]);
     assert!(!output.exists());
-}
-
-#[test]
-fn attachment_delete_is_idempotent() {
-    let env = TestEnv::new();
-    let db = env.db("attachment-delete-idempotent.sqlite");
-    let created = ok(env.aven(&db, ["add", "attach me", "--project", "app"]));
-    let task_ref = extract_ref(&created);
-    let image = env.path("photo.png");
-    std::fs::write(&image, compressible_png_bytes()).unwrap();
-    let added = ok(env.aven(
-        &db,
-        ["attachment", "add", &task_ref, image.to_str().unwrap()],
-    ));
-    let attachment_id = extract_attachment_id(&added);
-
-    ok(env.aven(&db, ["attachment", "delete", &attachment_id]));
-    ok(env.aven(&db, ["attachment", "delete", &attachment_id]));
-    let all = ok(env.aven(&db, ["attachment", "list", &task_ref, "--all", "--json"]));
-    let value: serde_json::Value = serde_json::from_str(&all).unwrap();
-    assert_eq!(value.as_array().unwrap().len(), 1);
-    assert_eq!(value[0]["deleted"], true);
 }
 
 #[test]
