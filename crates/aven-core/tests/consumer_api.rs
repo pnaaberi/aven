@@ -1397,36 +1397,34 @@ fn consumer_api_reuses_pure_recurrence_enums() {
 #[tokio::test]
 async fn consumer_api_round_trips_monthly_and_yearly_recurrence_rules() {
     let directory = tempfile::tempdir().unwrap();
-    let store = Store::open(directory.path().join("monthly.sqlite"))
-        .await
-        .unwrap();
+    let path = directory.path().join("monthly.sqlite");
+    let store = Store::open(&path).await.unwrap();
     let workspace = store.resolve_workspace("default").await.unwrap();
-    let created = store
-        .create_recurrence_series(&workspace.id, monthly_series("monthly review"))
-        .await
-        .unwrap();
-
-    assert_eq!(created.series.rule.frequency, RecurrenceFrequency::Monthly);
-    assert_eq!(
-        store
-            .show_recurrence_series(&workspace.id, &created.series_ref)
+    let mut expected = Vec::new();
+    for (frequency, interval) in [
+        (RecurrenceFrequency::Monthly, 1),
+        (RecurrenceFrequency::Yearly, 2),
+    ] {
+        let mut request = daily_series("periodic review");
+        request.schedule.rule.frequency = frequency;
+        request.schedule.rule.interval = interval;
+        let rule = request.schedule.rule.clone();
+        let created = store
+            .create_recurrence_series(&workspace.id, request)
             .await
-            .unwrap()
-            .series
-            .rule
-            .frequency,
-        RecurrenceFrequency::Monthly
-    );
-
-    let mut yearly = daily_series("biennial review");
-    yearly.schedule.rule.frequency = RecurrenceFrequency::Yearly;
-    yearly.schedule.rule.interval = 2;
-    let created = store
-        .create_recurrence_series(&workspace.id, yearly)
-        .await
-        .unwrap();
-    assert_eq!(created.series.rule.frequency, RecurrenceFrequency::Yearly);
-    assert_eq!(created.series.rule.interval, 2);
+            .unwrap();
+        assert_eq!(created.series.rule, rule);
+        expected.push((created.series_ref, rule));
+    }
+    drop(store);
+    let reopened = Store::open(&path).await.unwrap();
+    for (series_ref, rule) in expected {
+        let shown = reopened
+            .show_recurrence_series(&workspace.id, &series_ref)
+            .await
+            .unwrap();
+        assert_eq!(shown.series.rule, rule);
+    }
 }
 
 #[tokio::test]
