@@ -1401,3 +1401,93 @@ async fn base_projection_applies_sql_limit_before_decoding_tasks() {
     assert_eq!(tasks.len(), 1);
     assert_eq!(tasks[0].title, "first");
 }
+
+#[tokio::test]
+async fn dependency_filters_ignore_closed_blockers_without_creating_epics() {
+    let (_temp, mut conn) = test_conn().await;
+    seed_default_project(&mut conn).await;
+    let workspace = crate::workspaces::Workspace::default();
+    for (i, status, deleted) in [
+        (0, "done", false),
+        (1, "canceled", false),
+        (2, "todo", true),
+        (3, "todo", false),
+    ] {
+        let blocker = format!("B00000000000000{i}");
+        let child = format!("C00000000000000{i}");
+        let (title, at) = (format!("blocker {i}"), format!("00{i}"));
+        insert_test_task(&mut conn, &blocker, &title, status, "none", &at).await;
+        let (title, at) = (format!("child {i}"), format!("10{i}"));
+        insert_test_task(&mut conn, &child, &title, "todo", "none", &at).await;
+        sqlx::query("UPDATE tasks SET deleted = ? WHERE id = ?")
+            .bind(deleted)
+            .bind(&blocker)
+            .execute(&mut *conn)
+            .await
+            .unwrap();
+        crate::operations::add_task_dependency(
+            &mut conn,
+            &workspace,
+            &child.parse().unwrap(),
+            &blocker.parse().unwrap(),
+        )
+        .await
+        .unwrap();
+        let summary = crate::query::task_dependency_summary(
+            &mut conn,
+            &workspace.id,
+            &blocker.parse().unwrap(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(summary.blocks.len(), 1);
+        assert_eq!(summary.blocks[0].unresolved, i == 3);
+    }
+    for (ready_only, blocked_only, epics_only, expected) in [
+        (
+            true,
+            false,
+            false,
+            vec!["blocker 3", "child 0", "child 1", "child 2"],
+        ),
+        (false, true, false, vec!["child 3"]),
+        (false, false, true, vec![]),
+    ] {
+        let items = list_task_items_in_workspace(
+            &mut conn,
+            &workspace.id,
+            TaskFilters {
+                ready_only,
+                blocked_only,
+                epics_only,
+                ..TaskFilters::default()
+            },
+            TaskQueryMode::Flat,
+            TaskSort::Created,
+            SortDirection::Asc,
+        )
+        .await
+        .unwrap();
+        assert_eq!(listed_titles(&items), expected);
+    }
+    let items = list_task_items_in_workspace(
+        &mut conn,
+        &workspace.id,
+        TaskFilters {
+            include_deleted: true,
+            ..TaskFilters::default()
+        },
+        TaskQueryMode::Flat,
+        TaskSort::Created,
+        SortDirection::Asc,
+    )
+    .await
+    .unwrap();
+    assert_eq!(items.len(), 8);
+    for item in items {
+        assert_eq!(
+            item.dependent_count,
+            i64::from(item.task.title == "blocker 3")
+        );
+    }
+}

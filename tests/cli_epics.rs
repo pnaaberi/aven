@@ -93,24 +93,6 @@ fn epic_json_surfaces_include_state_and_links() {
 }
 
 #[test]
-fn dependency_does_not_make_epic() {
-    let env = TestEnv::new();
-    let db = env.db("epic-dependency-separation.sqlite");
-
-    let parent = extract_ref(&ok(
-        env.aven(&db, ["add", "blocking prerequisite", "--project", "app"])
-    ));
-    let child = extract_ref(&ok(
-        env.aven(&db, ["add", "blocked task", "--project", "app"])
-    ));
-
-    ok(env.aven(&db, ["dep", "add", &child, &parent]));
-
-    let epics = ok(env.aven(&db, ["list", "--epics"]));
-    contains_none(&epics, &[&parent, &child]);
-}
-
-#[test]
 fn list_ready_and_epics_are_mutually_exclusive() {
     let env = TestEnv::new();
     let db = env.db("epic-ready-conflict.sqlite");
