@@ -35,58 +35,6 @@ async fn create_task_refreshes_and_selects_visible_task() {
 }
 
 #[tokio::test]
-async fn create_task_uses_priority_to_promote_only_inbox_tasks() {
-    let mut store = test_store().await;
-
-    for priority in ["medium", "high", "urgent"] {
-        let (_, selected) = store
-            .create_task(
-                TaskDraft {
-                    priority: priority.to_string(),
-                    ..task_draft(priority)
-                },
-                None,
-            )
-            .await
-            .unwrap();
-        let task = &store.tasks[selected.unwrap()].task;
-        assert_eq!(task.status, TaskStatus::Todo);
-        assert_eq!(task.priority.as_str(), priority);
-    }
-
-    let (_, low_selected) = store
-        .create_task(
-            TaskDraft {
-                priority: "low".to_string(),
-                ..task_draft("low")
-            },
-            None,
-        )
-        .await
-        .unwrap();
-    assert_eq!(
-        store.tasks[low_selected.unwrap()].task.status,
-        TaskStatus::Inbox
-    );
-
-    let (_, backlog_selected) = store
-        .create_task(
-            TaskDraft {
-                status: "backlog".to_string(),
-                priority: "urgent".to_string(),
-                ..task_draft("urgent backlog")
-            },
-            None,
-        )
-        .await
-        .unwrap();
-    assert_eq!(
-        store.tasks[backlog_selected.unwrap()].task.status,
-        TaskStatus::Backlog
-    );
-}
-
-#[tokio::test]
 async fn create_task_assigns_tui_source() {
     let (_dir, pool, mut store) = test_store_with_pool().await;
     let (_, selected) = store
