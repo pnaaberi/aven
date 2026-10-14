@@ -11,15 +11,11 @@ Use the install script:
 curl -fsSL https://raw.githubusercontent.com/raine/aven/main/scripts/install | bash
 ```
 
-On macOS, the script installs `Aven.app` to `~/.local/share/aven` and links `aven` into `/usr/local/bin`, or `~/.local/bin` when `/usr/local/bin` is not writable.
-
 Or install with Homebrew:
 
 ```sh
 brew install raine/aven/aven
 ```
-
-On macOS, an installed [background daemon](/command-reference/#aven-daemon) restarts on the new version shortly after a Homebrew install or upgrade and moves itself to `Aven.app`, so Login Items lists it as Aven.
 
 Or install the prebuilt release binary with Nix:
 

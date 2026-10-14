@@ -121,7 +121,7 @@ See [Scheduling tasks](/schedule-tasks/) for availability and deadlines, and
 
 ### Create with AI
 
-Press `Ctrl-n` when the visible title and description contain rough notes, pasted context, or dictated input. The configured task-intake agent produces a structured draft for review. See [`agent.task_intake`](/configuration/#agent-task-intake).
+Press `Ctrl-n` when the visible title and description contain rough notes, pasted context, or dictated input. The configured task-intake agent produces a structured draft for review. See [`agent.task_intake`](/configuration/#agent-task-intake). If you close the TUI before the task is created, Aven sends a [notification](/notifications/) when it is.
 
 ### Attach images
 

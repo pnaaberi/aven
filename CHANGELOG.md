@@ -3,6 +3,10 @@ title: Changelog
 description: Release notes for aven.
 ---
 
+## Unreleased
+
+- macOS installations from Homebrew or the install script show [notifications](https://aventasks.dev/notifications/) with Aven's name and icon, and identify the background daemon as Aven in Login Items.
+
 ## v0.1.49 (2026-10-13)
 
 - Install the prebuilt binary with Nix, without compiling: `nix profile install https://github.com/raine/aven/releases/latest/download/aven-nix.tar.gz`.
