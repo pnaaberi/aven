@@ -453,8 +453,14 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(config.tui.columns[0].name, "Work");
-        assert_eq!(config.tui.columns[0].statuses, ["active", "todo"]);
+        assert_eq!(
+            config.tui.columns,
+            [
+                TaskColumnConfig::new("Work", &["active", "todo"]),
+                TaskColumnConfig::new("Later", &["inbox", "backlog"]),
+                TaskColumnConfig::new("Closed", &["done", "canceled"]),
+            ]
+        );
     }
 
     #[test]
