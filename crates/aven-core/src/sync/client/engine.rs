@@ -1632,8 +1632,7 @@ mod hosting_tests {
                 let error = session
                     .next()
                     .await
-                    .err()
-                    .expect("hosting must stop the exchange");
+                    .expect_err("hosting must stop the exchange");
                 assert!(has_code(&error, client_code), "{error:#}");
                 assert!(!is_access_refusal(&error));
                 assert!(db.sync_access_refusal().await.unwrap().is_none());
@@ -1734,8 +1733,7 @@ mod hosting_tests {
                 let error = session
                     .next()
                     .await
-                    .err()
-                    .expect("must refuse before yielding a request");
+                    .expect_err("must refuse before yielding a request");
                 assert!(has_code(&error, "sync-cloud-https-required"), "{error:#}");
             }
         }
