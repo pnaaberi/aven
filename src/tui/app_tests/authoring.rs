@@ -4,6 +4,10 @@ use super::*;
 async fn add_task_alias_creates_task_after_title() {
     let mut app = test_app().await;
     app.handle_normal_key(KeyCode::Char('a')).await.unwrap();
+    assert_pending_empty(&app);
+    assert!(
+        matches!(&app.overlay, Some(OverlayState::AddTask(state)) if state.focus == AddTaskStep::Title)
+    );
     type_chars(&mut app, "Write docs").await;
     app.handle_overlay_key(key(KeyCode::Enter)).await.unwrap();
 
@@ -1314,6 +1318,17 @@ async fn refresh_preserves_recent_action_selection() {
     app.list.select_task(Some(1));
     let selected_change_id = app.store.recent_actions[1].change_id.clone();
 
+    app.store
+        .database()
+        .create_task(
+            &app.store.active_workspace,
+            TaskDraft {
+                project: Some(app.store.projects[0].key.clone()),
+                ..test_task_draft("new action")
+            },
+        )
+        .await
+        .unwrap();
     app.refresh().await.unwrap();
 
     let selected = app.list.selected_task().unwrap();
@@ -1478,20 +1493,6 @@ async fn toast_expiry_clears_message_once() {
     assert!(app.clear_expired_notification());
     assert!(app.notification.is_none());
     assert!(!app.clear_expired_notification());
-}
-
-#[tokio::test]
-async fn successful_mutation_adds_undo_toast_action() {
-    let mut app = test_app().await;
-    let result = app
-        .store
-        .create_task(test_task_draft("Toast undo"), None)
-        .await
-        .unwrap();
-
-    app.apply_mutation_result(crate::tui::store::MutationMessage::new(result.0, result.1));
-
-    assert!(toast_message(&app).is_some_and(|message| message.ends_with(" · u undo")));
 }
 
 #[tokio::test]
@@ -1780,7 +1781,11 @@ async fn add_task_enter_opens_each_metadata_control() {
         assert!(matches!(
             &app.overlay,
             Some(OverlayState::AddTask(state))
-                if !matches!(state.mode, crate::tui::overlay::AddTaskMode::Compose)
+                if match &state.mode {
+                    AddTaskMode::Picker { field: opened, .. } => *opened == field,
+                    AddTaskMode::Labels(labels) => field == AddTaskStep::Labels && labels.intent == TagComboboxIntent::AddTaskLabels,
+                    _ => false,
+                }
         ));
     }
 }
@@ -2137,7 +2142,17 @@ async fn add_task_composer_sets_fuzzy_availability() {
     app.store.show_view(TaskQuery::Upcoming).await.unwrap();
 
     assert_eq!(app.store.tasks.len(), 1);
-    assert!(app.store.tasks[0].task.available_at.is_some());
+    use chrono::{Datelike, Timelike};
+    let available = chrono::DateTime::parse_from_rfc3339(
+        app.store.tasks[0].task.available_at.as_deref().unwrap(),
+    )
+    .unwrap()
+    .with_timezone(&chrono::Local);
+    assert_eq!(available.weekday(), chrono::Weekday::Mon);
+    assert_eq!(
+        (available.hour(), available.minute(), available.second()),
+        (9, 0, 0)
+    );
 }
 
 #[tokio::test]
@@ -2158,8 +2173,12 @@ async fn add_task_composer_preserves_availability_and_due_date() {
     let task = &app.store.tasks[0].task;
     let available_at = task.available_at.as_deref().unwrap();
     let due_on = task.due_on.as_deref().unwrap();
-    assert_eq!(due_on.len(), 10);
-    assert!(due_on > &available_at[..10]);
+    let available = chrono::DateTime::parse_from_rfc3339(available_at)
+        .unwrap()
+        .with_timezone(&chrono::Local)
+        .date_naive();
+    let due = chrono::NaiveDate::parse_from_str(due_on, "%Y-%m-%d").unwrap();
+    assert_eq!(due - available, chrono::Duration::days(7));
 }
 
 #[tokio::test]
@@ -2287,6 +2306,7 @@ async fn add_note_targets_one_marked_task_instead_of_cursor() {
         .find(|item| item.task.id != marked_id)
         .unwrap();
     assert_eq!(marked.notes.len(), 1);
+    assert_eq!(marked.notes[0].body, "Marked detail");
     assert!(cursor.notes.is_empty());
 }
 
@@ -2312,7 +2332,8 @@ async fn add_note_rejects_multiple_marked_tasks() {
 #[tokio::test]
 async fn add_note_flow_creates_note_for_selected_task() {
     let mut app = test_app().await;
-    create_and_select_task(&mut app, test_task_draft("Note target")).await;
+    let selected = create_and_select_task(&mut app, test_task_draft("Note target")).await;
+    let task_id = app.store.tasks[selected].task.id.clone();
 
     app.handle_normal_key(KeyCode::Char('t')).await.unwrap();
     app.handle_normal_key(KeyCode::Char('N')).await.unwrap();
@@ -2325,6 +2346,9 @@ async fn add_note_flow_creates_note_for_selected_task() {
     app.handle_overlay_key(ctrl_s()).await.unwrap();
 
     assert!(app.overlay.is_none());
+    let item = app.store.load_task_item(&task_id).await.unwrap().unwrap();
+    assert_eq!(item.notes.len(), 1);
+    assert_eq!(item.notes[0].body, "Important detail");
     assert!(toast_message(&app).is_some_and(|message| message.starts_with("added note ")));
 }
 

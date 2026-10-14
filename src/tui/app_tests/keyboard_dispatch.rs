@@ -17,17 +17,6 @@ async fn ctrl_c_quits_while_overlay_captures_input() {
 }
 
 #[tokio::test]
-async fn add_task_alias_executes_immediately() {
-    let mut app = test_app().await;
-    app.handle_normal_key(KeyCode::Char('a')).await.unwrap();
-    assert_pending_empty(&app);
-    assert!(matches!(
-        &app.overlay,
-        Some(OverlayState::AddTask(state)) if state.focus == AddTaskStep::Title
-    ));
-}
-
-#[tokio::test]
 async fn normal_dispatch_ignores_modified_shortcuts() {
     let mut app = test_app().await;
     create_and_select_task(&mut app, test_task_draft("Priority target")).await;
@@ -168,31 +157,6 @@ async fn sidebar_selection_survives_focus_changes() {
 }
 
 #[tokio::test]
-async fn sidebar_enter_selects_the_highlighted_view() {
-    let mut app = test_app().await;
-    let view_index = app
-        .store
-        .sidebar_entries
-        .iter()
-        .position(|entry| {
-            matches!(
-                &entry.target,
-                Some(SidebarEntryTarget::View(TaskQuery::Open))
-            )
-        })
-        .unwrap();
-    app.list.focus_sidebar();
-    app.list.select_sidebar(Some(view_index));
-
-    app.handle_normal_key(KeyCode::Enter).await.unwrap();
-
-    assert_eq!(app.store.view_state.query, TaskQuery::Open);
-    assert_eq!(app.list.focus(), Focus::Tasks);
-    assert!(!app.detail.is_active());
-    assert_eq!(toast_message(&app), None);
-}
-
-#[tokio::test]
 async fn sidebar_enter_selects_the_highlighted_project_scope() {
     let mut app = test_app().await;
     app.store
@@ -229,30 +193,32 @@ async fn sidebar_enter_selects_the_highlighted_project_scope() {
 
 #[tokio::test]
 async fn sidebar_enter_selects_a_view_with_no_tasks_in_the_current_view() {
-    let mut app = test_app().await;
-    app.show_view(TaskQuery::Conflicts).await.unwrap();
-    assert!(app.store.tasks.is_empty());
+    for query in [TaskQuery::Queue, TaskQuery::Conflicts] {
+        let mut app = test_app().await;
+        app.show_view(query).await.unwrap();
+        assert!(app.store.tasks.is_empty());
 
-    let view_index = app
-        .store
-        .sidebar_entries
-        .iter()
-        .position(|entry| {
-            matches!(
-                &entry.target,
-                Some(SidebarEntryTarget::View(TaskQuery::Open))
-            )
-        })
-        .unwrap();
-    app.list.focus_sidebar();
-    app.list.select_sidebar(Some(view_index));
+        let view_index = app
+            .store
+            .sidebar_entries
+            .iter()
+            .position(|entry| {
+                matches!(
+                    &entry.target,
+                    Some(SidebarEntryTarget::View(TaskQuery::Open))
+                )
+            })
+            .unwrap();
+        app.list.focus_sidebar();
+        app.list.select_sidebar(Some(view_index));
 
-    app.handle_normal_key(KeyCode::Enter).await.unwrap();
+        app.handle_normal_key(KeyCode::Enter).await.unwrap();
 
-    assert_eq!(app.store.view_state.query, TaskQuery::Open);
-    assert_eq!(app.list.focus(), Focus::Tasks);
-    assert!(!app.detail.is_active());
-    assert_eq!(toast_message(&app), None);
+        assert_eq!(app.store.view_state.query, TaskQuery::Open);
+        assert_eq!(app.list.focus(), Focus::Tasks);
+        assert!(!app.detail.is_active());
+        assert_eq!(toast_message(&app), None);
+    }
 }
 
 #[tokio::test]
@@ -449,26 +415,15 @@ async fn hidden_sidebar_is_not_rendered_in_wide_layout() {
 }
 
 #[tokio::test]
-async fn h_reveals_sidebar() {
+async fn focus_shortcuts_reveal_sidebar_when_task_list_is_expanded() {
     let mut app = test_app().await;
-    app.list.hide_sidebar();
-
-    app.handle_normal_key(KeyCode::Char('h')).await.unwrap();
-
-    assert!(app.list.sidebar_visible());
-    assert_eq!(app.list.focus(), Focus::Sidebar);
-}
-
-#[tokio::test]
-async fn tab_reveals_sidebar_when_task_list_is_expanded() {
-    let mut app = test_app().await;
-    app.list.hide_sidebar();
-
-    app.handle_normal_key(KeyCode::Tab).await.unwrap();
-
-    assert!(app.list.sidebar_visible());
-    assert_eq!(app.list.focus(), Focus::Sidebar);
-    assert_eq!(toast_message(&app), None);
+    for code in [KeyCode::Char('h'), KeyCode::Tab] {
+        app.list.hide_sidebar();
+        app.handle_normal_key(code).await.unwrap();
+        assert!(app.list.sidebar_visible());
+        assert_eq!(app.list.focus(), Focus::Sidebar);
+        assert_eq!(toast_message(&app), None);
+    }
 }
 
 #[tokio::test]
