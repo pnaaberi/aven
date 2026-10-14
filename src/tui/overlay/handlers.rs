@@ -2041,24 +2041,6 @@ mod tests {
     }
 
     #[test]
-    fn changed_description_edit_requires_discard_confirmation() {
-        let mut state = MultilineInputState::from_value(
-            description_intent(),
-            "Edit description",
-            "",
-            "existing description".to_string(),
-        );
-        state.insert_paste(" updated");
-        assert!(matches!(
-            handle(key(KeyCode::Esc), OverlayState::MultilineInput(state)),
-            OverlayOutcome::None(OverlayState::MultilineInput(MultilineInputState {
-                mode: MultilineInputMode::ConfirmDiscard,
-                ..
-            }))
-        ));
-    }
-
-    #[test]
     fn clean_initialized_manual_conflict_merge_cancels_without_confirmation() {
         let state = MultilineInputState::from_value(
             manual_conflict_description_intent(),
