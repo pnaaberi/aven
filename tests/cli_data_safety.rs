@@ -1029,107 +1029,51 @@ fn import_rejects_accepted_history_without_server_identity() {
 }
 
 #[test]
-fn import_rejects_invalid_project_ids() {
+fn import_rejects_invalid_ids_without_replacing_existing_data() {
     let env = TestEnv::new();
-    let db = env.db("invalid-import-project-id.sqlite");
+    let db = env.db("invalid-import-ids.sqlite");
     seed_sample_data(&env, &db);
-    let export_path = env.path("invalid-import-project-id.json");
-    ok(env.aven(&db, ["export", "--output", export_path.to_str().unwrap()]));
-
-    let mut snapshot: Value =
-        serde_json::from_str(&fs::read_to_string(&export_path).unwrap()).unwrap();
-    snapshot["tables"]["tasks"][0]["project_id"] = Value::String("missing-project".to_string());
-    fs::write(&export_path, serde_json::to_string(&snapshot).unwrap()).unwrap();
-
-    let output = fail(env.aven(&db, ["import", "--yes", export_path.to_str().unwrap()]));
-    contains_all(
-        &output,
-        &[
-            "could not parse",
-            "project ID must be 16 Crockford Base32 characters",
-        ],
-    );
-}
-
-#[test]
-fn import_rejects_invalid_task_ids() {
-    let env = TestEnv::new();
-    let db = env.db("invalid-import-task-id.sqlite");
-    seed_sample_data(&env, &db);
-    let export_path = env.path("invalid-import-task-id.json");
-    ok(env.aven(&db, ["export", "--output", export_path.to_str().unwrap()]));
-
-    let mut snapshot: Value =
-        serde_json::from_str(&fs::read_to_string(&export_path).unwrap()).unwrap();
-    snapshot["tables"]["tasks"][0]["id"] = Value::String("invalid".to_string());
-    fs::write(&export_path, serde_json::to_string(&snapshot).unwrap()).unwrap();
-
-    let output = fail(env.aven(&db, ["import", "--yes", export_path.to_str().unwrap()]));
-    contains_all(
-        &output,
-        &[
-            "could not parse",
-            "task ID must be 16 Crockford Base32 characters",
-        ],
-    );
-}
-
-#[test]
-fn import_rejects_invalid_project_record_ids() {
-    let env = TestEnv::new();
-    let db = env.db("invalid-import-project-record-ids.sqlite");
-    seed_sample_data(&env, &db);
-    let export_path = env.path("invalid-import-project-record-ids.json");
+    let export_path = env.path("invalid-import-ids.json");
     ok(env.aven(&db, ["export", "--output", export_path.to_str().unwrap()]));
 
     let original: Value = serde_json::from_str(&fs::read_to_string(&export_path).unwrap()).unwrap();
-    let workspace_id = original["tables"]["projects"][0]["workspace_id"]
-        .as_str()
-        .unwrap()
-        .to_string();
-    let project_id = original["tables"]["projects"][0]["id"]
-        .as_str()
-        .unwrap()
-        .to_string();
-
-    let mut snapshots = Vec::new();
-    let mut project = original.clone();
-    project["tables"]["projects"][0]["id"] = Value::String("invalid".to_string());
-    snapshots.push(project);
-
-    let mut path = original.clone();
-    path["tables"]["project_paths"]
-        .as_array_mut()
-        .unwrap()
-        .push(serde_json::json!({
-            "workspace_id": workspace_id,
-            "project_id": "invalid",
-            "path": "/tmp/invalid-project-id",
-        }));
-    snapshots.push(path);
-
-    let mut alias = original;
-    alias["tables"]["project_id_aliases"]
-        .as_array_mut()
-        .unwrap()
-        .push(serde_json::json!({
-            "workspace_id": workspace_id,
-            "remote_project_id": "invalid",
-            "local_project_id": project_id,
-        }));
-    snapshots.push(alias);
-
-    for snapshot in snapshots {
+    let workspace_id = &original["tables"]["projects"][0]["workspace_id"];
+    let project_id = &original["tables"]["projects"][0]["id"];
+    for (table, field, invalid, kind) in [
+        ("tasks", "project_id", "missing-project", "project"),
+        ("tasks", "id", "invalid", "task"),
+        ("projects", "id", "invalid", "project"),
+        ("project_paths", "project_id", "invalid", "project"),
+        (
+            "project_id_aliases",
+            "remote_project_id",
+            "invalid",
+            "project",
+        ),
+    ] {
+        let mut snapshot = original.clone();
+        match table {
+            "project_paths" => snapshot["tables"][table].as_array_mut().unwrap().push(serde_json::json!({
+                "workspace_id": workspace_id, "project_id": invalid, "path": "/tmp/invalid-project-id",
+            })),
+            "project_id_aliases" => snapshot["tables"][table].as_array_mut().unwrap().push(serde_json::json!({
+                "workspace_id": workspace_id, "remote_project_id": invalid, "local_project_id": project_id,
+            })),
+            _ => snapshot["tables"][table][0][field] = Value::String(invalid.to_string()),
+        }
         fs::write(&export_path, serde_json::to_string(&snapshot).unwrap()).unwrap();
         let output = fail(env.aven(&db, ["import", "--yes", export_path.to_str().unwrap()]));
         contains_all(
             &output,
             &[
                 "could not parse",
-                "project ID must be 16 Crockford Base32 characters",
+                &format!("{kind} ID must be 16 Crockford Base32 characters"),
             ],
         );
     }
+    ok(env.aven(&db, ["export", "--output", export_path.to_str().unwrap()]));
+    let unchanged: Value = serde_json::from_str(&fs::read_to_string(export_path).unwrap()).unwrap();
+    assert_eq!(unchanged["tables"], original["tables"]);
 }
 
 #[test]
