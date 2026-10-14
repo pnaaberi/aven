@@ -111,12 +111,15 @@ fn edit_description_kind_uses_specialized_renderer_with_changed_title() {
         kind: MultilineInputKind::EditDescription,
         title: "Changed description title".to_string(),
         prompt: String::new(),
-        lines: borrow_slice(vec!["a".repeat(160)]),
+        lines: borrow_slice(vec!["x".repeat(160)]),
         row: 0,
         column: 150,
         mode: MultilineInputMode::Compose,
     }));
     assert!(rendered.contains("Changed description title"));
+    assert!(rendered.contains("Ctrl-Enter / ^S submit"));
+    assert!(!rendered.contains(&"x".repeat(160)));
+    assert_eq!(rendered.matches('x').count(), 160);
     assert!(rendered.contains("Ctrl+X Ctrl+E editor"));
     assert!(rendered.contains("line 1/1"));
 }
