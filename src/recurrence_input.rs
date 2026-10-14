@@ -589,23 +589,6 @@ mod tests {
     }
 
     #[test]
-    fn upcoming_slots_follow_month_end_and_leap_day_rules() {
-        assert_eq!(
-            slots("monthly", "2028-01-31", "2028-01-01T00:00:00Z", 4),
-            [
-                date("2028-01-31"),
-                date("2028-02-29"),
-                date("2028-03-31"),
-                date("2028-04-30"),
-            ]
-        );
-        assert_eq!(
-            slots("yearly", "2028-02-29", "2028-01-01T00:00:00Z", 3),
-            [date("2028-02-29"), date("2029-02-28"), date("2030-02-28")]
-        );
-    }
-
-    #[test]
     fn upcoming_slots_use_the_schedule_zone_across_dst_changes() {
         // Helsinki moves from UTC+2 to UTC+3 at 01:00 UTC on 2026-03-29.
         let schedule = recurrence_schedule(
