@@ -1802,14 +1802,23 @@ mod tests {
         for expected in [
             "● Background sync blocked",
             "Background sync",
-            "Choose",
-            "Sync now, then Always Allow",
             "Last daemon sync",
             "4h 41m ago",
             "Daemon error",
             "Next retry",
             "in 3m",
         ] {
+            assert!(text.contains(expected), "missing {expected}: {text}");
+        }
+        #[cfg(target_os = "macos")]
+        let recovery = [
+            "Keychain access needed",
+            "Choose",
+            "Sync now, then Always Allow",
+        ];
+        #[cfg(not(target_os = "macos"))]
+        let recovery = ["Key store access needed", "Unlock", "then choose Sync now."];
+        for expected in recovery {
             assert!(text.contains(expected), "missing {expected}: {text}");
         }
         let headline = body(&theme, &view, 96)

@@ -199,7 +199,25 @@ mod tests {
             (THEME.danger, "sync error".to_string())
         );
         assert!(summary.can_manual_sync);
-        assert!(summary.issues[0].value.contains("Choose Sync now"));
+        assert_eq!(summary.issues[0].label, "Background sync");
+        #[cfg(target_os = "macos")]
+        assert!(
+            summary.issues[0]
+                .value
+                .contains("Keychain access needed since")
+                && summary.issues[0]
+                    .value
+                    .contains("Choose Sync now, then Always Allow.")
+        );
+        #[cfg(not(target_os = "macos"))]
+        assert!(
+            summary.issues[0]
+                .value
+                .contains("Key store access needed since")
+                && summary.issues[0]
+                    .value
+                    .contains("Unlock the system key store, then choose Sync now.")
+        );
         status.access_refused_at = Some("refused".to_string());
         assert_eq!(
             sync_status_summary(&status).health,
