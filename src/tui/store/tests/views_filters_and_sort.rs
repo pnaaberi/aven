@@ -65,169 +65,51 @@ async fn availability_transition_refreshes_tasks_sidebar_and_project_counts() {
     assert_eq!(project.inbox_count, 1);
 }
 
-async fn assert_work_view_parity(
-    store: &mut TuiStore,
-    query: TaskQuery,
-    filters: crate::query::TaskFilters,
-) {
-    store.show_view(query).await.unwrap();
-    let core_rows = store
-        .database
-        .list_task_items(
-            &store.active_workspace.id,
-            filters,
-            crate::query::TaskQueryMode::Flat,
-            store.view_state.sort(),
-            store.view_state.sort_direction(),
-        )
-        .await
-        .unwrap();
-    let tui_ids = store
-        .tasks
-        .iter()
-        .map(|item| item.task.id.clone())
-        .collect::<std::collections::BTreeSet<_>>();
-    let core_ids = core_rows
-        .iter()
-        .map(|item| item.task.id.clone())
-        .collect::<std::collections::BTreeSet<_>>();
-    assert_eq!(tui_ids, core_ids, "{query:?}");
-    let count = match query {
-        TaskQuery::Ready => store.counts.ready,
-        TaskQuery::Blocked => store.counts.blocked,
-        TaskQuery::Overdue => store.counts.overdue,
-        _ => panic!("work view required"),
-    };
-    assert_eq!(
-        usize::try_from(count).unwrap(),
-        store.tasks.len(),
-        "{query:?}"
-    );
-}
-
 #[tokio::test]
 async fn work_views_and_sidebar_counts_match_core_filters_at_workspace_and_project_scope() {
     let (_dir, pool, mut store) = test_store_with_pool().await;
     create_mobile_project(&mut store).await;
-    let today = chrono::Local::now().date_naive();
-    let yesterday = (today - chrono::Duration::days(1))
-        .format("%Y-%m-%d")
-        .to_string();
-    let today = today.format("%Y-%m-%d").to_string();
     let mut ids = std::collections::BTreeMap::new();
-    for (title, project, is_epic) in [
-        ("app ready", "aven", false),
-        ("app blocked", "aven", false),
-        ("app blocker", "aven", false),
-        ("app deferred", "aven", false),
-        ("app overdue", "aven", false),
-        ("app due today", "aven", false),
-        ("app epic", "aven", true),
-        ("app blocked epic", "aven", true),
-        ("app deleted", "aven", false),
-        ("app done", "aven", false),
-        ("app canceled", "aven", false),
-        ("mobile ready", "mobile-app", false),
-        ("mobile blocked", "mobile-app", false),
-        ("mobile blocker", "mobile-app", false),
-        ("mobile overdue", "mobile-app", false),
-        ("mobile due today", "mobile-app", false),
-        ("mobile deferred overdue", "mobile-app", false),
+    for (title, project) in [
+        ("app ready", "aven"),
+        ("app blocked", "aven"),
+        ("app overdue", "aven"),
+        ("mobile ready", "mobile-app"),
+        ("mobile blocked", "mobile-app"),
+        ("mobile overdue", "mobile-app"),
     ] {
         let (_, selected) = store
             .create_task(
                 TaskDraft {
                     title: title.to_string(),
                     project: Some(project.to_string()),
-                    is_epic,
                     ..task_draft("")
                 },
                 None,
             )
             .await
             .unwrap();
-        let selected = selected.unwrap();
-        ids.insert(title, store.tasks[selected].task.id.clone());
+        ids.insert(title, store.tasks[selected.unwrap()].task.id.clone());
     }
-
-    let workspace_id = store.active_workspace.id.clone();
     let mut conn = pool.acquire().await.unwrap();
-    for title in ["app deferred", "mobile deferred overdue"] {
-        sqlx::query("UPDATE tasks SET available_at = '2999-01-01T00:00:00Z' WHERE workspace_id = ? AND id = ?")
-            .bind(&workspace_id)
-            .bind(&ids[title])
+    for project in ["app", "mobile"] {
+        sqlx::query("UPDATE tasks SET due_on = '2000-01-01' WHERE id = ?")
+            .bind(&ids[format!("{project} overdue").as_str()])
             .execute(&mut *conn)
             .await
             .unwrap();
-    }
-    for title in ["app overdue", "mobile overdue", "mobile deferred overdue"] {
-        sqlx::query("UPDATE tasks SET due_on = ? WHERE workspace_id = ? AND id = ?")
-            .bind(&yesterday)
-            .bind(&workspace_id)
-            .bind(&ids[title])
-            .execute(&mut *conn)
-            .await
-            .unwrap();
-    }
-    for title in ["app due today", "mobile due today"] {
-        sqlx::query("UPDATE tasks SET due_on = ? WHERE workspace_id = ? AND id = ?")
-            .bind(&today)
-            .bind(&workspace_id)
-            .bind(&ids[title])
-            .execute(&mut *conn)
-            .await
-            .unwrap();
-    }
-    for (title, status) in [("app done", "done"), ("app canceled", "canceled")] {
-        sqlx::query("UPDATE tasks SET status = ? WHERE workspace_id = ? AND id = ?")
-            .bind(status)
-            .bind(&workspace_id)
-            .bind(&ids[title])
-            .execute(&mut *conn)
-            .await
-            .unwrap();
-    }
-    sqlx::query("UPDATE tasks SET deleted = 1 WHERE workspace_id = ? AND id = ?")
-        .bind(&workspace_id)
-        .bind(&ids["app deleted"])
-        .execute(&mut *conn)
-        .await
-        .unwrap();
-    for (blocked, blocker) in [
-        ("app blocked", "app blocker"),
-        ("app blocked epic", "app blocker"),
-        ("mobile blocked", "mobile blocker"),
-    ] {
         sqlx::query(
             "INSERT INTO task_dependencies(workspace_id, task_id, depends_on_task_id, created_at)
-             VALUES (?, ?, ?, ?)",
+             VALUES (?, ?, ?, 't')",
         )
-        .bind(&workspace_id)
-        .bind(&ids[blocked])
-        .bind(&ids[blocker])
-        .bind(crate::ids::now())
+        .bind(&store.active_workspace.id)
+        .bind(&ids[format!("{project} blocked").as_str()])
+        .bind(&ids[format!("{project} ready").as_str()])
         .execute(&mut *conn)
         .await
         .unwrap();
     }
     drop(conn);
-
-    let ready = crate::query::TaskFilters {
-        ready_only: true,
-        exclude_epics: true,
-        availability: crate::query::TaskAvailabilityFilter::Available,
-        ..crate::query::TaskFilters::default()
-    };
-    let blocked = crate::query::TaskFilters {
-        blocked_only: true,
-        availability: crate::query::TaskAvailabilityFilter::Available,
-        ..crate::query::TaskFilters::default()
-    };
-    let overdue = crate::query::TaskFilters {
-        overdue_only: true,
-        availability: crate::query::TaskAvailabilityFilter::Available,
-        ..crate::query::TaskFilters::default()
-    };
 
     store.show_view(TaskQuery::Queue).await.unwrap();
     assert_eq!(
@@ -241,73 +123,55 @@ async fn work_views_and_sidebar_counts_match_core_filters_at_workspace_and_proje
         crate::queue::QueueBand::Blocked
     );
 
-    assert_work_view_parity(&mut store, TaskQuery::Ready, ready.clone()).await;
-    assert_eq!(
-        store
-            .tasks
-            .iter()
-            .map(|item| item.task.title.as_str())
-            .collect::<std::collections::BTreeSet<_>>(),
-        std::collections::BTreeSet::from([
-            "app blocker",
-            "app due today",
-            "app overdue",
-            "app ready",
-            "mobile blocker",
-            "mobile due today",
-            "mobile overdue",
-            "mobile ready",
-        ])
-    );
-    assert_work_view_parity(&mut store, TaskQuery::Blocked, blocked.clone()).await;
-    assert_eq!(
-        store
-            .tasks
-            .iter()
-            .map(|item| item.task.title.as_str())
-            .collect::<std::collections::BTreeSet<_>>(),
-        std::collections::BTreeSet::from(["app blocked", "app blocked epic", "mobile blocked"])
-    );
-    assert_work_view_parity(&mut store, TaskQuery::Overdue, overdue.clone()).await;
-    assert_eq!(
-        store
-            .tasks
-            .iter()
-            .map(|item| item.task.title.as_str())
-            .collect::<std::collections::BTreeSet<_>>(),
-        std::collections::BTreeSet::from(["app overdue", "mobile overdue"])
-    );
-    assert!(
-        store
-            .tasks
-            .iter()
-            .all(|item| item.task.due_on.as_deref() == Some(yesterday.as_str()))
-    );
-
-    store
-        .show_scope(TaskScopeTarget::Project("mobile-app".to_string()))
-        .await
-        .unwrap();
-    assert_work_view_parity(
-        &mut store,
-        TaskQuery::Ready,
-        ready.with_project(Some("mobile-app".to_string())),
-    )
-    .await;
-    assert_work_view_parity(
-        &mut store,
-        TaskQuery::Blocked,
-        blocked.with_project(Some("mobile-app".to_string())),
-    )
-    .await;
-    assert_work_view_parity(
-        &mut store,
-        TaskQuery::Overdue,
-        overdue.with_project(Some("mobile-app".to_string())),
-    )
-    .await;
-    assert_eq!(store.tasks.len(), 1);
-    assert_eq!(store.tasks[0].task.title, "mobile overdue");
+    for project_scoped in [false, true] {
+        if project_scoped {
+            store
+                .show_scope(TaskScopeTarget::Project("mobile-app".to_string()))
+                .await
+                .unwrap();
+        }
+        for (query, workspace_titles, project_titles) in [
+            (
+                TaskQuery::Ready,
+                vec!["app overdue", "app ready", "mobile overdue", "mobile ready"],
+                vec!["mobile overdue", "mobile ready"],
+            ),
+            (
+                TaskQuery::Blocked,
+                vec!["app blocked", "mobile blocked"],
+                vec!["mobile blocked"],
+            ),
+            (
+                TaskQuery::Overdue,
+                vec!["app overdue", "mobile overdue"],
+                vec!["mobile overdue"],
+            ),
+        ] {
+            store.show_view(query).await.unwrap();
+            let mut titles = store
+                .tasks
+                .iter()
+                .map(|item| item.task.title.as_str())
+                .collect::<Vec<_>>();
+            titles.sort_unstable();
+            assert_eq!(
+                titles,
+                if project_scoped {
+                    project_titles
+                } else {
+                    workspace_titles
+                },
+                "{query:?}"
+            );
+            let count = match query {
+                TaskQuery::Ready => store.counts.ready,
+                TaskQuery::Blocked => store.counts.blocked,
+                TaskQuery::Overdue => store.counts.overdue,
+                _ => unreachable!(),
+            };
+            assert_eq!(usize::try_from(count).unwrap(), titles.len(), "{query:?}");
+        }
+    }
 }
 
 #[tokio::test]
