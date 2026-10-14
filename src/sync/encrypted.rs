@@ -264,9 +264,13 @@ pub(crate) async fn run_join(
 
 pub(crate) async fn run_to_completion(database: &Database, config: &AppConfig) -> Result<Outcome> {
     let host = DesktopHost::foreground(config);
-    driver()?
+    let outcome = driver()?
         .run(|link| engine::run_to_completion(link, database, &host))
-        .await
+        .await?;
+    if outcome.metadata_caught_up && outcome.images != ImageTransfer::Failed {
+        crate::daemon::retry_after_foreground_sync(database, config).await;
+    }
+    Ok(outcome)
 }
 
 #[derive(Default)]

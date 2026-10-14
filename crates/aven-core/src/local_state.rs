@@ -22,6 +22,24 @@ pub struct SyncVaultDeletion {
     pub at: String,
 }
 
+/// Local daemon health, cleared with the other sync metadata on reset.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct DaemonSyncState {
+    /// Unix seconds of the last completed daemon round.
+    pub last_success_at: Option<i64>,
+    pub error: Option<DaemonSyncError>,
+    /// Unix seconds of the backoff deadline, absent after success.
+    pub next_retry_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct DaemonSyncError {
+    pub code: String,
+    pub message: String,
+    /// Unix seconds when this error code first appeared without a success.
+    pub since: i64,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OnboardingStatus {
     Due,
@@ -30,6 +48,51 @@ pub enum OnboardingStatus {
 }
 
 impl Database {
+    pub async fn daemon_sync_state(&self) -> Result<DaemonSyncState> {
+        self.meta("sync_daemon_health")
+            .await?
+            .map(|value| serde_json::from_str(&value).map_err(Into::into))
+            .unwrap_or_else(|| Ok(DaemonSyncState::default()))
+    }
+
+    /// Records an actual round, not idle polling or lock contention. Repeated
+    /// errors retain their first-seen time; unchanged snapshots cause no write.
+    pub async fn record_daemon_sync_round(
+        &self,
+        at: i64,
+        error: Option<(&str, &str, i64)>,
+    ) -> Result<()> {
+        let previous = self.daemon_sync_state().await?;
+        let mut state = previous.clone();
+        if let Some((code, message, retry_at)) = error {
+            let since = previous
+                .error
+                .as_ref()
+                .filter(|error| error.code == code)
+                .map_or(at, |error| error.since);
+            state.error = Some(DaemonSyncError {
+                code: code.to_string(),
+                message: message.to_string(),
+                since,
+            });
+            state.next_retry_at = Some(retry_at);
+        } else {
+            state.last_success_at = Some(at);
+            state.error = None;
+            state.next_retry_at = None;
+        }
+        if state != previous {
+            let mut conn = self.acquire_writer().await?;
+            set_meta(
+                &mut conn,
+                "sync_daemon_health",
+                &serde_json::to_string(&state)?,
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
     /// Returns the last time this installation's sync credentials were refused.
     pub async fn sync_access_refusal(&self) -> Result<Option<SyncAccessRefusal>> {
         Ok(self
@@ -262,6 +325,83 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn daemon_health_preserves_first_seen_and_clears_on_success_and_reset() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("health.sqlite");
+        let database = Database::open(&path).await.unwrap();
+        assert_eq!(
+            database.daemon_sync_state().await.unwrap(),
+            DaemonSyncState::default()
+        );
+        database.record_daemon_sync_round(100, None).await.unwrap();
+        database
+            .record_daemon_sync_round(110, Some(("network", "retry", 111)))
+            .await
+            .unwrap();
+        database
+            .record_daemon_sync_round(120, Some(("network", "retry", 122)))
+            .await
+            .unwrap();
+        let state = database.daemon_sync_state().await.unwrap();
+        assert_eq!(state.last_success_at, Some(100));
+        assert_eq!(state.error.as_ref().unwrap().since, 110);
+        assert_eq!(state.next_retry_at, Some(122));
+        sqlx::raw_sql(
+            "CREATE TRIGGER reject_health_write BEFORE UPDATE ON meta
+            WHEN NEW.key = 'sync_daemon_health'
+            BEGIN SELECT RAISE(ABORT, 'redundant health write'); END;",
+        )
+        .execute(&mut *database.acquire_writer().await.unwrap())
+        .await
+        .unwrap();
+        database
+            .record_daemon_sync_round(121, Some(("network", "retry", 122)))
+            .await
+            .unwrap();
+        sqlx::raw_sql("DROP TRIGGER reject_health_write")
+            .execute(&mut *database.acquire_writer().await.unwrap())
+            .await
+            .unwrap();
+        assert_eq!(
+            Database::open(&path)
+                .await
+                .unwrap()
+                .daemon_sync_state()
+                .await
+                .unwrap(),
+            state
+        );
+        database
+            .record_daemon_sync_round(130, Some(("keys", "unlock", 140)))
+            .await
+            .unwrap();
+        assert_eq!(
+            database
+                .daemon_sync_state()
+                .await
+                .unwrap()
+                .error
+                .unwrap()
+                .since,
+            130
+        );
+        database.record_daemon_sync_round(150, None).await.unwrap();
+        assert_eq!(
+            database.daemon_sync_state().await.unwrap(),
+            DaemonSyncState {
+                last_success_at: Some(150),
+                error: None,
+                next_retry_at: None,
+            }
+        );
+        database.clear_sync_state().await.unwrap();
+        assert_eq!(
+            database.daemon_sync_state().await.unwrap(),
+            DaemonSyncState::default()
+        );
+    }
 
     #[tokio::test]
     async fn sync_access_refusal_persists_until_cleared() {

@@ -9,6 +9,7 @@ pub(super) enum SyncHealth {
     VaultDeleted,
     AccessRefused,
     ProtectedStorageUnavailable,
+    BackgroundBlocked,
     Attention,
     RuntimeDisabled,
     NotSetUp,
@@ -37,6 +38,7 @@ impl SyncStatusSummary {
             SyncHealth::VaultDeleted => "Sync vault deleted",
             SyncHealth::AccessRefused => "Sync access unconfirmed",
             SyncHealth::ProtectedStorageUnavailable => "Sync keys unavailable",
+            SyncHealth::BackgroundBlocked => "Background sync blocked",
             SyncHealth::Attention => "Sync needs attention",
             SyncHealth::RuntimeDisabled => "Sync disabled",
             SyncHealth::NotSetUp => "Local only",
@@ -50,7 +52,8 @@ impl SyncStatusSummary {
         match self.health {
             SyncHealth::VaultDeleted
             | SyncHealth::AccessRefused
-            | SyncHealth::ProtectedStorageUnavailable => theme.danger,
+            | SyncHealth::ProtectedStorageUnavailable
+            | SyncHealth::BackgroundBlocked => theme.danger,
             SyncHealth::Attention | SyncHealth::Unfinished | SyncHealth::Pending(_) => {
                 theme.warning
             }
@@ -60,6 +63,9 @@ impl SyncStatusSummary {
     }
 
     pub(super) fn badge(&self, theme: &Theme, status: &TuiSyncStatus) -> (Color, String) {
+        if self.health == SyncHealth::BackgroundBlocked {
+            return (theme.danger, "sync error".to_string());
+        }
         if let Some(invitation) = status.invitation {
             let remaining = invitation
                 .expires_at
@@ -74,7 +80,8 @@ impl SyncStatusSummary {
         match self.health {
             SyncHealth::VaultDeleted
             | SyncHealth::AccessRefused
-            | SyncHealth::ProtectedStorageUnavailable => (theme.danger, "sync error".to_string()),
+            | SyncHealth::ProtectedStorageUnavailable
+            | SyncHealth::BackgroundBlocked => (theme.danger, "sync error".to_string()),
             SyncHealth::Attention | SyncHealth::Unfinished => (theme.warning, "sync!".to_string()),
             SyncHealth::RuntimeDisabled => (theme.fg_dim, "sync off".to_string()),
             SyncHealth::NotSetUp => (theme.fg_dim, "local".to_string()),
@@ -98,6 +105,34 @@ pub(super) fn sync_status_summary(status: &TuiSyncStatus) -> SyncStatusSummary {
             value: status.protected_storage.value.clone(),
         });
     }
+    let background_blocked = status.enabled
+        && status.runtime_allowed
+        && crate::status::daemon_sync_blocked(&status.daemon_sync, chrono::Utc::now().timestamp());
+    if background_blocked && let Some(error) = &status.daemon_sync.error {
+        let message = if error.code == "protected-key-storage-unavailable" {
+            #[cfg(target_os = "macos")]
+            let (storage, guidance) = ("Keychain access", "Choose Sync now, then Always Allow.");
+            #[cfg(not(target_os = "macos"))]
+            let (storage, guidance) = (
+                "Key store access",
+                "Unlock the system key store, then choose Sync now.",
+            );
+            format!(
+                "{storage} needed since {}. {guidance}",
+                crate::status::daemon_time(error.since)
+            )
+        } else {
+            format!(
+                "Since {}: {}",
+                crate::status::daemon_time(error.since),
+                error.message
+            )
+        };
+        issues.push(SyncIssue {
+            label: "Background sync",
+            value: message,
+        });
+    }
     let health = if !status.set_up {
         SyncHealth::NotSetUp
     } else if !status.protected_storage.ok {
@@ -110,6 +145,8 @@ pub(super) fn sync_status_summary(status: &TuiSyncStatus) -> SyncStatusSummary {
         SyncHealth::RuntimeDisabled
     } else if status.phase != LocalPhase::SetUp {
         SyncHealth::Unfinished
+    } else if background_blocked {
+        SyncHealth::BackgroundBlocked
     } else if status.conflicts > 0 || !issues.is_empty() {
         SyncHealth::Attention
     } else if status.pending_changes > 0 {
@@ -137,6 +174,77 @@ mod tests {
             phase: LocalPhase::SetUp,
             ..TuiSyncStatus::default()
         }
+    }
+
+    #[test]
+    fn background_failure_is_visible_despite_foreground_key_access() {
+        let mut status = TuiSyncStatus {
+            enabled: true,
+            pending_changes: 16,
+            conflicts: 1,
+            daemon_sync: aven_core::local_state::DaemonSyncState {
+                error: Some(aven_core::local_state::DaemonSyncError {
+                    code: "protected-key-storage-unavailable".to_string(),
+                    message: "unlock".to_string(),
+                    since: chrono::Utc::now().timestamp(),
+                }),
+                ..Default::default()
+            },
+            ..set_up()
+        };
+        let summary = sync_status_summary(&status);
+        assert_eq!(summary.health, SyncHealth::BackgroundBlocked);
+        assert_eq!(
+            summary.badge(&THEME, &status),
+            (THEME.danger, "sync error".to_string())
+        );
+        assert!(summary.can_manual_sync);
+        assert!(summary.issues[0].value.contains("Choose Sync now"));
+        status.access_refused_at = Some("refused".to_string());
+        assert_eq!(
+            sync_status_summary(&status).health,
+            SyncHealth::AccessRefused
+        );
+        status.vault_deleted_at = Some("deleted".to_string());
+        assert_eq!(
+            sync_status_summary(&status).health,
+            SyncHealth::VaultDeleted
+        );
+        status.protected_storage.ok = false;
+        assert_eq!(
+            sync_status_summary(&status).health,
+            SyncHealth::ProtectedStorageUnavailable
+        );
+        status.protected_storage.ok = true;
+        status.access_refused_at = None;
+        status.vault_deleted_at = None;
+        status.enabled = false;
+        assert_eq!(sync_status_summary(&status).health, SyncHealth::Attention);
+    }
+
+    #[test]
+    fn transient_daemon_network_errors_do_not_replace_pending_headline() {
+        let mut status = TuiSyncStatus {
+            enabled: true,
+            pending_changes: 16,
+            daemon_sync: aven_core::local_state::DaemonSyncState {
+                error: Some(aven_core::local_state::DaemonSyncError {
+                    code: "encrypted-tail-network".to_string(),
+                    message: "Check connection".to_string(),
+                    since: chrono::Utc::now().timestamp(),
+                }),
+                ..Default::default()
+            },
+            ..set_up()
+        };
+        assert_eq!(sync_status_summary(&status).health, SyncHealth::Pending(16));
+        assert!(sync_status_summary(&status).issues.is_empty());
+        status.daemon_sync.error.as_mut().unwrap().since -= 121;
+        let summary = sync_status_summary(&status);
+        assert_eq!(summary.health, SyncHealth::BackgroundBlocked);
+        assert!(summary.issues[0].value.contains("Check connection"));
+        status.daemon_sync = Default::default();
+        assert_eq!(sync_status_summary(&status).health, SyncHealth::Pending(16));
     }
 
     #[test]

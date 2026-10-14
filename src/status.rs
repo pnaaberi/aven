@@ -46,6 +46,7 @@ pub(crate) struct DaemonStatusReport {
     pub(crate) wake_address_valid: bool,
     pub(crate) paths: DaemonPaths,
     pub(crate) guidance: Vec<String>,
+    pub(crate) sync: aven_core::local_state::DaemonSyncState,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
@@ -109,6 +110,7 @@ pub(crate) fn build_daemon_status(
     }
     DaemonStatusReport {
         version: 1,
+        sync: Default::default(),
         state,
         platform_supported: service.platform_supported,
         platform: std::env::consts::OS.to_string(),
@@ -127,6 +129,52 @@ pub(crate) fn build_daemon_status(
             stderr_log: service.stderr_path,
         },
         guidance,
+    }
+}
+
+impl DaemonStatusReport {
+    pub(crate) fn with_sync(mut self, sync: aven_core::local_state::DaemonSyncState) -> Self {
+        if self.sync_enabled
+            && daemon_sync_blocked(&sync, chrono::Utc::now().timestamp())
+            && self.state == StatusState::Healthy
+        {
+            self.state = StatusState::Blocked;
+        }
+        self.sync = sync;
+        self
+    }
+}
+
+/// Key storage failures need user action immediately. Other errors must persist
+/// for two minutes before being called blocked, so short network retries do not
+/// replace the normal pending headline.
+pub(crate) fn daemon_sync_blocked(
+    state: &aven_core::local_state::DaemonSyncState,
+    now: i64,
+) -> bool {
+    state.error.as_ref().is_some_and(|error| {
+        error.code.starts_with("protected-key-storage-") || now.saturating_sub(error.since) >= 120
+    })
+}
+
+pub(crate) fn daemon_time(at: i64) -> String {
+    chrono::DateTime::from_timestamp(at, 0)
+        .map(|time| {
+            time.with_timezone(&chrono::Local)
+                .format("%H:%M")
+                .to_string()
+        })
+        .unwrap_or_else(|| at.to_string())
+}
+
+pub(crate) fn elapsed_text(seconds: i64) -> String {
+    let seconds = seconds.max(0);
+    if seconds >= 3600 {
+        format!("{}h {}m", seconds / 3600, seconds % 3600 / 60)
+    } else if seconds >= 60 {
+        format!("{}m {}s", seconds / 60, seconds % 60)
+    } else {
+        format!("{seconds}s")
     }
 }
 
@@ -158,6 +206,30 @@ mod tests {
         let mut config = AppConfig::default();
         config.sync.enabled = true;
         config
+    }
+
+    #[test]
+    fn daemon_blocking_threshold_and_json_health_are_stable() {
+        let mut sync = aven_core::local_state::DaemonSyncState {
+            last_success_at: Some(50),
+            error: Some(aven_core::local_state::DaemonSyncError {
+                code: "encrypted-tail-network".to_string(),
+                message: "retry".to_string(),
+                since: 100,
+            }),
+            next_retry_at: Some(400),
+        };
+        assert!(!daemon_sync_blocked(&sync, 219));
+        assert!(daemon_sync_blocked(&sync, 220));
+        sync.error.as_mut().unwrap().code = "protected-key-storage-unavailable".to_string();
+        assert!(daemon_sync_blocked(&sync, 100));
+        let report = build_daemon_status(&configured(), service(true)).with_sync(sync);
+        assert_eq!(report.state, StatusState::Blocked);
+        let json = serde_json::to_value(report).unwrap();
+        assert_eq!(json["sync"]["last_success_at"], 50);
+        assert_eq!(json["sync"]["error"]["since"], 100);
+        assert_eq!(json["sync"]["next_retry_at"], 400);
+        assert!(!daemon_sync_blocked(&Default::default(), 1000));
     }
 
     #[test]

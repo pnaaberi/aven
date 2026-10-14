@@ -115,15 +115,20 @@ async fn run_loop(
                 break;
             }
             result = socket.recv_from(&mut wake_buf) => {
+                let mut retry_now = false;
+                if let Ok((len, _)) = &result {
+                    retry_now = &wake_buf[..*len] == b"r";
+                }
                 if let Err(err) = result {
                     warn!(error = %err, "daemon wake receive failed");
                 } else {
                     debug!("daemon wake received");
                 }
-                drain_wakes(&socket, &mut wake_buf);
+                retry_now |= drain_wakes(&socket, &mut wake_buf);
                 let now = Instant::now();
                 next_reminder = now;
-                if retry_not_before.is_none_or(|deadline| now >= deadline) {
+                if wake_can_sync(retry_now, retry_not_before, now) {
+                    retry_not_before = None;
                     next_sync = now;
                 }
             }
@@ -148,6 +153,9 @@ async fn run_loop(
                 sync_catching_up = matches!(&round, Ok(DaemonRound::Completed(outcome)) if outcome.more_work_ready());
                 match round {
                     Ok(DaemonRound::Completed(outcome)) => {
+                        if let Err(error) = database.record_daemon_sync_round(chrono::Utc::now().timestamp(), None).await {
+                            warn!(%error, "could not persist daemon sync health");
+                        }
                         backoff_seconds = 1;
                         awaiting_setup = false;
                         access_refused = false;
@@ -194,12 +202,14 @@ async fn run_loop(
                         backoff_seconds = 1;
                         next_sync = Instant::now() + Duration::from_secs(interval_seconds);
                         retry_not_before = Some(next_sync);
+                        record_failure(&database, &err, interval_seconds).await;
                     }
                     Err(err) => {
                         let retry_seconds = backoff_seconds;
                         backoff_seconds = (backoff_seconds * 2).min(300);
                         next_sync = Instant::now() + Duration::from_secs(retry_seconds);
                         retry_not_before = Some(next_sync);
+                        record_failure(&database, &err, retry_seconds).await;
                         warn!(error = %daemon_error(&err), retry_seconds, "daemon sync failed");
                     }
                 }
@@ -316,8 +326,54 @@ fn binary_fingerprint(launch_path: &Path) -> Result<BinaryFingerprint> {
     })
 }
 
-fn drain_wakes(socket: &UdpSocket, wake_buf: &mut [u8]) {
-    while socket.try_recv_from(wake_buf).is_ok() {}
+fn wake_can_sync(retry_now: bool, deadline: Option<Instant>, now: Instant) -> bool {
+    retry_now || deadline.is_none_or(|deadline| now >= deadline)
+}
+
+fn drain_wakes(socket: &UdpSocket, wake_buf: &mut [u8]) -> bool {
+    let mut retry_now = false;
+    while let Ok((len, _)) = socket.try_recv_from(wake_buf) {
+        retry_now |= &wake_buf[..len] == b"r";
+    }
+    retry_now
+}
+
+async fn record_failure(database: &Database, error: &anyhow::Error, retry_seconds: u64) {
+    use crate::sync::error_explanations::{ErrorAction, ErrorSurface, explain};
+    let explanation = explain(ErrorAction::General, ErrorSurface::Tui, error);
+    let code = explanation
+        .map(|explanation| explanation.code.to_string())
+        .or_else(|| crate::sync::error_explanations::codes(error).last())
+        .unwrap_or_else(|| "daemon-sync-failed".to_string());
+    // Persist actionable explanations, not raw chains that may contain URLs or credentials.
+    let message = explanation.map_or_else(
+        || "Background sync failed. Choose Sync now to retry and see the cause.".to_string(),
+        |explanation| explanation.combined(),
+    );
+    let now = chrono::Utc::now().timestamp();
+    if let Err(error) = database
+        .record_daemon_sync_round(now, Some((&code, &message, now + retry_seconds as i64)))
+        .await
+    {
+        warn!(%error, "could not persist daemon sync health");
+    }
+}
+
+/// A successful foreground sync can repair prompt-less key access. The `r` wake
+/// bypasses backoff; ordinary mutation wakes retain the legacy `1` payload.
+pub(crate) async fn retry_after_foreground_sync(database: &Database, config: &AppConfig) {
+    if !config.automatic_sync_is_enabled() {
+        return;
+    }
+    match database.daemon_sync_state().await {
+        Ok(state) if state.error.is_some() => {
+            if let Ok(addr) = config.wake_addr() {
+                send_wake(addr, b"r");
+            }
+        }
+        Err(error) => warn!(%error, "could not read daemon sync health"),
+        _ => {}
+    }
 }
 
 async fn sync_once(
@@ -372,8 +428,12 @@ pub(crate) fn wake_if_enabled(config: &AppConfig) {
 }
 
 fn wake(addr: SocketAddr) {
+    send_wake(addr, b"1");
+}
+
+fn send_wake(addr: SocketAddr, payload: &[u8]) {
     let bind_addr = SocketAddr::new(addr.ip(), 0);
-    match std::net::UdpSocket::bind(bind_addr).and_then(|socket| socket.send_to(b"1", addr)) {
+    match std::net::UdpSocket::bind(bind_addr).and_then(|socket| socket.send_to(payload, addr)) {
         Ok(_) => debug!(wake_addr = %addr, "daemon wake sent"),
         Err(err) => warn!(wake_addr = %addr, error = %err, "daemon wake send failed"),
     }
@@ -382,6 +442,83 @@ fn wake(addr: SocketAddr) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_retry_wakes_bypass_backoff() {
+        let now = Instant::now();
+        let deadline = Some(now + Duration::from_secs(300));
+        assert!(!wake_can_sync(false, deadline, now));
+        assert!(wake_can_sync(true, deadline, now));
+        assert!(wake_can_sync(
+            false,
+            deadline,
+            now + Duration::from_secs(300)
+        ));
+        assert!(wake_can_sync(false, None, now));
+    }
+
+    #[tokio::test]
+    async fn draining_preserves_retry_wakes_among_ordinary_wakes() {
+        let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let sender = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let addr = socket.local_addr().unwrap();
+        for payload in [b"1", b"r", b"1"] {
+            sender.send_to(payload, addr).await.unwrap();
+        }
+        socket.readable().await.unwrap();
+        assert!(drain_wakes(&socket, &mut [0; 16]));
+        assert!(!drain_wakes(&socket, &mut [0; 16]));
+    }
+
+    #[tokio::test]
+    async fn foreground_recovery_wakes_only_when_enabled_and_error_recorded() {
+        let database = Database::open(Path::new(":memory:")).await.unwrap();
+        let socket = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+        socket
+            .set_read_timeout(Some(Duration::from_millis(100)))
+            .unwrap();
+        let mut config = AppConfig::default();
+        config.sync.enabled = true;
+        config.daemon.wake_addr = Some(socket.local_addr().unwrap().to_string());
+        let mut buf = [0; 16];
+        retry_after_foreground_sync(&database, &config).await;
+        assert!(socket.recv(&mut buf).is_err());
+        database
+            .record_daemon_sync_round(
+                100,
+                Some(("protected-key-storage-unavailable", "unlock", 400)),
+            )
+            .await
+            .unwrap();
+        config.sync.disable_override = true;
+        retry_after_foreground_sync(&database, &config).await;
+        assert!(socket.recv(&mut buf).is_err());
+        config.sync.disable_override = false;
+        retry_after_foreground_sync(&database, &config).await;
+        assert_eq!(socket.recv(&mut buf).unwrap(), 1);
+        assert_eq!(buf[0], b'r');
+        // Foreground success cannot claim that the daemon recovered.
+        assert!(database.daemon_sync_state().await.unwrap().error.is_some());
+        database.record_daemon_sync_round(200, None).await.unwrap();
+        retry_after_foreground_sync(&database, &config).await;
+        assert!(socket.recv(&mut buf).is_err());
+    }
+
+    #[tokio::test]
+    async fn failure_records_codes_and_explanations_without_raw_details() {
+        let database = Database::open(Path::new(":memory:")).await.unwrap();
+        record_failure(
+            &database,
+            &anyhow::anyhow!("error encrypted-tail-reply url=secret"),
+            1,
+        )
+        .await;
+        let state = database.daemon_sync_state().await.unwrap();
+        let error = state.error.unwrap();
+        assert_eq!(error.code, "encrypted-tail-reply");
+        assert!(!error.message.contains("secret"));
+        assert_eq!(state.next_retry_at, Some(error.since + 1));
+    }
 
     #[test]
     fn wake_if_enabled_sends_to_configured_address() {

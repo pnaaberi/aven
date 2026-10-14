@@ -97,6 +97,12 @@ pub(super) async fn load_sync_status(
         .sync_vault_deletion()
         .await?
         .map(|deletion| deletion.at);
+    let daemon_sync = database.daemon_sync_state().await?;
+    let daemon_service = tokio::task::spawn_blocking(crate::daemon::status_snapshot)
+        .await
+        .ok()
+        .and_then(Result::ok)
+        .map(|service| crate::status::build_daemon_status(config, service));
     Ok(TuiSyncStatus {
         enabled: config.sync.enabled,
         runtime_allowed: config.sync_is_allowed(),
@@ -104,6 +110,8 @@ pub(super) async fn load_sync_status(
         phase,
         interval_seconds: config.sync_interval_seconds(),
         daemon_wake,
+        daemon_sync,
+        daemon_service,
         protected_storage,
         pending_changes: persistence.pending_changes,
         conflicts: persistence.conflicts,

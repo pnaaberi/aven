@@ -1544,6 +1544,65 @@ fn detail_lines(theme: &Theme, status: &TuiSyncStatus, width: usize) -> Vec<Line
             width,
         ));
     }
+    let daemon = status
+        .daemon_service
+        .as_ref()
+        .map_or("unavailable", |service| {
+            if !service.installed {
+                "not installed"
+            } else if service.running == Some(true) {
+                "running"
+            } else {
+                "not running"
+            }
+        });
+    lines.extend(wrapped_row(theme, "Daemon", daemon, theme.muted(), width));
+    let now = chrono::Utc::now().timestamp();
+    let last_sync = status.daemon_sync.last_success_at.map_or_else(
+        || "never recorded".to_string(),
+        |at| {
+            format!(
+                "{} ({} ago)",
+                crate::status::daemon_time(at),
+                crate::status::elapsed_text(now.saturating_sub(at))
+            )
+        },
+    );
+    // Three intervals allows normal scheduling jitter without hiding a stalled daemon.
+    let stale = status.enabled
+        && status.pending_changes > 0
+        && status.daemon_sync.last_success_at.is_none_or(|at| {
+            now.saturating_sub(at) > status.interval_seconds.saturating_mul(3) as i64
+        });
+    lines.extend(wrapped_row(
+        theme,
+        "Last daemon sync",
+        &last_sync,
+        Style::new().fg(if stale { theme.warning } else { theme.fg_muted }),
+        width,
+    ));
+    if let Some(error) = &status.daemon_sync.error {
+        lines.extend(wrapped_row(
+            theme,
+            "Daemon error",
+            &format!(
+                "{} since {}",
+                error.code,
+                crate::status::daemon_time(error.since)
+            ),
+            Style::new().fg(theme.danger),
+            width,
+        ));
+        if let Some(at) = status.daemon_sync.next_retry_at.filter(|at| *at > now) {
+            lines.extend(wrapped_row(
+                theme,
+                "Next retry",
+                &format!("in {}", crate::status::elapsed_text(at - now)),
+                theme.muted(),
+                width,
+            ));
+        }
+    }
     lines.extend(wrapped_row(
         theme,
         "Sync cursor",
@@ -1586,13 +1645,14 @@ fn wrapped_row(
     style: Style,
     width: usize,
 ) -> Vec<Line<'static>> {
-    let value_width = width.saturating_sub(LABEL_WIDTH).max(1);
+    let label_width = LABEL_WIDTH.max(label.len() + 1);
+    let value_width = width.saturating_sub(label_width).max(1);
     let mut lines = wrap_with_code(theme, value, style, value_width);
     for (index, line) in lines.iter_mut().enumerate() {
         let label = if index == 0 { label } else { "" };
         line.spans.insert(
             0,
-            Span::styled(format!("{label:<LABEL_WIDTH$}"), theme.dim()),
+            Span::styled(format!("{label:<label_width$}"), theme.dim()),
         );
     }
     lines
@@ -1694,8 +1754,103 @@ pub(in crate::tui::ui) fn sync_dialog_lines_for_test_width(
 }
 
 #[cfg(test)]
-mod cloud_tests {
+mod tests {
     use super::*;
+
+    #[test]
+    fn background_blocked_dialog_renders_headline_recovery_and_health_details() {
+        let theme = Theme::dark();
+        let now = chrono::Utc::now().timestamp();
+        let status = TuiSyncStatus {
+            enabled: true,
+            set_up: true,
+            phase: LocalPhase::SetUp,
+            pending_changes: 16,
+            daemon_sync: aven_core::local_state::DaemonSyncState {
+                last_success_at: Some(now - 4 * 3600 - 41 * 60),
+                error: Some(aven_core::local_state::DaemonSyncError {
+                    code: "protected-key-storage-unavailable".to_string(),
+                    message: "unlock".to_string(),
+                    since: now - 4 * 3600,
+                }),
+                next_retry_at: Some(now + 192),
+            },
+            ..Default::default()
+        };
+        let state = crate::tui::overlay::SyncDialogState {
+            details: true,
+            ..Default::default()
+        };
+        let activity = SyncActivity::default();
+        let view = SyncDialogView {
+            state: &state,
+            status: &status,
+            activity: &activity,
+            syncing: None,
+        };
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(100, 60)).unwrap();
+        terminal
+            .draw(|frame| render_sync_dialog(frame, &theme, &view))
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        let text = buffer
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        for expected in [
+            "● Background sync blocked",
+            "Background sync",
+            "Choose",
+            "Sync now, then Always Allow",
+            "Last daemon sync",
+            "4h 41m ago",
+            "Daemon error",
+            "Next retry",
+            "in 3m",
+        ] {
+            assert!(text.contains(expected), "missing {expected}: {text}");
+        }
+        let headline = body(&theme, &view, 96)
+            .lines
+            .into_iter()
+            .find(|line| line.to_string().contains("Background sync blocked"))
+            .unwrap();
+        assert!(
+            headline
+                .spans
+                .iter()
+                .all(|span| span.style.fg == Some(theme.danger))
+        );
+        let details = detail_lines(&theme, &status, 96);
+        let stale = details
+            .iter()
+            .find(|line| line.to_string().contains("Last daemon sync"))
+            .unwrap();
+        assert_eq!(stale.spans.last().unwrap().style.fg, Some(theme.warning));
+        let error = details
+            .iter()
+            .find(|line| line.to_string().contains("Daemon error"))
+            .unwrap();
+        assert_eq!(error.spans.last().unwrap().style.fg, Some(theme.danger));
+        let mut recovered = status;
+        recovered.daemon_sync.error = None;
+        recovered.daemon_sync.next_retry_at = None;
+        recovered.daemon_sync.last_success_at = Some(now);
+        let details = detail_lines(&theme, &recovered, 96);
+        assert!(
+            !details
+                .iter()
+                .any(|line| line.to_string().contains("Daemon error")
+                    || line.to_string().contains("Next retry"))
+        );
+        let last = details
+            .iter()
+            .find(|line| line.to_string().contains("Last daemon sync"))
+            .unwrap();
+        assert_eq!(last.spans.last().unwrap().style.fg, Some(theme.fg_muted));
+    }
 
     #[test]
     fn cloud_link_styles_only_label_cells_and_handles_wrapping() {

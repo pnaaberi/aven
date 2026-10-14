@@ -298,7 +298,9 @@ async fn dispatch_standalone(
             let db_path = config::resolve_db_path(db, &config)?;
             match args.command {
                 None => daemon::run(daemon::DaemonRunArgs { db_path, config }).await,
-                Some(DaemonSubcommand::Status(args)) => cmd_daemon_status(&config, args.json),
+                Some(DaemonSubcommand::Status(args)) => {
+                    cmd_daemon_status(&config, &db_path, args.json).await
+                }
                 Some(DaemonSubcommand::Install(args)) => {
                     daemon::install(daemon::ServiceInstallArgs {
                         db_path,
