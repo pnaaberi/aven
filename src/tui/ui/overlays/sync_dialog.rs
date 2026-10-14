@@ -340,10 +340,11 @@ fn home_lines(theme: &Theme, body: &mut Body, view: &SyncDialogView<'_>, width: 
     }
     if summary.health == SyncHealth::VaultDeleted {
         lines.extend(paragraph(
+            theme,
             "This sync's vault was deleted on the server, so automatic sync stopped. Local \
              tasks and unsynced changes stay here. Run `aven sync reset` in a terminal, then \
              `aven sync setup` with a new setup code.",
-            Style::new().fg(FG),
+            Style::new().fg(theme.fg),
             width,
         ));
     }
@@ -1156,7 +1157,13 @@ fn server_lines(theme: &Theme, lines: &mut Vec<Line<'static>>, server: &str, wid
             width,
         ));
     }
-    lines.extend(wrapped_row(theme, "Server", server, Style::new().fg(theme.fg), width));
+    lines.extend(wrapped_row(
+        theme,
+        "Server",
+        server,
+        Style::new().fg(theme.fg),
+        width,
+    ));
 }
 
 fn confirm_setup_lines(
@@ -1500,9 +1507,10 @@ fn detail_lines(theme: &Theme, status: &TuiSyncStatus, width: usize) -> Vec<Line
     }
     if let Some(at) = &status.vault_deleted_at {
         lines.extend(wrapped_row(
+            theme,
             "Vault deleted",
             at,
-            Style::new().fg(RED),
+            Style::new().fg(theme.danger),
             width,
         ));
     }
