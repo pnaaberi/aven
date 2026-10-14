@@ -233,6 +233,10 @@ async fn done_view_shortcut_keeps_project_scope() {
         TaskScope::Project("mobile-app".to_string())
     );
     assert_eq!(app.store.view_state.query, TaskQuery::Done);
+    assert_eq!(
+        app.store.view_state.filters().statuses,
+        vec!["done", "canceled"]
+    );
     assert_eq!(app.store.tasks.len(), 1);
     assert_eq!(app.store.tasks[0].task.title, "Mobile done");
     assert_eq!(toast_message(&app), None);

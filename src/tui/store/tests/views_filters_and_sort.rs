@@ -285,29 +285,6 @@ async fn show_conflicts_view_sets_conflicts_view() {
 }
 
 #[tokio::test]
-async fn queue_view_hides_done_tasks() {
-    let mut store = test_store().await;
-    let (_, selected) = store
-        .create_task(task_draft("Finished"), None)
-        .await
-        .unwrap();
-    store.update_status(selected, "done").await.unwrap();
-
-    store.show_view(TaskQuery::Queue).await.unwrap();
-
-    assert!(
-        store
-            .tasks
-            .iter()
-            .all(|item| item.task.status != TaskStatus::Done)
-    );
-    assert_eq!(store.counts.done, 1);
-    assert!(store.sidebar_entries.iter().any(|entry| {
-        entry.target == Some(SidebarEntryTarget::View(TaskQuery::Done)) && entry.count == 1
-    }));
-}
-
-#[tokio::test]
 async fn project_scope_hides_done_and_canceled_tasks_in_open_view() {
     let mut store = test_store().await;
     create_mobile_project(&mut store).await;
@@ -349,26 +326,6 @@ async fn project_scope_hides_done_and_canceled_tasks_in_open_view() {
             .collect::<Vec<_>>(),
         vec!["Open task"]
     );
-}
-
-#[tokio::test]
-async fn done_view_shows_done_tasks() {
-    let mut store = test_store().await;
-    let (_, selected) = store
-        .create_task(task_draft("Finished"), None)
-        .await
-        .unwrap();
-    let selected = selected.unwrap();
-    store.update_status(Some(selected), "done").await.unwrap();
-
-    store.show_view(TaskQuery::Done).await.unwrap();
-
-    assert_eq!(
-        store.view_state.filters().statuses,
-        vec!["done", "canceled"]
-    );
-    assert_eq!(store.tasks.len(), 1);
-    assert_eq!(store.tasks[0].task.title, "Finished");
 }
 
 async fn create_search_task(store: &mut TuiStore, title: &str) -> TaskId {
@@ -608,6 +565,10 @@ async fn closed_filter_reuses_visibility_cycle_for_tasks() {
 
     assert_eq!(store.tasks.len(), 1);
     assert_eq!(store.tasks[0].task.title, "Open task");
+    assert_eq!(store.counts.done, 1);
+    assert!(store.sidebar_entries.iter().any(|entry| {
+        entry.target == Some(SidebarEntryTarget::View(TaskQuery::Done)) && entry.count == 1
+    }));
 
     store.toggle_closed_filter().await.unwrap();
     assert_eq!(store.tasks.len(), 2);
@@ -619,23 +580,6 @@ async fn closed_filter_reuses_visibility_cycle_for_tasks() {
     store.toggle_closed_filter().await.unwrap();
     assert_eq!(store.tasks.len(), 1);
     assert_eq!(store.tasks[0].task.title, "Open task");
-}
-
-#[tokio::test]
-async fn toggle_deleted_filter_switches_include_deleted() {
-    let mut store = test_store().await;
-
-    store.toggle_deleted_filter().await.unwrap();
-    assert!(store.view_state.filter_modifiers.include_deleted);
-    assert!(!store.view_state.filter_modifiers.deleted_only);
-
-    store.toggle_deleted_filter().await.unwrap();
-    assert!(store.view_state.filter_modifiers.include_deleted);
-    assert!(store.view_state.filter_modifiers.deleted_only);
-
-    store.toggle_deleted_filter().await.unwrap();
-    assert!(!store.view_state.filter_modifiers.include_deleted);
-    assert!(!store.view_state.filter_modifiers.deleted_only);
 }
 
 #[tokio::test]
@@ -668,6 +612,17 @@ async fn deleted_filter_cycle_preserves_project_scope() {
     assert!(store.view_state.filter_modifiers.deleted_only);
     assert_eq!(store.tasks.len(), 1);
     assert!(store.tasks[0].task.deleted);
+
+    store.toggle_deleted_filter().await.unwrap();
+
+    assert!(!store.view_state.filter_modifiers.include_deleted);
+    assert!(!store.view_state.filter_modifiers.deleted_only);
+    assert_eq!(
+        store.view_state.scope,
+        TaskScope::Project("mobile-app".to_string())
+    );
+    assert_eq!(store.tasks.len(), 1);
+    assert_eq!(store.tasks[0].task.title, "Live project task");
 }
 
 #[tokio::test]
