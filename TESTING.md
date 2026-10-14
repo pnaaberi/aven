@@ -6,8 +6,8 @@ automatic diff-based selection.
 
 ## Focused iteration
 
-Focused tests use the full suite's `SQLX_OFFLINE=true`,
-`RUST_MIN_STACK=4194304`, and `target/test` artifacts:
+Focused tests use the full suite's `SQLX_OFFLINE=true` and `target/test`
+artifacts:
 
 ```sh
 just test-lib aven-core sync::
@@ -19,6 +19,16 @@ end a module filter with `::` (for example, `sync::`) to avoid matching unrelate
 names containing the same text. `test-target` runs the named integration-test
 target; target names use Rust/Cargo naming, such as `cli_local` for
 `tests/cli_local.rs`.
+
+Tests run on Rust's default 2 MiB test-thread stack. Test builds compile
+workspace crates at opt-level 0. At that level, an async function's poll frame
+reserves a separate slot for every future it awaits, so dispatchers with many
+arms and test bodies with many awaits use far more stack than release builds.
+When a test aborts with `has overflowed its stack`, find the large future, for
+example with `RUSTC_BOOTSTRAP=1 cargo rustc --profile test --lib -p <package>
+-- -Zprint-type-sizes` in a separate target directory. Box that future where it
+is defined, or box the call that every caller awaits, rather than raising
+`RUST_MIN_STACK`.
 
 Ordinary database fixtures copy a blank template instead of migrating a new
 file per test. `aven_core::test_support::open_blank_database` builds one fully
@@ -99,7 +109,7 @@ such as local-variable information. To compare suite concurrency, warm
 `target/test` and repeat the full suite at 6, 8, and 12 threads:
 
 ```sh
-env SQLX_OFFLINE=true RUST_MIN_STACK=4194304 cargo nextest run \
+env SQLX_OFFLINE=true cargo nextest run \
     --target-dir target/test --locked --workspace --all-targets \
     --no-fail-fast --status-level fail --test-threads 12
 ```

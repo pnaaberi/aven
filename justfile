@@ -123,7 +123,7 @@ test:
 
 # Run tests with the same environment and target directory as the full suite
 _test *ARGS:
-    env SQLX_OFFLINE=true RUST_MIN_STACK=4194304 cargo nextest run --target-dir target/test --locked --no-fail-fast --status-level fail {{ARGS}}
+    env SQLX_OFFLINE=true cargo nextest run --target-dir target/test --locked --no-fail-fast --status-level fail {{ARGS}}
 
 # Run library tests matching a test-name filter
 test-lib package filter:
@@ -143,7 +143,7 @@ fuzz target *ARGS:
 
 # Report passing tests that take longer than one second
 profile-tests *ARGS:
-    env SQLX_OFFLINE=true RUST_MIN_STACK=4194304 cargo nextest run --target-dir target/test --locked --no-fail-fast --profile slow-tests {{ARGS}}
+    env SQLX_OFFLINE=true cargo nextest run --target-dir target/test --locked --no-fail-fast --profile slow-tests {{ARGS}}
 
 # Lint every target in one package
 _clippy-package package:
