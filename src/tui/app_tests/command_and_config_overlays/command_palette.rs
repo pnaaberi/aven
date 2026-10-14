@@ -594,21 +594,6 @@ async fn command_panel_rejects_stale_captured_task_without_cursor_fallback() {
 }
 
 #[tokio::test]
-async fn command_overlay_tab_completes_unique_suffix_alias() {
-    let mut app = test_app().await;
-
-    app.begin_command().await;
-    type_chars(&mut app, ":todo").await;
-    app.handle_overlay_key(key(KeyCode::Tab)).await.unwrap();
-
-    assert!(matches!(
-        app.overlay,
-        Some(OverlayState::Command { state })
-            if state.input.text == "status-todo" && state.input.cursor == "status-todo".len()
-    ));
-}
-
-#[tokio::test]
 async fn command_overlay_tab_selects_first_partial_command_match() {
     let mut app = test_app().await;
 
@@ -712,6 +697,7 @@ async fn command_overlay_tab_cycles_from_exact_alias_match() {
         &app.overlay,
         Some(OverlayState::Command { state })
             if state.input.text == "status-todo"
+                && state.input.cursor == "status-todo".len()
                 && state.highlighted_name() == Some("status-todo")
     ));
 
