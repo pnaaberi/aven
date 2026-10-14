@@ -513,7 +513,7 @@ async fn create_search_task(store: &mut TuiStore, title: &str) -> TaskId {
 }
 
 #[tokio::test]
-async fn search_view_preview_hides_deleted_ordinary_text_results() {
+async fn search_preview_and_submission_hide_deleted_ordinary_text_results() {
     let mut store = test_store().await;
     let live_id = create_search_task(&mut store, "Live needle").await;
     let deleted_id = create_search_task(&mut store, "Deleted needle").await;
@@ -537,25 +537,7 @@ async fn search_view_preview_hides_deleted_ordinary_text_results() {
     assert_eq!(ids, vec![live_id.as_str()]);
     assert!(!ids.contains(&deleted_id.as_str()));
     assert_eq!(results.total_matches, 1);
-}
-
-#[tokio::test]
-async fn search_view_submitted_search_hides_deleted_ordinary_text_results() {
-    let mut store = test_store().await;
-    let live_id = create_search_task(&mut store, "Live needle").await;
-    let deleted_id = create_search_task(&mut store, "Deleted needle").await;
-    let deleted_index = store
-        .tasks
-        .iter()
-        .position(|item| item.task.id == deleted_id)
-        .unwrap();
-    store
-        .update_deleted(Some(deleted_index), true)
-        .await
-        .unwrap();
-
     store.accept_search("needle").await.unwrap();
-
     let ids = store
         .tasks
         .iter()
