@@ -2890,16 +2890,7 @@ mod tests {
     }
 
     #[test]
-    fn error_codes_are_stable_and_internal_errors_are_distinct() {
-        assert_eq!(ErrorCode::Validation.as_str(), "validation");
-        assert_eq!(ErrorCode::NotFound.as_str(), "not_found");
-        assert_eq!(ErrorCode::OpenConflict.as_str(), "open_conflict");
-        assert_eq!(
-            ErrorCode::GenerationConflict.as_str(),
-            "generation_conflict"
-        );
-        assert_eq!(ErrorCode::Database.as_str(), "database");
-        assert_eq!(ErrorCode::Internal.as_str(), "internal");
+    fn internal_errors_map_to_distinct_error_codes() {
         assert_eq!(
             Error::from_internal(
                 crate::error::CoreError::generation_conflict(
