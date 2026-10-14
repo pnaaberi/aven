@@ -25,12 +25,21 @@ mod tests {
 
     #[test]
     fn missing_hooks_are_failures() {
+        assert_eq!(require(&[], &[]), Ok(()));
+        assert_eq!(
+            require(&[Capability::Barrier], &[Capability::Barrier]),
+            Ok(())
+        );
         assert_eq!(
             require(
                 &[Capability::Barrier],
-                &[Capability::Barrier, Capability::Restart]
+                &[
+                    Capability::Barrier,
+                    Capability::Restart,
+                    Capability::LostReply
+                ]
             ),
-            Err(vec![Capability::Restart]),
+            Err(vec![Capability::Restart, Capability::LostReply]),
         );
     }
 }
