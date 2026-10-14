@@ -521,7 +521,6 @@ mod tests {
             })
             .collect();
         let batches = pack(&slots, header);
-        assert_eq!(batches.len(), slots.len());
         assert!(batches.iter().all(|batch| batch.len() == 1));
         assert_eq!(batches.concat(), slots);
     }

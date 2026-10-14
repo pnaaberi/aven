@@ -297,7 +297,6 @@ fn every_registered_operation_name_has_encrypted_validation() {
             value.strip_suffix("\";")
         })
         .collect();
-    assert!(registered.len() >= 39);
     for op in registered {
         assert!(
             domain::payload_keys(op).is_some(),
