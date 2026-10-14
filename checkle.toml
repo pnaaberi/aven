@@ -20,11 +20,11 @@ command = ["env", "SQLX_OFFLINE=true", "cargo", "test", "--target-dir", "target/
 
 [[group]]
 name = "all"
-checks = ["format-check", "clippy", "test", "doc-test", "static-analysis"]
+checks = ["format-check", "clippy", "test", "doc-test", "cargo-machete"]
 
 [[group]]
 name = "fast-readonly"
-checks = ["format-check", "static-analysis"]
+checks = ["format-check", "cargo-machete"]
 
 [[group]]
 name = "tests"

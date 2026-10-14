@@ -32,6 +32,8 @@ jobs:
         run: |
           cargo install checkle --version '=0.1.2' --locked
           cargo install sqlx-cli --version '=0.9.0' --locked
+      - name: Check dependency advisories and licenses
+        run: checkle run cargo-deny
       - name: Check SQLx metadata
         run: just sqlx-check
       - name: Run full checks

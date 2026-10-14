@@ -38,7 +38,7 @@ install-hooks:
 
 # Install local tools used by quality gates
 install-quality-tools:
-    cargo install checkle cargo-deny cargo-machete cargo-nextest sqlx-cli
+    cargo install checkle cargo-machete cargo-nextest sqlx-cli
 
 # Provision the persistent CuaBot verification image
 cua-sandbox-setup:
