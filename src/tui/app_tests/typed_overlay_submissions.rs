@@ -16,6 +16,13 @@ async fn add_project_submit_uses_intent_independent_of_title() {
         toast_message(&app).as_deref(),
         Some("created project mobile-app · u undo")
     );
+    assert!(app.overlay.is_none());
+    assert!(
+        app.store
+            .projects
+            .iter()
+            .any(|project| project.key == "mobile-app")
+    );
 }
 
 #[tokio::test]
@@ -124,7 +131,8 @@ async fn delete_project_name_mismatch_keeps_confirmation_open() {
 #[tokio::test]
 async fn search_selected_blocker_adds_dependency() {
     let mut app = test_app().await;
-    create_and_select_task(&mut app, test_task_draft("Blocker needle")).await;
+    let blocker = create_and_select_task(&mut app, test_task_draft("Blocker needle")).await;
+    let blocker_id = app.store.tasks[blocker].task.id.clone();
     let blocked_index = create_and_select_task(&mut app, test_task_draft("Blocked")).await;
     let blocked_id = app.store.tasks[blocked_index].task.id.clone();
 
@@ -140,7 +148,14 @@ async fn search_selected_blocker_adds_dependency() {
         .iter()
         .position(|item| item.task.id == blocked_id)
         .unwrap();
-    assert_eq!(app.store.tasks[blocked_index].depends_on.len(), 1);
+    assert_eq!(
+        app.store.tasks[blocked_index]
+            .depends_on
+            .iter()
+            .map(|link| &link.task_id)
+            .collect::<Vec<_>>(),
+        vec![&blocker_id]
+    );
     let toast = toast_message(&app);
     assert!(
         toast.is_some() && toast.as_deref().unwrap().contains("added dependency"),
@@ -239,7 +254,7 @@ async fn add_dependency_search_tab_keeps_picker_context() {
 }
 
 #[tokio::test]
-async fn remove_shortcut_opens_current_dependency_picker() {
+async fn submitting_dependency_removal_removes_dependency() {
     let (_dir, _pool, mut app) = test_app_with_pool().await;
     let (blocker_id, blocked_id) = create_blocked_pair(&mut app).await;
     let blocked_index = app
@@ -252,7 +267,6 @@ async fn remove_shortcut_opens_current_dependency_picker() {
 
     app.handle_normal_key(KeyCode::Char('t')).await.unwrap();
     app.handle_normal_key(KeyCode::Char('U')).await.unwrap();
-
     let Some(OverlayState::Picker(state)) = &app.overlay else {
         panic!("expected dependency picker");
     };
@@ -263,22 +277,7 @@ async fn remove_shortcut_opens_current_dependency_picker() {
     ));
     assert_eq!(state.items.len(), 1);
     assert_eq!(state.items[0].value, blocker_id.to_string());
-}
 
-#[tokio::test]
-async fn submitting_dependency_removal_removes_dependency() {
-    let (_dir, _pool, mut app) = test_app_with_pool().await;
-    let (_blocker_id, blocked_id) = create_blocked_pair(&mut app).await;
-    let blocked_index = app
-        .store
-        .tasks
-        .iter()
-        .position(|item| item.task.id == blocked_id)
-        .unwrap();
-    app.list.select_task(Some(blocked_index));
-
-    app.handle_normal_key(KeyCode::Char('t')).await.unwrap();
-    app.handle_normal_key(KeyCode::Char('U')).await.unwrap();
     app.handle_overlay_key(key(KeyCode::Enter)).await.unwrap();
 
     let blocked_index = app
