@@ -48,7 +48,9 @@ impl SyncStatusSummary {
 
     pub(super) fn color(&self, theme: &Theme) -> Color {
         match self.health {
-            SyncHealth::VaultDeleted | SyncHealth::AccessRefused | SyncHealth::ProtectedStorageUnavailable => theme.danger,
+            SyncHealth::VaultDeleted
+            | SyncHealth::AccessRefused
+            | SyncHealth::ProtectedStorageUnavailable => theme.danger,
             SyncHealth::Attention | SyncHealth::Unfinished | SyncHealth::Pending(_) => {
                 theme.warning
             }
@@ -70,9 +72,9 @@ impl SyncStatusSummary {
             }
         }
         match self.health {
-            SyncHealth::VaultDeleted | SyncHealth::AccessRefused | SyncHealth::ProtectedStorageUnavailable => {
-                (theme.danger, "sync error".to_string())
-            }
+            SyncHealth::VaultDeleted
+            | SyncHealth::AccessRefused
+            | SyncHealth::ProtectedStorageUnavailable => (theme.danger, "sync error".to_string()),
             SyncHealth::Attention | SyncHealth::Unfinished => (theme.warning, "sync!".to_string()),
             SyncHealth::RuntimeDisabled => (theme.fg_dim, "sync off".to_string()),
             SyncHealth::NotSetUp => (theme.fg_dim, "local".to_string()),
@@ -196,7 +198,10 @@ mod tests {
 
         assert_eq!(summary.health, SyncHealth::VaultDeleted);
         assert_eq!(summary.headline(), "Sync vault deleted");
-        assert_eq!(summary.badge(&status), (RED, "sync error".to_string()));
+        assert_eq!(
+            summary.badge(&THEME, &status),
+            (THEME.danger, "sync error".to_string())
+        );
         assert!(summary.can_manual_sync);
     }
 
