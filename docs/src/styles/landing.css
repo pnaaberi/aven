@@ -41,7 +41,7 @@ code { font-family: var(--mono); }
 .site-header nav a { color: var(--muted); }
 .site-header nav a:hover, .site-footer nav a:hover { color: var(--ink); }
 .hero { position: relative; isolation: isolate; padding-top: 77px; }
-.hero::after { content: ''; position: absolute; inset: -40px -60px auto auto; width: 640px; height: 670px; background: var(--hero-logo) center/contain no-repeat; opacity: .12; z-index: -1; pointer-events: none; -webkit-mask-image: linear-gradient(to bottom, transparent 8%, #0001 45%, #000 82%); mask-image: linear-gradient(to bottom, transparent 8%, #0001 45%, #000 82%); }
+.hero::after { content: ''; position: absolute; inset: -100px -60px auto auto; width: 640px; height: 670px; background: var(--hero-logo) center/contain no-repeat; opacity: .12; z-index: -1; pointer-events: none; -webkit-mask-image: linear-gradient(to bottom, transparent 8%, #0001 45%, #000 82%); mask-image: linear-gradient(to bottom, transparent 8%, #0001 45%, #000 82%); }
 @media (prefers-reduced-motion: no-preference) {
   .hero::after { animation: hero-mark-enter 260ms ease-out both; }
 }
