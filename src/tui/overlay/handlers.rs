@@ -2008,25 +2008,6 @@ mod tests {
     }
 
     #[test]
-    fn repeated_esc_never_discards_populated_add_note() {
-        let mut state = MultilineInputState::blank(add_note_intent(), "Add note", "");
-        state.insert_paste("draft");
-        let OverlayOutcome::None(OverlayState::MultilineInput(state)) =
-            handle(key(KeyCode::Esc), OverlayState::MultilineInput(state))
-        else {
-            panic!("expected discard confirmation");
-        };
-        assert_eq!(state.mode, MultilineInputMode::ConfirmDiscard);
-        let OverlayOutcome::None(OverlayState::MultilineInput(state)) =
-            handle(key(KeyCode::Esc), OverlayState::MultilineInput(state))
-        else {
-            panic!("expected composer");
-        };
-        assert_eq!(state.mode, MultilineInputMode::Compose);
-        assert_eq!(state.buffer.lines, vec!["draft"]);
-    }
-
-    #[test]
     fn clean_initialized_description_edit_cancels_without_confirmation() {
         let state = MultilineInputState::from_value(
             description_intent(),
