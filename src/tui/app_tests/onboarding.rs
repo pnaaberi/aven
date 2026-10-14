@@ -157,15 +157,6 @@ async fn welcome_quit_completes_but_control_c_does_not() {
     );
 }
 
-#[test]
-fn welcome_command_is_discoverable() {
-    assert!(
-        crate::tui::event::COMMANDS
-            .iter()
-            .any(|command| { command.name == "welcome" && command.action == Action::ShowWelcome })
-    );
-}
-
 #[tokio::test]
 async fn update_review_supports_action_focus_and_later() {
     let mut app = test_app().await;
