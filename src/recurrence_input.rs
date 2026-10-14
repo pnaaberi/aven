@@ -429,34 +429,31 @@ mod tests {
     #[test]
     fn parses_the_fixed_rule_grammar() {
         let monday = NaiveDate::from_ymd_opt(2026, 7, 20).unwrap();
-        for rule in [
-            "daily",
-            "every 1 days",
-            "every 3 days",
-            "weekdays",
-            "weekly",
-            "fortnightly",
-            "monthly",
-            "every 1 months",
-            "every 3 months",
-            "yearly",
-            "every 1 years",
-            "every 2 years",
-            "weekly on mon,wed,fri",
-            "every 2 weeks",
-            "every 2 weeks on tue",
-            "every 3 weeks on mon,thu",
+        use Weekday::{Fri, Mon, Thu, Tue, Wed};
+        let weeks = |n, days: &[Weekday]| {
+            RecurrenceRule::every_n_weeks_on(n, days.iter().copied()).unwrap()
+        };
+        for (input, expected) in [
+            ("daily", RecurrenceRule::daily()),
+            ("every 1 days", RecurrenceRule::daily()),
+            ("every 3 days", RecurrenceRule::every_n_days(3).unwrap()),
+            ("weekdays", RecurrenceRule::weekdays()),
+            ("weekly", RecurrenceRule::weekly(Mon)),
+            ("fortnightly", weeks(2, &[Mon])),
+            ("monthly", RecurrenceRule::monthly()),
+            ("every 1 months", RecurrenceRule::monthly()),
+            ("every 3 months", RecurrenceRule::every_n_months(3).unwrap()),
+            ("yearly", RecurrenceRule::yearly()),
+            ("every 1 years", RecurrenceRule::yearly()),
+            ("every 2 years", RecurrenceRule::every_n_years(2).unwrap()),
+            ("weekly on mon,wed,fri", weeks(1, &[Mon, Wed, Fri])),
+            ("every 2 weeks", weeks(2, &[Mon])),
+            ("every 3 weeks", weeks(3, &[Mon])),
+            ("every 2 weeks on tue", weeks(2, &[Tue])),
+            ("every 3 weeks on mon,thu", weeks(3, &[Mon, Thu])),
         ] {
-            assert!(parse_rule(rule, monday).is_ok(), "{rule}");
+            assert_eq!(parse_rule(input, monday).unwrap(), expected, "{input}");
         }
-        assert_eq!(
-            parse_rule("fortnightly", monday).unwrap(),
-            RecurrenceRule::every_n_weeks_on(2, [chrono::Weekday::Mon]).unwrap()
-        );
-        assert_eq!(
-            parse_rule("every 3 weeks", monday).unwrap(),
-            RecurrenceRule::every_n_weeks_on(3, [chrono::Weekday::Mon]).unwrap()
-        );
         for rule in [
             "every 0 days",
             "every 0 weeks",
