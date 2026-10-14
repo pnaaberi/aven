@@ -215,19 +215,27 @@ fn backup_restore_archive_replaces_database_and_keeps_safety_copy() {
 }
 
 #[test]
-fn json_export_includes_attachment_metadata_without_bytes() {
+fn import_preserves_attachment_metadata_without_local_blobs() {
     let env = TestEnv::new();
-    let db = env.db("export-attachments.sqlite");
-    let task_ref = extract_ref(&ok(env.aven(&db, ["add", "with image", "--project", "app"])));
+    let source_db = env.db("import-attachments-source.sqlite");
+    let target_dir = env.path("target");
+    fs::create_dir_all(&target_dir).unwrap();
+    let target_db = target_dir.join("import-attachments-target.sqlite");
+    let task_ref = extract_ref(&ok(
+        env.aven(&source_db, ["add", "with image", "--project", "app"])
+    ));
     let image = env.path("photo.png");
     fs::write(&image, png_bytes(3, 2)).unwrap();
     ok(env.aven(
-        &db,
+        &source_db,
         ["attachment", "add", &task_ref, image.to_str().unwrap()],
     ));
 
-    let output_path = env.path("attachments-export.json");
-    ok(env.aven(&db, ["export", "--output", output_path.to_str().unwrap()]));
+    let output_path = env.path("attachments-import.json");
+    ok(env.aven(
+        &source_db,
+        ["export", "--output", output_path.to_str().unwrap()],
+    ));
     let text = fs::read_to_string(&output_path).unwrap();
     let snapshot: Value = serde_json::from_str(&text).unwrap();
 
@@ -252,30 +260,9 @@ fn json_export_includes_attachment_metadata_without_bytes() {
             .unwrap()
             .contains_key("bytes")
     );
-}
-
-#[test]
-fn import_preserves_attachment_metadata_without_local_blobs() {
-    let env = TestEnv::new();
-    let source_db = env.db("import-attachments-source.sqlite");
-    let target_dir = env.path("target");
-    fs::create_dir_all(&target_dir).unwrap();
-    let target_db = target_dir.join("import-attachments-target.sqlite");
-    let task_ref = extract_ref(&ok(
-        env.aven(&source_db, ["add", "with image", "--project", "app"])
-    ));
-    let image = env.path("photo.png");
-    fs::write(&image, png_bytes(3, 2)).unwrap();
-    ok(env.aven(
-        &source_db,
-        ["attachment", "add", &task_ref, image.to_str().unwrap()],
-    ));
-
-    let output_path = env.path("attachments-import.json");
-    ok(env.aven(
-        &source_db,
-        ["export", "--output", output_path.to_str().unwrap()],
-    ));
+    let attachment_id = snapshot["tables"]["task_attachments"][0]["attachment_id"]
+        .as_str()
+        .unwrap();
     ok(env.aven(
         &target_db,
         ["import", "--yes", output_path.to_str().unwrap()],
@@ -311,6 +298,20 @@ fn import_preserves_attachment_metadata_without_local_blobs() {
             .join(sha)
             .exists()
     );
+
+    let output = env.path("copy.png");
+    let error = fail(env.aven(
+        &target_db,
+        [
+            "attachment",
+            "get",
+            attachment_id,
+            "--output",
+            output.to_str().unwrap(),
+        ],
+    ));
+    contains_all(&error, &["error attachment-blob-unavailable"]);
+    assert!(!output.exists());
 }
 
 #[test]
