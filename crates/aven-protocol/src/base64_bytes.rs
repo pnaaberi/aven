@@ -75,10 +75,19 @@ mod tests {
 
     #[test]
     fn round_trips_with_exact_length() {
-        for n in [0, 1, 2, 3, 4, 255, 1024] {
+        for (n, encoded) in [
+            (0, 0),
+            (1, 4),
+            (2, 4),
+            (3, 4),
+            (4, 8),
+            (255, 340),
+            (1024, 1368),
+        ] {
             let bytes: Vec<u8> = (0..n).map(|i| (i * 7) as u8).collect();
             let json = serde_json::to_string(&Field(bytes.clone())).unwrap();
-            assert_eq!(json.len(), super::encoded_len(n) + 2);
+            assert_eq!(super::encoded_len(n), encoded);
+            assert_eq!(json.len(), encoded + 2);
             assert_eq!(serde_json::from_str::<Field>(&json).unwrap().0, bytes);
         }
     }
