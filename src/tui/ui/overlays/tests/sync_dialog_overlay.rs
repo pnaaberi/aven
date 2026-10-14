@@ -119,23 +119,6 @@ fn wake_failures_are_visible_without_expanding_details() {
 }
 
 #[test]
-fn unset_up_and_runtime_disabled_states_have_distinct_copy() {
-    let local = render_overlay_view(sync_overlay(TuiSyncStatus::default(), false));
-    let disabled = render_overlay_view(sync_overlay(
-        TuiSyncStatus {
-            runtime_allowed: false,
-            ..sync_status()
-        },
-        false,
-    ));
-
-    assert!(!local.contains("Local only"));
-    assert!(!local.contains("Sync now"));
-    assert!(local.contains("Set up sync"));
-    assert!(disabled.contains("Sync disabled"));
-}
-
-#[test]
 fn conflicts_use_attention_color() {
     let mut status = sync_status();
     status.conflicts = 2;
@@ -397,9 +380,18 @@ fn local_databases_offer_setup_and_joining() {
     let rendered = render_page(SyncPage::Home, local_status(), SyncActivity::default());
 
     assert!(!rendered.contains("Local only"));
+    assert!(!rendered.contains("Sync now"));
     assert!(rendered.contains("Keep your tasks in sync across devices"));
     assert!(rendered.contains("› Set up sync"));
     assert!(rendered.contains("Join existing sync"));
+    let disabled = render_overlay_view(sync_overlay(
+        TuiSyncStatus {
+            runtime_allowed: false,
+            ..sync_status()
+        },
+        false,
+    ));
+    assert!(disabled.contains("Sync disabled"));
 }
 
 #[test]
