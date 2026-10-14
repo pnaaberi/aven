@@ -58,7 +58,6 @@ pub fn server_origin(url: &str) -> Result<String> {
 }
 
 /// Identifies Cloud only after validating the complete server origin.
-/// The address must still be displayed alongside this hosting label.
 pub fn is_aven_cloud(origin: &str) -> bool {
     endpoint(origin, "/").is_ok_and(|url| {
         let host = url.host_str().unwrap_or_default();

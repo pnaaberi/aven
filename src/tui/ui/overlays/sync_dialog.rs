@@ -1214,15 +1214,11 @@ fn invitation_lines(
 }
 
 fn server_lines(theme: &Theme, lines: &mut Vec<Line<'static>>, server: &str, width: usize) {
-    if aven_core::sync::client::is_aven_cloud(server) {
-        lines.extend(wrapped_row(
-            theme,
-            "Hosting",
-            "Aven Cloud",
-            Style::new().fg(theme.fg),
-            width,
-        ));
-    }
+    let server = if aven_core::sync::client::is_aven_cloud(server) {
+        "Aven Cloud"
+    } else {
+        server
+    };
     lines.extend(wrapped_row(
         theme,
         "Server",
@@ -1792,7 +1788,7 @@ mod cloud_tests {
     }
 
     #[test]
-    fn hosting_identity_keeps_the_address_visible_without_labeling_other_origins() {
+    fn server_row_names_cloud_and_keeps_other_origins_visible() {
         for (server, cloud) in [
             ("https://sync.aventasks.dev", true),
             ("HTTPS://SYNC.AVENTASKS.DEV:443/", true),
@@ -1808,8 +1804,10 @@ mod cloud_tests {
                 .map(ToString::to_string)
                 .collect::<Vec<_>>()
                 .join("\n");
+            assert!(text.contains("Server"), "{text}");
+            assert!(!text.contains("Hosting"), "{text}");
             assert_eq!(text.contains("Aven Cloud"), cloud, "{text}");
-            assert!(text.contains(server), "{text}");
+            assert_eq!(text.contains(server), !cloud, "{text}");
         }
     }
 }
