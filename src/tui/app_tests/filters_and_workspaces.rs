@@ -426,6 +426,8 @@ async fn workspace_administration_cancellation_reports_the_canceled_flow() {
 #[tokio::test]
 async fn switch_workspace_accepts_direct_filtering_and_arrow_navigation() {
     let mut app = test_app().await;
+    create_and_select_task(&mut app, test_task_draft("Default only")).await;
+    app.store.view_state.query = TaskQuery::Todo;
     app.store
         .create_workspace("Client Alpha".to_string())
         .await
@@ -462,7 +464,10 @@ async fn switch_workspace_accepts_direct_filtering_and_arrow_navigation() {
     app.handle_overlay_key(key(KeyCode::Enter)).await.unwrap();
 
     assert_eq!(app.store.active_workspace.key, expected);
+    assert_eq!(app.store.view_state.query, TaskQuery::Todo);
+    assert!(app.store.tasks.is_empty());
     assert!(app.overlay.is_none());
+    assert_eq!(toast_message(&app), None);
 }
 
 #[tokio::test]
@@ -520,33 +525,6 @@ async fn refresh_reports_invalid_project_scope_fallback() {
         Some("project scope missing is no longer available")
     );
     assert_eq!(toast_severity(&app), Some(ToastSeverity::Warning));
-}
-
-#[tokio::test]
-async fn switch_workspace_changes_active_workspace() {
-    let (_dir, pool, mut app) = test_app_with_pool().await;
-    create_and_select_task(&mut app, test_task_draft("Default only")).await;
-
-    let mut conn = pool.acquire().await.unwrap();
-    crate::workspaces::create_workspace(&mut conn, "Client Work")
-        .await
-        .unwrap();
-    drop(conn);
-    app.refresh().await.unwrap();
-
-    app.store.view_state.query = TaskQuery::Todo;
-
-    app.submit_switch_workspace(vec!["client-work".to_string()])
-        .await
-        .unwrap();
-
-    assert_eq!(app.store.active_workspace.key, "client-work");
-    assert_eq!(app.store.view_state.query, TaskQuery::Todo);
-    assert!(app.store.tasks.is_empty());
-    assert!(app.overlay.is_none());
-    assert_eq!(toast_message(&app), None);
-
-    reset_default_workspace(&pool).await;
 }
 
 #[tokio::test]
