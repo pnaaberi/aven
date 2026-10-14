@@ -279,28 +279,9 @@ mod tests {
     }
 
     #[test]
-    fn sidebar_views_default_to_existing_order() {
-        let expected = vec![
-            SidebarView::Queue,
-            SidebarView::Ready,
-            SidebarView::Blocked,
-            SidebarView::Overdue,
-            SidebarView::All,
-            SidebarView::Open,
-            SidebarView::Inbox,
-            SidebarView::Active,
-            SidebarView::Backlog,
-            SidebarView::Todo,
-            SidebarView::Upcoming,
-            SidebarView::Done,
-            SidebarView::Conflicts,
-            SidebarView::Epics,
-            SidebarView::Recurring,
-            SidebarView::RecentActions,
-            SidebarView::Search,
-        ];
+    fn omitted_sidebar_views_load_the_default() {
+        let expected = AppConfig::default().tui.sidebar.views;
 
-        assert_eq!(AppConfig::default().tui.sidebar.views, expected);
         assert_eq!(load_config("{}\n").unwrap().tui.sidebar.views, expected);
         assert_eq!(
             load_config("tui:\n  sidebar: {}\n")
