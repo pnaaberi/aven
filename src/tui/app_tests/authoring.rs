@@ -1,19 +1,6 @@
 use super::*;
 
 #[tokio::test]
-async fn add_task_shortcut_opens_title_prompt() {
-    let mut app = test_app().await;
-    app.handle_normal_key(KeyCode::Char('t')).await.unwrap();
-    app.handle_normal_key(KeyCode::Char('n')).await.unwrap();
-
-    assert!(matches!(
-        &app.overlay,
-        Some(OverlayState::AddTask(state))
-            if state.focus == AddTaskStep::Title && state.title.as_str().is_empty()
-    ));
-}
-
-#[tokio::test]
 async fn add_task_alias_creates_task_after_title() {
     let mut app = test_app().await;
     app.handle_normal_key(KeyCode::Char('a')).await.unwrap();
@@ -602,6 +589,7 @@ async fn add_task_priority_picker_and_shortcut_share_status_derivation() {
     let Some(OverlayState::AddTask(state)) = app.overlay.as_mut() else {
         panic!("expected composer");
     };
+    state.title = LineEdit::new("Picker priority".to_string());
     state.focus = AddTaskStep::Priority;
     app.handle_overlay_key(key(KeyCode::Enter)).await.unwrap();
     let Some(OverlayState::AddTask(state)) = app.overlay.as_mut() else {
@@ -622,6 +610,16 @@ async fn add_task_priority_picker_and_shortcut_share_status_derivation() {
             if state.priority.value() == "high" && state.effective_status() == "todo"
     ));
 
+    app.handle_overlay_key(ctrl_g()).await.unwrap();
+    let task = app.store.selected_task(app.list.selected_task()).unwrap();
+    assert_eq!(task.task.title, "Picker priority");
+    assert_eq!(task.task.status, TaskStatus::Todo);
+    assert_eq!(task.task.priority, TaskPriority::High);
+    let Some(OverlayState::AddTask(state)) = app.overlay.as_mut() else {
+        panic!("expected repeated composer");
+    };
+    state.title = LineEdit::new("Shortcut priority".to_string());
+
     app.handle_overlay_key(ctrl_r()).await.unwrap();
     app.handle_overlay_key(key(KeyCode::Char('n')))
         .await
@@ -631,6 +629,11 @@ async fn add_task_priority_picker_and_shortcut_share_status_derivation() {
         Some(OverlayState::AddTask(state))
             if state.priority.value() == "none" && state.effective_status() == "inbox"
     ));
+    app.handle_overlay_key(ctrl_s()).await.unwrap();
+    let task = app.store.selected_task(app.list.selected_task()).unwrap();
+    assert_eq!(task.task.title, "Shortcut priority");
+    assert_eq!(task.task.status, TaskStatus::Inbox);
+    assert_eq!(task.task.priority, TaskPriority::None);
 }
 
 #[tokio::test]
@@ -640,8 +643,9 @@ async fn add_task_status_picker_auto_restores_derived_status() {
     let Some(OverlayState::AddTask(state)) = app.overlay.as_mut() else {
         panic!("expected composer");
     };
+    state.title = LineEdit::new("Auto status".to_string());
+    state.apply_status_choice("active");
     state.apply_priority_choice("high");
-    state.apply_status_choice("inbox");
     state.focus = AddTaskStep::Status;
     app.handle_overlay_key(key(KeyCode::Enter)).await.unwrap();
     let Some(OverlayState::AddTask(state)) = app.overlay.as_mut() else {
@@ -663,6 +667,11 @@ async fn add_task_status_picker_auto_restores_derived_status() {
         Some(OverlayState::AddTask(state))
             if state.status_is_automatic() && state.effective_status() == "todo"
     ));
+    app.handle_overlay_key(ctrl_s()).await.unwrap();
+    let task = app.store.selected_task(app.list.selected_task()).unwrap();
+    assert_eq!(task.task.title, "Auto status");
+    assert_eq!(task.task.status, TaskStatus::Todo);
+    assert_eq!(task.task.priority, TaskPriority::High);
 }
 
 #[tokio::test]
@@ -952,22 +961,13 @@ async fn add_task_start_view_keeps_main_surface() {
 }
 
 #[tokio::test]
-async fn add_task_only_view_uses_popup_surface() {
-    let mut app = test_app().await;
-    app.intake.enter_add_task_only();
-    app.begin_add_task().await.unwrap();
-
-    let view = app.view();
-
-    assert_eq!(view.surface, ViewSurface::AddTask);
-}
-
-#[tokio::test]
 async fn add_task_only_render_skips_normal_tui() {
     let mut app = test_app().await;
     create_and_select_task(&mut app, test_task_draft("Existing queue task")).await;
     app.intake.enter_add_task_only();
     app.begin_add_task().await.unwrap();
+
+    assert_eq!(app.view().surface, ViewSurface::AddTask);
 
     let rendered = render_app_text(&mut app, 50, 12);
 
@@ -1030,6 +1030,11 @@ async fn add_task_flow_configures_project_and_priority_from_title() {
 
     app.handle_normal_key(KeyCode::Char('t')).await.unwrap();
     app.handle_normal_key(KeyCode::Char('n')).await.unwrap();
+    assert!(matches!(
+        &app.overlay,
+        Some(OverlayState::AddTask(state))
+            if state.focus == AddTaskStep::Title && state.title.as_str().is_empty()
+    ));
     type_chars(&mut app, "Write docs").await;
     app.handle_overlay_key(ctrl_p()).await.unwrap();
 
@@ -1157,21 +1162,6 @@ async fn add_task_project_creation_error_keeps_picker_filter_open() {
 }
 
 #[tokio::test]
-async fn add_task_tab_opens_description_step() {
-    let mut app = test_app().await;
-    app.handle_normal_key(KeyCode::Char('a')).await.unwrap();
-    type_chars(&mut app, "Write docs").await;
-    app.handle_overlay_key(key(KeyCode::Tab)).await.unwrap();
-
-    assert!(matches!(
-        &app.overlay,
-        Some(OverlayState::AddTask(state))
-            if state.focus == AddTaskStep::Description
-                && state.title.as_str() == "Write docs"
-    ));
-}
-
-#[tokio::test]
 async fn add_task_picker_escape_returns_to_add_task_only_dialog() {
     let mut app = test_app().await;
     app.intake.enter_add_task_only();
@@ -1195,6 +1185,12 @@ async fn add_task_description_flow_creates_task_with_description() {
     app.handle_normal_key(KeyCode::Char('a')).await.unwrap();
     type_chars(&mut app, "Write docs").await;
     app.handle_overlay_key(key(KeyCode::Tab)).await.unwrap();
+    assert!(matches!(
+        &app.overlay,
+        Some(OverlayState::AddTask(state))
+            if state.focus == AddTaskStep::Description
+                && state.title.as_str() == "Write docs"
+    ));
     type_chars(&mut app, "Include setup details").await;
     app.handle_overlay_key(ctrl_s()).await.unwrap();
 
@@ -1250,6 +1246,11 @@ async fn add_task_description_ctrl_e_moves_to_line_end() {
     type_chars(&mut app, "Write docs").await;
     app.handle_overlay_key(key(KeyCode::Tab)).await.unwrap();
     type_chars(&mut app, "Details").await;
+    app.handle_overlay_key(ctrl_a()).await.unwrap();
+    assert!(matches!(
+        &app.overlay,
+        Some(OverlayState::AddTask(state)) if state.description.buffer.column == 0
+    ));
     app.handle_overlay_key(ctrl_e()).await.unwrap();
 
     assert!(matches!(
@@ -1964,59 +1965,31 @@ async fn recurrence_due_control_cycles_each_policy() {
 }
 
 #[tokio::test]
-async fn add_task_ctrl_a_moves_title_cursor_to_start() {
+async fn add_task_dispatches_title_editing_keys_to_composer() {
     let mut app = test_app().await;
     app.handle_normal_key(KeyCode::Char('a')).await.unwrap();
-    type_chars(&mut app, "Write docs").await;
-
-    app.handle_overlay_key(ctrl_a()).await.unwrap();
-
-    assert!(matches!(
-        &app.overlay,
-        Some(OverlayState::AddTask(state))
-            if state.mode == crate::tui::overlay::AddTaskMode::Compose
-                && state.title.cursor == 0
-                && state.title.text == "Write docs"
-    ));
-}
-
-#[tokio::test]
-async fn add_task_ctrl_u_clears_title_before_cursor() {
-    let mut app = test_app().await;
-    app.handle_normal_key(KeyCode::Char('a')).await.unwrap();
-    type_chars(&mut app, "Write docs").await;
-
-    app.dispatch_key(ctrl_u(), (80, 24).into()).await.unwrap();
-
-    assert!(matches!(
-        &app.overlay,
-        Some(OverlayState::AddTask(state))
-            if state.mode == crate::tui::overlay::AddTaskMode::Compose
-                && state.title.text.is_empty()
-                && state.title.cursor == 0
-    ));
-}
-
-#[tokio::test]
-async fn add_task_ctrl_w_deletes_previous_title_word() {
-    let mut app = test_app().await;
-    app.handle_normal_key(KeyCode::Char('a')).await.unwrap();
-    type_chars(&mut app, "Write docs").await;
-
-    app.dispatch_key(
-        KeyEvent::new(KeyCode::Char('w'), KeyModifiers::CONTROL),
-        (80, 24).into(),
-    )
-    .await
-    .unwrap();
-
-    assert!(matches!(
-        &app.overlay,
-        Some(OverlayState::AddTask(state))
-            if state.mode == crate::tui::overlay::AddTaskMode::Compose
-                && state.title.text == "Write "
-                && state.title.cursor == "Write ".len()
-    ));
+    for (event, expected_text, expected_cursor) in [
+        (ctrl_a(), "Write docs", 0),
+        (ctrl_u(), "", 0),
+        (
+            KeyEvent::new(KeyCode::Char('w'), KeyModifiers::CONTROL),
+            "Write ",
+            6,
+        ),
+    ] {
+        let Some(OverlayState::AddTask(state)) = app.overlay.as_mut() else {
+            panic!("expected composer");
+        };
+        state.title = LineEdit::new("Write docs".to_string());
+        app.dispatch_key(event, (80, 24).into()).await.unwrap();
+        assert!(matches!(
+            &app.overlay,
+            Some(OverlayState::AddTask(state))
+                if state.mode == crate::tui::overlay::AddTaskMode::Compose
+                    && state.title.text == expected_text
+                    && state.title.cursor == expected_cursor
+        ));
+    }
 }
 
 #[tokio::test]
@@ -2223,19 +2196,6 @@ async fn add_note_requires_selected_task() {
         Some("no selected task for note")
     );
     assert_eq!(toast_severity(&app), Some(ToastSeverity::Warning));
-}
-
-#[tokio::test]
-async fn add_note_alias_requires_selected_task() {
-    let mut app = test_app().await;
-    app.list.select_task(None);
-    app.handle_normal_key(KeyCode::Char('n')).await.unwrap();
-
-    assert!(app.overlay.is_none());
-    assert_eq!(
-        toast_message(&app).as_deref(),
-        Some("no selected task for note")
-    );
 }
 
 #[tokio::test]
