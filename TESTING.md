@@ -20,6 +20,25 @@ names containing the same text. `test-target` runs the named integration-test
 target; target names use Rust/Cargo naming, such as `cli_local` for
 `tests/cli_local.rs`.
 
+## Test quality
+
+A useful test adds independent information. Ask whether a plausible wrong
+implementation would fail it and a correct refactor would pass. Prefer fewer,
+stronger tests; extend an existing test when that keeps related coverage clear.
+For a bug fix, verify the regression test fails without the fix when feasible.
+
+Treat these as review signals, not deletion rules:
+
+- Assertions that only restate constants, defaults, or mappings; tests of pure
+derived or standard-library behavior; expected values built with the same helper
+under test.
+- Echo mocks, existence-only checks, incidental structure assertions, and
+coverage duplicated across layers.
+
+Retain independently meaningful behavior, including custom codec behavior,
+observable API, CLI, and serialized contracts, compatibility fixtures,
+invariants, boundary and failure cases, and cross-module behavior.
+
 Tests run on Rust's default 2 MiB test-thread stack. Test builds compile
 workspace crates at opt-level 0. At that level, an async function's poll frame
 reserves a separate slot for every future it awaits, so dispatchers with many
