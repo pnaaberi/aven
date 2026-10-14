@@ -437,6 +437,10 @@ async fn switch_workspace_accepts_direct_filtering_and_arrow_navigation() {
 
     app.handle_normal_key(KeyCode::Char('g')).await.unwrap();
     app.handle_normal_key(KeyCode::Char('w')).await.unwrap();
+    assert!(matches!(
+        &app.overlay,
+        Some(OverlayState::Picker(state)) if state.title == SWITCH_WORKSPACE_TITLE && state.mode == PickerMode::Filter
+    ));
     type_chars(&mut app, "client").await;
 
     let first = match &app.overlay {
@@ -502,30 +506,6 @@ async fn switch_workspace_no_match_warns_and_reopens_filter() {
 }
 
 #[tokio::test]
-async fn switch_workspace_shortcut_opens_picker() {
-    let (_dir, pool, mut app) = test_app_with_pool().await;
-    let mut conn = pool.acquire().await.unwrap();
-    crate::workspaces::create_workspace(&mut conn, "Client Work")
-        .await
-        .unwrap();
-    drop(conn);
-
-    app.handle_normal_key(KeyCode::Char('g')).await.unwrap();
-    app.handle_normal_key(KeyCode::Char('w')).await.unwrap();
-
-    assert!(matches!(
-        &app.overlay,
-        Some(OverlayState::Picker(PickerState {
-            title,
-            mode: PickerMode::Filter,
-            ..
-        })) if title == SWITCH_WORKSPACE_TITLE
-    ));
-
-    reset_default_workspace(&pool).await;
-}
-
-#[tokio::test]
 async fn refresh_reports_invalid_project_scope_fallback() {
     let mut app = test_app().await;
     app.store.view_state.scope = TaskScope::Project("missing".to_string());
@@ -573,11 +553,15 @@ async fn switch_workspace_changes_active_workspace() {
 async fn clear_filters_shortcut_resets_default_view_without_notification() {
     let mut app = test_app().await;
     app.store.view_state.query = TaskQuery::Todo;
+    app.submit_filter_priority(vec!["urgent".to_string()])
+        .await
+        .unwrap();
 
     app.handle_normal_key(KeyCode::Char('f')).await.unwrap();
     app.handle_normal_key(KeyCode::Char('c')).await.unwrap();
 
     assert_eq!(app.store.view_state.query, TaskQuery::Todo);
+    assert!(app.store.view_state.filter_modifiers.priority.is_none());
     assert_eq!(toast_message(&app), None);
 }
 
@@ -588,7 +572,6 @@ async fn go_conflicts_shortcut_sets_conflicts_view() {
     app.handle_normal_key(KeyCode::Char('v')).await.unwrap();
     app.handle_normal_key(KeyCode::Char('c')).await.unwrap();
 
-    assert_eq!(app.store.view_state.query, TaskQuery::Conflicts);
     assert_eq!(app.store.view_state.query, TaskQuery::Conflicts);
 }
 
@@ -796,6 +779,7 @@ async fn header_click_opens_workspace_menu_when_more_than_two_are_available() {
 #[tokio::test]
 async fn header_metric_click_still_selects_view_directly() {
     let mut app = test_app().await;
+    app.show_view(TaskQuery::Todo).await.unwrap();
 
     let queue_column = (0..180)
         .find(|column| {
