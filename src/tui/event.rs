@@ -33,24 +33,6 @@ pub(crate) use self::session::{
     list_situation, recurrence_list_situation,
 };
 
-/// Whether the input dispatcher acts on `action`. The excluded actions come
-/// from overlay key handling and are dispatcher no-ops.
-#[cfg(test)]
-fn implemented_action_is_handled(action: Action) -> bool {
-    !matches!(
-        action,
-        Action::AcceptCommand
-            | Action::CancelCommand
-            | Action::BackspaceCommand
-            | Action::CommandChar(_)
-            | Action::AcceptSearch
-            | Action::CancelSearch
-            | Action::BackspaceSearch
-            | Action::SearchChar(_)
-            | Action::None
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use crossterm::event::KeyCode;
@@ -358,11 +340,22 @@ mod tests {
     }
 
     #[test]
-    fn catalog_actions_are_handled() {
+    fn catalog_excludes_overlay_input_and_no_op_actions() {
         for command in COMMANDS {
             assert!(
-                implemented_action_is_handled(command.action),
-                "catalog action :{} is not handled",
+                !matches!(
+                    command.action,
+                    Action::AcceptCommand
+                        | Action::CancelCommand
+                        | Action::BackspaceCommand
+                        | Action::CommandChar(_)
+                        | Action::AcceptSearch
+                        | Action::CancelSearch
+                        | Action::BackspaceSearch
+                        | Action::SearchChar(_)
+                        | Action::None
+                ),
+                "catalog command :{} uses overlay input or a no-op action",
                 command.name
             );
         }
