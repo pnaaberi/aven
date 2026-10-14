@@ -393,8 +393,11 @@ async fn detail_scroll_keys_update_detail_offset() {
         .join("\n");
     create_and_select_task(&mut app, draft).await;
     app.show_detail(0);
+    assert_eq!(detail_scroll(&app), 0);
 
     app.dispatch_key(ctrl_d(), (80, 24).into()).await.unwrap();
+    let first_page = detail_scroll(&app);
+    assert!(first_page > 1);
     assert!(app.overlay.is_none());
     assert!(app.detail.is_active());
 
@@ -404,7 +407,10 @@ async fn detail_scroll_keys_update_detail_offset() {
     assert!(app.overlay.is_none());
     assert!(app.detail.is_active());
 
+    assert!(detail_scroll(&app) > first_page);
+
     app.dispatch_key(ctrl_u(), (80, 24).into()).await.unwrap();
+    assert_eq!(detail_scroll(&app), first_page);
     assert!(app.overlay.is_none());
     assert!(app.detail.is_active());
 
@@ -414,11 +420,14 @@ async fn detail_scroll_keys_update_detail_offset() {
     assert!(app.overlay.is_none());
     assert!(app.detail.is_active());
 
+    assert_eq!(detail_scroll(&app), first_page - 1);
+
     app.dispatch_key(key(KeyCode::PageUp), (80, 24).into())
         .await
         .unwrap();
     assert!(app.overlay.is_none());
     assert!(app.detail.is_active());
+    assert_eq!(detail_scroll(&app), 0);
 }
 
 #[tokio::test]
@@ -432,12 +441,14 @@ async fn detail_scroll_resists_down_input_at_bottom() {
             .await
             .unwrap();
     }
+    assert_eq!(detail_scroll(&app), 0);
     assert!(app.overlay.is_none());
     assert!(app.detail.is_active());
 
     app.dispatch_key(key(KeyCode::Char('k')), (80, 24).into())
         .await
         .unwrap();
+    assert_eq!(detail_scroll(&app), 0);
     assert!(app.overlay.is_none());
     assert!(app.detail.is_active());
 }
@@ -779,12 +790,14 @@ async fn detail_mouse_wheel_updates_detail_offset() {
     app.dispatch_mouse(mouse_wheel(MouseEventKind::ScrollDown), (80, 24).into())
         .await
         .unwrap();
+    assert_eq!(detail_scroll(&app), 1);
     assert!(app.overlay.is_none());
     assert!(app.detail.is_active());
 
     app.dispatch_mouse(mouse_wheel(MouseEventKind::ScrollUp), (80, 24).into())
         .await
         .unwrap();
+    assert_eq!(detail_scroll(&app), 0);
     assert!(app.overlay.is_none());
     assert!(app.detail.is_active());
 }
