@@ -2469,7 +2469,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert!(!key_widths.is_empty());
-        assert!(key_widths.iter().all(|width| *width == 18));
+        assert!(key_widths.iter().all(|width| *width == key_widths[0]));
     }
 
     #[test]

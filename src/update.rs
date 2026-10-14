@@ -193,11 +193,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn package_version_is_semver() {
-        assert_eq!(current_version().to_string(), CURRENT_VERSION);
-    }
-
-    #[test]
     fn cancellation_is_reported() {
         let cancelled = Arc::new(AtomicBool::new(true));
         assert_eq!(

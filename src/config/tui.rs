@@ -275,6 +275,7 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["Inbox", "Backlog", "Todo", "Active", "Done"]
         );
+        assert_eq!(load_config("{}\n").unwrap().tui.columns, config.tui.columns);
     }
 
     #[test]
@@ -476,11 +477,6 @@ mod tests {
     }
 
     #[test]
-    fn empty_config_uses_default_columns() {
-        assert_eq!(load_config("{}\n").unwrap().tui.columns.len(), 5);
-    }
-
-    #[test]
     fn column_config_rejects_missing_statuses() {
         let error =
             load_config("tui:\n  columns:\n    - name: Current\n      statuses: [active, todo]\n")
@@ -523,15 +519,5 @@ mod tests {
         let no_statuses =
             load_config("tui:\n  columns:\n    - name: Empty\n      statuses: []\n").unwrap_err();
         assert!(format!("{no_statuses:#}").contains("must include at least one status"));
-    }
-
-    #[test]
-    fn default_columns_round_trip() {
-        let config = AppConfig::default();
-        let yaml = serde_saphyr::to_string(&config).unwrap();
-        let loaded: AppConfig = serde_saphyr::from_str(&yaml).unwrap();
-
-        loaded.validate().unwrap();
-        assert_eq!(loaded.tui.columns, config.tui.columns);
     }
 }

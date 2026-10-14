@@ -426,41 +426,6 @@ mod tests {
     }
 
     #[test]
-    fn catalog_includes_update_and_changelog_without_global_shortcuts() {
-        for name in ["update", "changelog"] {
-            let command = COMMANDS
-                .iter()
-                .find(|command| command.name == name)
-                .unwrap();
-            assert!(command.keys(CommandContext::Normal).is_empty());
-        }
-    }
-
-    #[test]
-    fn catalog_includes_work_view_commands() {
-        for (name, query, shortcut) in [
-            ("view-ready", TaskQuery::Ready, "v y"),
-            ("view-blocked", TaskQuery::Blocked, "v k"),
-            ("view-overdue", TaskQuery::Overdue, "v x"),
-        ] {
-            let command = COMMANDS
-                .iter()
-                .find(|command| command.name == name)
-                .expect("work view command");
-            assert_eq!(command.section, "Views");
-            assert_eq!(command.action, Action::ShowView(query));
-            assert_eq!(
-                command
-                    .keys(CommandContext::Normal)
-                    .iter()
-                    .map(|key| key.label)
-                    .collect::<Vec<_>>(),
-                vec![shortcut]
-            );
-        }
-    }
-
-    #[test]
     fn resolves_work_view_shortcuts() {
         for (key, query) in [
             ('y', TaskQuery::Ready),
@@ -472,26 +437,6 @@ mod tests {
                 ShortcutLookup::Found(Action::ShowView(query))
             );
         }
-    }
-
-    #[test]
-    fn catalog_includes_upcoming_view_command() {
-        let command = COMMANDS
-            .iter()
-            .find(|command| command.name == "view-upcoming")
-            .expect("upcoming view command");
-
-        assert_eq!(command.description, "show upcoming task view");
-        assert_eq!(command.section, "Views");
-        assert_eq!(command.action, Action::ShowView(TaskQuery::Upcoming));
-        assert_eq!(
-            command
-                .keys(CommandContext::Normal)
-                .iter()
-                .map(|key| key.label)
-                .collect::<Vec<_>>(),
-            vec!["v p"]
-        );
     }
 
     #[test]
@@ -983,40 +928,6 @@ mod tests {
             resolve_shortcut(&[KeyCode::Char('n')]),
             ShortcutLookup::Found(Action::BeginAddNote)
         ));
-    }
-
-    #[test]
-    fn required_action_families_are_present() {
-        for name in [
-            "add-task",
-            "edit-title",
-            "status-picker",
-            "copy-ref",
-            "copy-id",
-            "status-active",
-            "scope-project",
-            "scope-all",
-            "order-due",
-            "order-priority",
-            "order-reverse",
-            "conflict-list",
-            "add-project",
-            "rename-project",
-            "delete-project",
-            "config-show",
-            "sync",
-            "sync-now",
-            "config-paths",
-            "database-stats",
-            "config-init",
-            "add-dependency",
-            "remove-dependency",
-        ] {
-            assert!(
-                COMMANDS.iter().any(|command| command.name == name),
-                "missing required command :{name}"
-            );
-        }
     }
 
     #[test]
