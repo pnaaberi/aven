@@ -467,7 +467,7 @@ fn reload_definition_with_runner(
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 fn validate_install_config(config: &AppConfig) -> Result<()> {
-    config.ensure_automatic_sync_enabled()?;
+    config.ensure_daemon_has_work()?;
     config.wake_addr()?;
     Ok(())
 }

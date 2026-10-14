@@ -89,7 +89,7 @@ aven edit APP-7KQ9 --available-at "tomorrow at 14:30"
 
 ### Due date input
 
-A due date describes when completion is expected. It does not control visibility, change status, clear availability, or create a reminder or notification. A task can be available before its deadline, deferred beyond its deadline, or have either field on its own.
+A due date describes when completion is expected. It does not control visibility, change status, or clear availability. With [reminders](/notifications/#reminders) on, due and overdue tasks appear in the daily digest. A task can be available before its deadline, deferred beyond its deadline, or have either field on its own.
 
 `aven add --due`, `aven edit --due`, natural task intake, and the TUI use the date expressions from [Availability input](#availability-input), including compact offsets, calendar months, `next week`, named weekdays, and ISO dates. Due dates are local-calendar values stored as `YYYY-MM-DD`. They reject times, UTC timestamps, and Unix timestamps because a deadline is date-only.
 
@@ -1126,8 +1126,8 @@ aven conflict resolve APP-7KQ9 description --value-file ./merged.md
 
 ### `aven daemon`
 
-Run synchronization continuously or manage it as a background service on macOS
-or on Linux with systemd.
+Run synchronization and [reminders](/notifications/#reminders) continuously,
+or manage them as a background service on macOS or on Linux with systemd.
 
 ```sh
 aven daemon
@@ -1138,7 +1138,7 @@ aven daemon restart
 aven daemon repair [--if-installed] [--program <path>]
 ```
 
-Running `aven daemon` in the foreground requires `sync.enabled: true`. Until the database is set up or joined it waits without contacting a server. Once set up, it syncs immediately, then on the configured interval and whenever a local mutation sends a UDP wake signal. Failed syncs use exponential backoff up to five minutes. Bounded rounds with more work remaining resume promptly. The process exits when its executable changes so a service manager can restart the updated binary.
+Running `aven daemon` in the foreground requires `sync.enabled: true`, `reminders.enabled: true`, or both. With only reminders on, it sends reminders and does not sync. Until the database is set up or joined it waits without contacting a server. Once set up, it syncs immediately, then on the configured interval and whenever a local mutation sends a UDP wake signal. Failed syncs use exponential backoff up to five minutes. Bounded rounds with more work remaining resume promptly. The process exits when its executable changes so a service manager can restart the updated binary.
 
 `daemon status` is observational. It reports platform support, installation,
 loaded and running state, executable consistency, configuration validity,

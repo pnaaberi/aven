@@ -116,6 +116,55 @@ impl Database {
     }
 }
 
+/// A reminder this device has handled, keyed by kind, task and trigger.
+/// Digest entries use an empty `task_id`.
+#[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]
+pub struct ReminderLogEntry {
+    pub kind: String,
+    pub task_id: String,
+    pub trigger: String,
+    pub outcome: String,
+}
+
+impl Database {
+    pub async fn reminder_log(&self) -> Result<Vec<ReminderLogEntry>> {
+        let mut conn = self.acquire_reader().await?;
+        Ok(sqlx::query_as::<_, ReminderLogEntry>(
+            "SELECT kind, task_id, trigger, outcome FROM local_reminder_log",
+        )
+        .fetch_all(&mut *conn)
+        .await?)
+    }
+
+    /// Records entries in one transaction, replacing the outcome of existing
+    /// keys.
+    pub async fn record_reminders(&self, entries: &[ReminderLogEntry]) -> Result<()> {
+        if entries.is_empty() {
+            return Ok(());
+        }
+        let recorded_at = crate::ids::now();
+        let mut conn = self.acquire_writer().await?;
+        let mut tx = begin_immediate(&mut conn).await?;
+        for entry in entries {
+            sqlx::query(
+                "INSERT INTO local_reminder_log(kind, task_id, trigger, outcome, recorded_at)
+                 VALUES (?, ?, ?, ?, ?)
+                 ON CONFLICT(kind, task_id, trigger)
+                 DO UPDATE SET outcome = excluded.outcome, recorded_at = excluded.recorded_at",
+            )
+            .bind(&entry.kind)
+            .bind(&entry.task_id)
+            .bind(&entry.trigger)
+            .bind(&entry.outcome)
+            .bind(&recorded_at)
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+}
+
 fn marker_version(value: Option<&str>) -> Option<u32> {
     value?.trim().parse().ok()
 }
@@ -197,6 +246,27 @@ mod tests {
 
         database.clear_sync_access_refusal().await.unwrap();
         assert_eq!(database.sync_access_refusal().await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn reminder_outcome_replaces_existing_key() {
+        let database = Database::open(std::path::Path::new(":memory:"))
+            .await
+            .unwrap();
+        let entry = |outcome: &str| ReminderLogEntry {
+            kind: "available".into(),
+            task_id: "T1".into(),
+            trigger: "2026-10-14T09:00:00Z".into(),
+            outcome: outcome.into(),
+        };
+
+        database
+            .record_reminders(&[entry("waiting")])
+            .await
+            .unwrap();
+        database.record_reminders(&[entry("sent")]).await.unwrap();
+
+        assert_eq!(database.reminder_log().await.unwrap(), vec![entry("sent")]);
     }
 
     #[tokio::test]

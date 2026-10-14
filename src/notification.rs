@@ -59,6 +59,14 @@ fn process_is_running(pid: u32) -> bool {
 }
 
 fn show_notification(message: &str) {
+    if let Err(error) = send_notification("aven", message) {
+        tracing::debug!(error = %format!("{error:#}"), "failed to send notification");
+    }
+}
+
+/// Hands the notification to the platform service. Success means it was
+/// accepted, not that it was displayed.
+pub(crate) fn send_notification(title: &str, message: &str) -> anyhow::Result<()> {
     #[cfg(target_os = "macos")]
     {
         use mac_notification_sys::{Notification, set_application};
@@ -68,25 +76,20 @@ fn show_notification(message: &str) {
         if let Err(error) = set_application(macos::notification_application()) {
             tracing::debug!(%error, "failed to set notification application");
         }
-        if let Err(error) = Notification::default()
-            .title("aven")
+        Notification::default()
+            .title(title)
             .message(message)
-            .send()
-        {
-            tracing::debug!(%error, "failed to send notification");
-        }
+            .send()?;
     }
 
     #[cfg(not(target_os = "macos"))]
     {
-        if let Err(error) = notify_rust::Notification::new()
-            .summary("aven")
+        notify_rust::Notification::new()
+            .summary(title)
             .body(message)
-            .show()
-        {
-            tracing::debug!(%error, "failed to send notification");
-        }
+            .show()?;
     }
+    Ok(())
 }
 
 #[cfg(target_os = "macos")]

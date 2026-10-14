@@ -62,7 +62,7 @@ pub(crate) fn build_daemon_status(
     service: ServiceStatus,
 ) -> DaemonStatusReport {
     let wake_address_valid = config.wake_addr().is_ok();
-    let configuration_valid = config.automatic_sync_is_enabled() && wake_address_valid;
+    let configuration_valid = config.daemon_has_work() && wake_address_valid;
     let state = if !service.platform_supported {
         StatusState::Unavailable
     } else if !service.installed {
@@ -86,7 +86,7 @@ pub(crate) fn build_daemon_status(
     } else {
         if !configuration_valid {
             guidance.push(
-                "Enable sync with `aven config set sync.enabled true`, then run `aven daemon repair`."
+                "Enable sync or reminders with `aven config set sync.enabled true` or `aven config set reminders.enabled true`, then run `aven daemon repair`."
                     .to_string(),
             );
         }

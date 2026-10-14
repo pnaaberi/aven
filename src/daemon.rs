@@ -50,7 +50,7 @@ pub struct DaemonRunArgs {
 }
 
 pub async fn run(args: DaemonRunArgs) -> Result<()> {
-    args.config.ensure_automatic_sync_enabled()?;
+    args.config.ensure_daemon_has_work()?;
     let wake_addr = args.config.wake_addr()?;
     #[cfg(target_os = "macos")]
     if move_service_into_bundle().await {
@@ -61,7 +61,13 @@ pub async fn run(args: DaemonRunArgs) -> Result<()> {
     let socket = UdpSocket::bind(wake_addr).await.with_context(|| {
         format!("could not bind daemon wake address {wake_addr}; is another daemon running?")
     })?;
-    println!("daemon db={} wake={}", args.db_path.display(), wake_addr);
+    println!(
+        "daemon db={} wake={} sync={} reminders={}",
+        args.db_path.display(),
+        wake_addr,
+        args.config.automatic_sync_is_enabled(),
+        args.config.reminders.enabled
+    );
     let blob_dir = crate::config::resolve_blob_dir(&args.db_path, &args.config)?;
     let lifecycle_policy = args.config.local.attachment_lifecycle.policy();
     let binary_fingerprint = current_binary_fingerprint()?;
@@ -86,6 +92,12 @@ async fn run_loop(
     lifecycle_policy: aven_core::attachments::LifecyclePolicy,
     binary_fingerprint: BinaryFingerprint,
 ) -> Result<()> {
+    let sync_on = config.automatic_sync_is_enabled();
+    let reminders_on = config.reminders.enabled;
+    let mut next_reminder = Instant::now();
+    // Reminders wait while sync rounds have more work, so they never judge a
+    // partly synced database.
+    let mut sync_catching_up = false;
     let mut wake_buf = [0_u8; 16];
     let mut backoff_seconds = 1_u64;
     let mut next_sync = Instant::now();
@@ -109,6 +121,7 @@ async fn run_loop(
                 }
                 drain_wakes(&socket, &mut wake_buf);
                 let now = Instant::now();
+                next_reminder = now;
                 if retry_not_before.is_none_or(|deadline| now >= deadline) {
                     next_sync = now;
                 }
@@ -120,14 +133,19 @@ async fn run_loop(
                 }
                 next_binary_check = Instant::now() + BINARY_CHECK_INTERVAL;
             }
-            _ = sleep_until(next_attachment_maintenance) => {
+            _ = sleep_until(next_reminder), if reminders_on && !sync_catching_up => {
+                next_reminder = Instant::now() + crate::reminders::remind(&database, &config.reminders).await;
+            }
+            _ = sleep_until(next_attachment_maintenance), if sync_on => {
                 maintain_attachments(&database, &blob_dir, lifecycle_policy).await;
                 next_attachment_maintenance =
                     Instant::now() + crate::sync::ATTACHMENT_MAINTENANCE_INTERVAL;
             }
-            _ = sleep_until(next_sync) => {
+            _ = sleep_until(next_sync), if sync_on => {
                 retry_not_before = None;
-                match sync_once(&database, config, &mut sync).await {
+                let round = sync_once(&database, config, &mut sync).await;
+                sync_catching_up = matches!(&round, Ok(DaemonRound::Completed(outcome)) if outcome.more_work_ready());
+                match round {
                     Ok(DaemonRound::Completed(outcome)) => {
                         backoff_seconds = 1;
                         awaiting_setup = false;
@@ -135,6 +153,7 @@ async fn run_loop(
                         next_sync = if outcome.more_work_ready() {
                             Instant::now() + DAEMON_INCOMPLETE_RESCHEDULE
                         } else {
+                            next_reminder = Instant::now();
                             Instant::now() + Duration::from_secs(interval_seconds)
                         };
                     }
@@ -328,7 +347,7 @@ async fn maintain_attachments(
 }
 
 pub(crate) fn wake_if_enabled(config: &AppConfig) {
-    if !config.automatic_sync_is_enabled() {
+    if !config.daemon_has_work() {
         return;
     }
     let Ok(addr) = config.wake_addr() else {

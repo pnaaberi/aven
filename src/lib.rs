@@ -25,6 +25,7 @@ pub mod peer_enrollment_http;
 mod projects;
 pub mod protected_local_keys;
 mod recurrence_input;
+mod reminders;
 mod render;
 mod routing;
 mod schedule_input;
@@ -61,7 +62,31 @@ use sync::run_server;
 use workspaces::resolve_active_workspace_with_routing;
 
 pub async fn run_cli() -> Result<()> {
+    #[cfg(target_os = "macos")]
+    if launched_as_bare_app() {
+        return Ok(());
+    }
     run_cli_from(std::env::args_os()).await
+}
+
+/// Launch Services starts Aven.app's executable with no arguments and no
+/// terminal when a notification is clicked or the app is opened. There is
+/// nothing to show, so the launch exits quietly instead of failing to start
+/// the TUI.
+#[cfg(target_os = "macos")]
+fn launched_as_bare_app() -> bool {
+    let no_arguments = std::env::args_os()
+        .skip(1)
+        .all(|arg| arg.to_string_lossy().starts_with("-psn_"));
+    no_arguments
+        && std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open("/dev/tty")
+            .is_err()
+        && std::env::current_exe()
+            .and_then(std::fs::canonicalize)
+            .is_ok_and(|executable| app_bundle::enclosing_bundle(&executable).is_some())
 }
 
 pub fn report_cli_error(error: &anyhow::Error) {

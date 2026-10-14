@@ -189,11 +189,11 @@ pub(crate) fn explain(
             next_step: "Unset AVEN_SYNC_DISABLED and try again.",
         });
     }
-    if has("sync-disabled") {
+    if has("daemon-no-work") {
         return Some(Explanation {
-            code: "sync-disabled",
-            message: "Automatic sync is turned off in config.yaml.",
-            next_step: "Run `aven config set sync.enabled true` and try again.",
+            code: "daemon-no-work",
+            message: "The daemon has nothing to do: automatic sync and reminders are both off.",
+            next_step: "Run `aven config set sync.enabled true` or `aven config set reminders.enabled true` and try again.",
         });
     }
     if has("sync-setup-confirmation-required") {
@@ -835,14 +835,25 @@ mod tests {
         let environment = explain(ErrorAction::General, ErrorSurface::Cli, &error).unwrap();
         assert_eq!(environment.code, "sync-disabled");
         assert!(environment.next_step.contains("AVEN_SYNC_DISABLED"));
+    }
 
+    #[test]
+    fn idle_daemon_names_both_options() {
         let error = crate::config::AppConfig::default()
-            .ensure_automatic_sync_enabled()
+            .ensure_daemon_has_work()
             .unwrap_err();
-        let configured = explain(ErrorAction::General, ErrorSurface::Cli, &error).unwrap();
-        assert_eq!(configured.code, "sync-disabled");
-        assert!(configured.next_step.contains("sync.enabled true"));
-        assert!(!configured.combined().contains("AVEN_SYNC_DISABLED"));
+        let explanation = explain(ErrorAction::General, ErrorSurface::Cli, &error).unwrap();
+        assert_eq!(explanation.code, "daemon-no-work");
+        assert!(explanation.next_step.contains("sync.enabled true"));
+        assert!(explanation.next_step.contains("reminders.enabled true"));
+
+        let mut config = crate::config::AppConfig::default();
+        config.sync.enabled = true;
+        config.sync.disable_override = true;
+        let error = config.ensure_daemon_has_work().unwrap_err();
+        let explanation = explain(ErrorAction::General, ErrorSurface::Cli, &error).unwrap();
+        assert_eq!(explanation.code, "sync-disabled");
+        assert!(explanation.next_step.contains("AVEN_SYNC_DISABLED"));
     }
 
     #[test]
