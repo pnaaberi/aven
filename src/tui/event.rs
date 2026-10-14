@@ -46,17 +46,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn maps_navigation_keys() {
-        assert_eq!(
-            Action::from_normal_key(KeyCode::Char('j')),
-            Action::MoveDown
-        );
-        assert_eq!(Action::from_normal_key(KeyCode::Down), Action::MoveDown);
-        assert_eq!(Action::from_normal_key(KeyCode::Char('k')), Action::MoveUp);
-        assert_eq!(Action::from_normal_key(KeyCode::Up), Action::MoveUp);
-    }
-
-    #[test]
     fn search_mode_captures_text_keys() {
         assert_eq!(
             Action::from_search_key(KeyCode::Char('q')),
@@ -67,19 +56,6 @@ mod tests {
             Action::AcceptSearch
         );
         assert_eq!(Action::from_search_key(KeyCode::Esc), Action::CancelSearch);
-    }
-
-    #[test]
-    fn normal_escape_cancels_overlay() {
-        assert_eq!(Action::from_normal_key(KeyCode::Esc), Action::CancelOverlay);
-    }
-
-    #[test]
-    fn maps_command_panel_key() {
-        assert_eq!(
-            Action::from_normal_key(KeyCode::Char(':')),
-            Action::BeginCommand
-        );
     }
 
     #[test]
@@ -331,6 +307,8 @@ mod tests {
             }
         }
 
+        assert_eq!(Action::from_normal_key(KeyCode::Down), Action::MoveDown);
+        assert_eq!(Action::from_normal_key(KeyCode::Up), Action::MoveUp);
         assert_eq!(Action::from_normal_key(KeyCode::Esc), Action::CancelOverlay);
         assert_eq!(Action::from_normal_key(KeyCode::Char('u')), Action::Undo);
         assert_eq!(Action::from_normal_key(KeyCode::Char('z')), Action::None);
