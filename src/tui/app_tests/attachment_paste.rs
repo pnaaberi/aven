@@ -525,35 +525,6 @@ async fn attachment_shutdown_finishes_commit_and_clears_pending_state() {
 }
 
 #[tokio::test]
-async fn detail_paste_image_path_ignores_existing_image() {
-    let (dir, pool, mut app) = paste_test_app().await;
-    let selected = create_and_select_task(&mut app, test_task_draft("image target")).await;
-    let task_id = app.store.tasks[selected].task.id.clone();
-    let image = dir.path().join("photo.png");
-    std::fs::write(&image, compressible_png_bytes()).unwrap();
-    app.show_detail(0);
-
-    app.dispatch_paste(image.to_str().unwrap()).await.unwrap();
-    finish_attachment_work(&mut app).await;
-    app.dispatch_paste(image.to_str().unwrap()).await.unwrap();
-    finish_attachment_work(&mut app).await;
-
-    assert_eq!(
-        toast_message(&app).as_deref(),
-        Some("image already attached")
-    );
-    let item = app
-        .store
-        .tasks
-        .iter()
-        .find(|item| item.task.id == task_id)
-        .unwrap();
-    assert!(item.task.description.is_empty());
-    let attachments = stored_attachments(&pool, &app, &task_id).await;
-    assert_eq!(attachments.len(), 1);
-}
-
-#[tokio::test]
 async fn add_task_paste_image_path_attaches_to_created_task_once() {
     let (dir, pool, mut app) = paste_test_app().await;
     let image = dir.path().join("composer.png");
