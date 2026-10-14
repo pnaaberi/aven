@@ -1385,32 +1385,13 @@ fn monthly_series(title: &str) -> CreateRecurrenceSeries {
 
 #[test]
 fn consumer_api_reuses_pure_recurrence_enums() {
-    let frequency: aven_core::recurrence::RecurrenceFrequency = RecurrenceFrequency::Weekly;
-    let due_policy: aven_core::recurrence::RecurrenceDuePolicy = RecurrenceDuePolicy::SameDay;
-    let state: aven_core::recurrence::RecurrenceSeriesState = RecurrenceSeriesState::Paused;
-    let outcome: aven_core::recurrence::RecurrenceOutcome = RecurrenceOutcome::Skipped;
-    let projection: aven_core::recurrence::RecurrenceProjectionState =
+    let _frequency: aven_core::recurrence::RecurrenceFrequency = RecurrenceFrequency::Weekly;
+    let _due_policy: aven_core::recurrence::RecurrenceDuePolicy = RecurrenceDuePolicy::SameDay;
+    let _state: aven_core::recurrence::RecurrenceSeriesState = RecurrenceSeriesState::Paused;
+    let _outcome: aven_core::recurrence::RecurrenceOutcome = RecurrenceOutcome::Skipped;
+    let _projection: aven_core::recurrence::RecurrenceProjectionState =
         RecurrenceProjectionState::Archived;
-    let history_kind: aven_core::query::RecurrenceHistoryKind = RecurrenceHistoryKind::Missed;
-
-    assert_eq!(
-        frequency,
-        aven_core::recurrence::RecurrenceFrequency::Weekly
-    );
-    assert_eq!(
-        due_policy,
-        aven_core::recurrence::RecurrenceDuePolicy::SameDay
-    );
-    assert_eq!(state, aven_core::recurrence::RecurrenceSeriesState::Paused);
-    assert_eq!(outcome, aven_core::recurrence::RecurrenceOutcome::Skipped);
-    assert_eq!(
-        projection,
-        aven_core::recurrence::RecurrenceProjectionState::Archived
-    );
-    assert_eq!(
-        history_kind,
-        aven_core::query::RecurrenceHistoryKind::Missed
-    );
+    let _history_kind: aven_core::query::RecurrenceHistoryKind = RecurrenceHistoryKind::Missed;
 }
 
 #[tokio::test]
