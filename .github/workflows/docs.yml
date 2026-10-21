@@ -32,6 +32,10 @@ jobs:
         working-directory: docs
         run: bun install --frozen-lockfile
 
+      - name: Check image dependency security
+        working-directory: docs
+        run: bun run test:image-security
+
       - name: Build
         working-directory: docs
         run: bun run build
@@ -42,6 +46,8 @@ jobs:
           path: docs/dist
 
   deploy:
+    # Fork maintenance must not create or publish a separate documentation site.
+    if: github.repository == 'raine/aven'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

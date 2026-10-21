@@ -117,3 +117,6 @@ See [Getting started](https://aventasks.dev/getting-started/) for first-run usag
 - [Back up and restore](https://aventasks.dev/backups/)
 - [Command reference](https://aventasks.dev/command-reference/)
 - [Configuration](https://aventasks.dev/configuration/)
+
+For this fork's documentation dependency checks and known audit limits, see
+[documentation maintenance](docs/README.md).
