@@ -149,3 +149,10 @@ existing session D-Bus. Keep upstream library notices for binary redistribution.
 `cargo audit --deny warnings` and the existing deny/license gate must remain clear. The isolated
 missing-bus regression proves error handling, not on-screen notification display.
 This is fork source maintenance, not installed-binary or upstream adoption.
+
+
+Static ARM musl builds use target-specific inline C atomics for the vendored
+D-Bus library, avoiding unavailable GCC outline helpers without changing other
+target flags. Full/container checks run on PRs, main and explicit dispatch rather
+than twice for each feature push. Nix release-flake validation explicitly reads
+upstream `raine/aven` release assets; a fork needs no invented local release.

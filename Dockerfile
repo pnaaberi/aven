@@ -4,6 +4,8 @@ RUN apk add --no-cache build-base cmake perl git
 WORKDIR /src
 COPY . .
 ENV SQLX_OFFLINE=true
+# musl ARM has no GCC outlined-sync helper; use equivalent inline C atomics.
+ENV CFLAGS_aarch64_unknown_linux_musl=-mno-outline-atomics
 RUN cargo build --release --locked --bin aven
 
 FROM alpine:3.23@sha256:85fe1e81d6758c208f3e1eed4338a1997e19d4be002d4dd32d3100c9a8c010a0 AS runtime

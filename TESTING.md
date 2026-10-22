@@ -205,3 +205,9 @@ unit cases in the integrated gate. The new-process probe overrides only its own
 D-Bus address to a private nonexistent socket; no real notification or user bus
 is contacted. Desktop display and other installed platforms remain unverified
 until their own runtime acceptance. Preserve cargo audit/deny and license checks.
+
+
+The Python CI trust suite also checks the ARM-musl C-flag contract, explicit
+upstream Nix release selection and retained PR/main/manual build coverage.
+Those static checks do not prove an ARM link or Nix build: require the actual
+hosted ARM64/AMD64 source-image and Nix jobs on the final candidate.

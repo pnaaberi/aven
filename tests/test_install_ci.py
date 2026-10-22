@@ -159,5 +159,25 @@ class InstallerDispatch(unittest.TestCase):
                                      == ["workflow", "run"] for call in calls))
 
 
+class SourceBuildContracts(unittest.TestCase):
+    def test_arm_musl_c_atomics_do_not_require_outlined_helpers(self):
+        dockerfile = (ROOT / "Dockerfile").read_text()
+        self.assertIn(
+            "ENV CFLAGS_aarch64_unknown_linux_musl=-mno-outline-atomics", dockerfile
+        )
+
+    def test_nix_release_reference_is_explicitly_upstream(self):
+        workflow = (ROOT / ".github/workflows/nix.yml").read_text()
+        self.assertIn("gh release view --repo raine/aven", workflow)
+        self.assertIn('gh release download "$version" --repo raine/aven', workflow)
+
+    def test_full_builds_cover_pr_main_and_preserve_explicit_dispatch(self):
+        for name in ("ci.yml", "container.yml"):
+            workflow = (ROOT / ".github/workflows" / name).read_text()
+            self.assertIn("  push:\n    branches: [main]\n", workflow)
+            self.assertIn("  pull_request:", workflow)
+            self.assertIn("  workflow_dispatch:", workflow)
+
+
 if __name__ == "__main__":
     unittest.main()

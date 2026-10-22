@@ -20,7 +20,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          version="$(gh release view --json tagName --jq .tagName)"
-          gh release download "$version" --pattern '*.sha256' --dir checksums
+          version="$(gh release view --repo raine/aven --json tagName --jq .tagName)"
+          gh release download "$version" --repo raine/aven --pattern '*.sha256' --dir checksums
           scripts/assemble-nix-release "$version" checksums aven-nix.tar.gz
           nix build --no-link --print-build-logs "file://$PWD/aven-nix.tar.gz"
