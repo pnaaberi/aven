@@ -93,7 +93,8 @@ security-framework = { version = "3.7", default-features = false }
 security-framework-sys = { version = "2.15", default-features = false }
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
-notify-rust = "4"
+# Avoid the unmaintained standalone zvariant/zbus_names stack; keep the public notification API.
+notify-rust = { version = "4", default-features = false, features = ["d_vendored"] }
 
 [dev-dependencies]
 aven-conformance = { path = "crates/aven-conformance", version = "=0.1.0" }

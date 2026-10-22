@@ -120,3 +120,39 @@ See [Getting started](https://aventasks.dev/getting-started/) for first-run usag
 
 For this fork's documentation dependency checks and known audit limits, see
 [documentation maintenance](docs/README.md).
+
+
+### Fork CI installer trust
+
+`scripts/install-ci` dispatches the same attached branch it pushes. The build
+accepts branch refs only and requires the requested SHA to equal GitHub's dispatch
+revision before checkout, toolchain setup, cache access or build. Checkout and
+artifact identity use that immutable context SHA; automatic cache saves are
+main-only. Branches may still read default caches under GitHub's normal policy.
+Moved refs, mismatches and tags fail closed; there is no fallback to main.
+A feature branch must contain the matching workflow. Arbitrary historical-SHA
+builds now require a matching authorized branch. Artifact SHA/checksum checks
+remain in place. This fork change does not update upstream or installed Aven.
+
+Run `python3 tests/test_install_ci.py` for hermetic guard/dispatch regressions;
+these use stub authorities and never perform a native installation.
+
+
+### Fork native dependency maintenance
+
+The lockfile keeps TLS/QUIC/certificate, event-listener and LRU dependencies on
+patched compatible releases. Non-macOS notifications use notify-rust's supported
+vendored D-Bus backend instead of the unmaintained standalone zvariant stack;
+the Notification API and existing Windows/macOS notification stacks stay unchanged. Building the
+vendored library requires a C compiler; runtime delivery still uses the user's
+existing session D-Bus. Keep upstream library notices for binary redistribution.
+`cargo audit --deny warnings` and the existing deny/license gate must remain clear. The isolated
+missing-bus regression proves error handling, not on-screen notification display.
+This is fork source maintenance, not installed-binary or upstream adoption.
+
+
+Static ARM musl builds use target-specific inline C atomics for the vendored
+D-Bus library, avoiding unavailable GCC outline helpers without changing other
+target flags. Full/container checks run on PRs, main and explicit dispatch rather
+than twice for each feature push. Nix release-flake validation explicitly reads
+upstream `raine/aven` release assets; a fork needs no invented local release.
