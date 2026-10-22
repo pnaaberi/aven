@@ -6,6 +6,7 @@ description: Release notes for aven.
 ## Unreleased
 
 - Security (fork documentation build): update Sharp to the patched 0.35 series and refresh compatible locked dependencies. Add a focused version, image-conversion and invalid-input regression check; the native application is unchanged.
+- Security (fork documentation build): remove the unpatched Braces dependency using the docs plugin's verified Picomatch `isMatch` seam; retain generated text output and enforce zero audit findings in CI.
 
 - macOS installations from Homebrew or the install script show [notifications](https://aventasks.dev/notifications/) with Aven's name and icon, and identify the background daemon as Aven in Login Items.
 - Get [reminders](https://aventasks.dev/notifications/#reminders) from the background daemon: a daily digest of tasks due today or overdue, and a notification when a deferred task becomes available. Turn them on with `aven config set reminders.enabled true`.

@@ -36,6 +36,12 @@ jobs:
         working-directory: docs
         run: bun run test:image-security
 
+      - name: Check matcher compatibility and dependency audit
+        working-directory: docs
+        run: |
+          bun run test:matcher-security
+          bun audit
+
       - name: Build
         working-directory: docs
         run: bun run build
