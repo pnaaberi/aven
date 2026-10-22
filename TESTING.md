@@ -197,3 +197,11 @@ input, dirty/detached sources and failed dispatch without artifact/native writes
 It verifies quoted branch dispatch, no main fallback and context-bound checkout.
 This is not a real macOS installation, poisoned-cache probe or upstream/runtime
 acceptance. Keep the integrated full gate for the final source tree.
+
+
+For notification dependency changes, include
+`cargo test --test notification_backend` on Linux and the existing notification
+unit cases in the integrated gate. The new-process probe overrides only its own
+D-Bus address to a private nonexistent socket; no real notification or user bus
+is contacted. Desktop display and other installed platforms remain unverified
+until their own runtime acceptance. Preserve cargo audit/deny and license checks.

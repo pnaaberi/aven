@@ -136,3 +136,16 @@ remain in place. This fork change does not update upstream or installed Aven.
 
 Run `python3 tests/test_install_ci.py` for hermetic guard/dispatch regressions;
 these use stub authorities and never perform a native installation.
+
+
+### Fork native dependency maintenance
+
+The lockfile keeps TLS/QUIC/certificate, event-listener and LRU dependencies on
+patched compatible releases. Non-macOS notifications use notify-rust's supported
+vendored D-Bus backend instead of the unmaintained standalone zvariant stack;
+the Notification API and existing Windows/macOS notification stacks stay unchanged. Building the
+vendored library requires a C compiler; runtime delivery still uses the user's
+existing session D-Bus. Keep upstream library notices for binary redistribution.
+`cargo audit --deny warnings` and the existing deny/license gate must remain clear. The isolated
+missing-bus regression proves error handling, not on-screen notification display.
+This is fork source maintenance, not installed-binary or upstream adoption.
