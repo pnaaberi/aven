@@ -185,3 +185,15 @@ material risk, choose the conservative full gate rather than guessing.
 
 If a change spans rows or does not fit a route, treat it as cross-package or
 uncertain and use the integrated full gate.
+
+
+## CI installer trust regression
+
+Run `bash -n scripts/install-ci`, `shellcheck scripts/install-ci`, and
+`python3 tests/test_install_ci.py` for workflow/client changes. The fixture runs
+the actual validation block and client with temporary HOME/Cargo paths and stub
+Git/GitHub/uname commands; it rejects mismatched or moved SHAs, tags, malformed
+input, dirty/detached sources and failed dispatch without artifact/native writes.
+It verifies quoted branch dispatch, no main fallback and context-bound checkout.
+This is not a real macOS installation, poisoned-cache probe or upstream/runtime
+acceptance. Keep the integrated full gate for the final source tree.

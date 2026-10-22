@@ -120,3 +120,19 @@ See [Getting started](https://aventasks.dev/getting-started/) for first-run usag
 
 For this fork's documentation dependency checks and known audit limits, see
 [documentation maintenance](docs/README.md).
+
+
+### Fork CI installer trust
+
+`scripts/install-ci` dispatches the same attached branch it pushes. The build
+accepts branch refs only and requires the requested SHA to equal GitHub's dispatch
+revision before checkout, toolchain setup, cache access or build. Checkout and
+artifact identity use that immutable context SHA; automatic cache saves are
+main-only. Branches may still read default caches under GitHub's normal policy.
+Moved refs, mismatches and tags fail closed; there is no fallback to main.
+A feature branch must contain the matching workflow. Arbitrary historical-SHA
+builds now require a matching authorized branch. Artifact SHA/checksum checks
+remain in place. This fork change does not update upstream or installed Aven.
+
+Run `python3 tests/test_install_ci.py` for hermetic guard/dispatch regressions;
+these use stub authorities and never perform a native installation.

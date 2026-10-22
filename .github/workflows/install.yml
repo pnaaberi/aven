@@ -28,14 +28,20 @@ jobs:
       - name: Validate commit
         env:
           COMMIT_SHA: ${{ inputs.commit_sha }}
+          DISPATCH_SHA: ${{ github.sha }}
+          REF_TYPE: ${{ github.ref_type }}
         run: |
           if [[ ! "$COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
             echo "commit_sha must be a full Git commit SHA" >&2
             exit 1
           fi
+          if [[ "$REF_TYPE" != "branch" || "$COMMIT_SHA" != "$DISPATCH_SHA" ]]; then
+            echo "commit_sha must match the dispatched branch revision; refusing moved or mismatched refs" >&2
+            exit 1
+          fi
       - uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.commit_sha }}
+          ref: ${{ github.sha }}
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.99.0
@@ -43,13 +49,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: install-${{ env.TARGET }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Build
         env:
           SQLX_OFFLINE: 'true'
         run: cargo build --release --locked --target "$TARGET"
       - name: Package
         env:
-          COMMIT_SHA: ${{ inputs.commit_sha }}
+          COMMIT_SHA: ${{ github.sha }}
         run: |
           mkdir package
           tar -C "target/$TARGET/release" -czf "package/$ARCHIVE_NAME" "$BIN_NAME"

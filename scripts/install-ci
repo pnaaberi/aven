@@ -109,7 +109,7 @@ main() {
     printf 'Building %s at %.12s on GitHub...\n' "$binary_name" "$commit_sha"
     dispatch_output=$(gh workflow run "$workflow_file" \
         --repo "$repo" \
-        --ref main \
+        --ref "$branch" \
         --raw-field "commit_sha=$commit_sha" \
         --raw-field "request_id=$request_id")
     run_url=$(printf '%s\n' "$dispatch_output" \
