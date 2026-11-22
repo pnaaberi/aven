@@ -1,0 +1,9 @@
+version: 2
+updates:
+  # docs/ is managed by Bun (bun.lock). The npm_and_yarn ecosystem cannot
+  # update bun.lock, so updates for this directory use the bun ecosystem.
+  - package-ecosystem: "bun"
+    directory: "/docs"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
